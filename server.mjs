@@ -55,6 +55,74 @@ const serveFile = async (res, filePath) => {
   res.end(data);
 };
 
+const fetchJson = async (url, init) => {
+  const resp = await fetch(url, init);
+  const text = await resp.text();
+  let json = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+  return { ok: resp.ok, status: resp.status, text, json };
+};
+
+const adminAuthHeaders = (adminKey) => {
+  const key = String(adminKey || '').trim();
+  const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
+  return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+};
+
+const bootstrapDefaultCeo = async () => {
+  const enabled = String(process.env.AUTO_BOOTSTRAP_CEO || '').toLowerCase() === 'true';
+  if (!enabled) return;
+
+  const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
+  const adminKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!supabaseUrl || !adminKey) return;
+  if (!/^https?:\/\//i.test(supabaseUrl)) return;
+
+  const base = supabaseUrl.replace(/\/$/, '');
+  const adminHeaders = adminAuthHeaders(adminKey);
+
+  const existing = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, {
+    method: 'GET',
+    headers: adminHeaders,
+  });
+  if (existing.ok && Array.isArray(existing.json) && existing.json.length > 0) return;
+
+  const email = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || 'ceo@theway.ge').trim();
+  const password = String(process.env.AUTO_BOOTSTRAP_CEO_PASSWORD || 'ceo123').trim();
+  const username = String(process.env.AUTO_BOOTSTRAP_CEO_USERNAME || 'ceo').trim();
+  const name = String(process.env.AUTO_BOOTSTRAP_CEO_NAME || 'CEO').trim();
+
+  const created = await fetchJson(`${base}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, email_confirm: true }),
+  });
+  if (!created.ok || !created.json || typeof created.json.id !== 'string') {
+    return;
+  }
+
+  const id = created.json.id;
+  await fetchJson(`${base}/rest/v1/profiles`, {
+    method: 'POST',
+    headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({
+      id,
+      email,
+      username,
+      role: 'ceo',
+      name,
+      two_factor_code: null,
+      points: 0,
+    }),
+  });
+};
+
 const exists = async (p) => {
   try {
     await fs.access(p);
@@ -160,5 +228,5 @@ const port = Number(process.env.PORT ?? 4173);
 server.listen(port, () => {
   // eslint-disable-next-line no-console
   console.log(`Server running on http://localhost:${port}`);
+  void bootstrapDefaultCeo();
 });
-
