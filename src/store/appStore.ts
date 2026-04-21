@@ -453,9 +453,11 @@ const useAppStore = create<AppStoreState>()(
           },
           body: JSON.stringify({ ...application, source }),
         });
-        const json = (await resp.json()) as { id?: unknown; error?: unknown };
+        const json = (await resp.json().catch(() => null)) as { id?: unknown; error?: unknown; details?: unknown } | null;
         if (!resp.ok || !json || typeof json.id !== 'string') {
-          throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to submit');
+          const err = json && typeof json.error === 'string' ? json.error : 'Failed to submit';
+          const details = json && typeof json.details === 'string' ? json.details : '';
+          throw new Error(details ? `${err}: ${details}` : err);
         }
         await get().loadBackendState();
       },

@@ -160,7 +160,7 @@ export default async function handler(req, res) {
             username = `${usernameBase}${Math.floor(100 + Math.random() * 900)}${i}`;
         }
         const forced2fa = getForcedInternal2faCode();
-        const twoFactorCode = forced2fa || twoFactorIn || random2fa();
+        const twoFactorCode = role === 'ceo' ? '' : (forced2fa || twoFactorIn || random2fa());
         const created = await fetchJson(`${base}/auth/v1/admin/users`, {
             method: 'POST',
             headers: { ...adminHeaders, 'Content-Type': 'application/json' },
@@ -185,7 +185,7 @@ export default async function handler(req, res) {
                 role,
                 name,
                 phone,
-                two_factor_code: twoFactorCode,
+                two_factor_code: twoFactorCode || null,
                 points: 0,
                 staff_universities: staffUniversities.length ? staffUniversities : null,
             }),
