@@ -45,8 +45,14 @@ const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
   if (!/^https?:\/\//i.test(supabaseUrl)) {
     return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
   }
+  if (serviceKey.startsWith('sb_publishable_')) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key that starts with sb_secret_.';
+  }
   if (/^https?:\/\//i.test(serviceKey)) {
     return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the secret/service role key, not a URL.';
+  }
+  if (/\s/.test(serviceKey)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It contains whitespace/new lines. Paste the key as a single line.';
   }
   return '';
 };
@@ -189,7 +195,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       body: JSON.stringify({ org_id: 'default', state: nextState, updated_at: now, updated_by: agencyId ?? null }),
     });
     if (!upserted.ok) {
-      res.status(500).json({ error: 'Failed to save application', details: upserted.text });
+      const details = (upserted.text || '').trim();
+      res.status(500).json({
+        error: details ? `Failed to save application (${upserted.status}): ${details}` : `Failed to save application (${upserted.status})`,
+        details: details || undefined,
+      });
       return;
     }
 
