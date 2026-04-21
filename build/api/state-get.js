@@ -1,0 +1,127 @@
+const getBearer = (req) => {
+    const raw = req.headers?.authorization || req.headers?.Authorization;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (!value)
+        return '';
+    const m = value.match(/^Bearer\s+(.+)$/i);
+    return m?.[1] ?? '';
+};
+const fetchJson = async (url, init) => {
+    const resp = await fetch(url, init);
+    const text = await resp.text();
+    const json = text ? (() => { try {
+        return JSON.parse(text);
+    }
+    catch {
+        return null;
+    } })() : null;
+    return { ok: resp.ok, status: resp.status, text, json };
+};
+const asRecord = (value) => (value && typeof value === 'object') ? value : null;
+const getString = (r, key) => (r && typeof r[key] === 'string' ? r[key] : '');
+const asState = (value) => {
+    const v = (value && typeof value === 'object') ? value : {};
+    return {
+        applications: Array.isArray(v.applications) ? v.applications : [],
+        documents: Array.isArray(v.documents) ? v.documents : [],
+        notifications: Array.isArray(v.notifications) ? v.notifications : [],
+        appointments: Array.isArray(v.appointments) ? v.appointments : [],
+        chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
+        chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? v.chatThreadReadAt : {},
+    };
+};
+const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(role);
+export default async function handler(req, res) {
+    try {
+        if (req.method !== 'GET') {
+            res.status(405).json({ error: 'Method not allowed' });
+            return;
+        }
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!supabaseUrl || !serviceKey) {
+            res.status(500).json({ error: 'Supabase is not configured' });
+            return;
+        }
+        const token = getBearer(req);
+        if (!token) {
+            res.status(401).json({ error: 'Missing token' });
+            return;
+        }
+        const base = supabaseUrl.replace(/\/$/, '');
+        const who = await fetchJson(`${base}/auth/v1/user`, {
+            method: 'GET',
+            headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+        });
+        if (!who.ok || !who.json || typeof who.json.id !== 'string') {
+            res.status(401).json({ error: 'Invalid token' });
+            return;
+        }
+        const userId = who.json.id;
+        const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role`, {
+            method: 'GET',
+            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+        });
+        const role = Array.isArray(profile.json) && profile.json[0] && typeof profile.json[0].role === 'string'
+            ? profile.json[0].role
+            : '';
+        const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
+            method: 'GET',
+            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+        });
+        const rawState = Array.isArray(stateResp.json) && stateResp.json[0] ? stateResp.json[0].state : {};
+        const state = asState(rawState);
+        if (isInternal(role)) {
+            res.status(200).json({ ok: true, state });
+            return;
+        }
+        if (role === 'student') {
+            const apps = state.applications.filter((row) => getString(asRecord(row), 'studentId') === userId);
+            const appIds = new Set(apps.map((a) => getString(asRecord(a), 'id')));
+            const documents = state.documents.filter((row) => getString(asRecord(row), 'studentId') === userId);
+            const notifications = state.notifications.filter((row) => getString(asRecord(row), 'userId') === userId);
+            const appointments = state.appointments.filter((row) => getString(asRecord(row), 'userId') === userId);
+            const chatMessages = state.chatMessages.filter((row) => {
+                const m = asRecord(row);
+                if (!m)
+                    return false;
+                if (getString(m, 'fromUserId') === userId || getString(m, 'toUserId') === userId)
+                    return true;
+                const appId = getString(m, 'applicationId');
+                return appId === `complaint-${userId}`;
+            });
+            const chatThreadReadAt = {};
+            Object.entries(state.chatThreadReadAt).forEach(([k, v]) => {
+                if (k === `complaint-${userId}` || appIds.has(k))
+                    chatThreadReadAt[k] = v;
+            });
+            res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt } });
+            return;
+        }
+        if (role === 'agency') {
+            const apps = state.applications.filter((row) => getString(asRecord(row), 'agencyId') === userId);
+            const appIds = new Set(apps.map((a) => getString(asRecord(a), 'id')));
+            const chatMessages = state.chatMessages.filter((row) => {
+                const m = asRecord(row);
+                if (!m)
+                    return false;
+                if (getString(m, 'fromUserId') === userId || getString(m, 'toUserId') === userId)
+                    return true;
+                const appId = getString(m, 'applicationId');
+                return appIds.has(appId);
+            });
+            const chatThreadReadAt = {};
+            Object.entries(state.chatThreadReadAt).forEach(([k, v]) => {
+                if (appIds.has(k))
+                    chatThreadReadAt[k] = v;
+            });
+            res.status(200).json({ ok: true, state: { applications: apps, documents: [], notifications: [], appointments: [], chatMessages, chatThreadReadAt } });
+            return;
+        }
+        res.status(403).json({ error: 'Forbidden' });
+    }
+    catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        res.status(500).json({ error: message });
+    }
+}

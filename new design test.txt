@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Way — Study in Georgia</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap');
+
+        :root {
+            --yellow: #F5A800;
+            --yellow-dark: #D4900A;
+            --yellow-light: #FFD166;
+            --navy: #0A1628;
+            --navy-mid: #0D1F3C;
+            --navy-light: #122244;
+            --cream: #F5F0E8;
+            --white: #FFFFFF;
+            --glass: rgba(255,255,255,0.04);
+            --glass-border: rgba(245,168,0,0.15);
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html { scroll-behavior:smooth; overflow-x:hidden; }
+        body { background:var(--navy); color:var(--cream); font-family:'Inter',sans-serif; overflow-x:hidden; }
+
+        /* PAGE SYSTEM */
+        .page { display:none; min-height:100vh; }
+        .page.active { display:block; }
+
+        /* TOP BAR */
+        .topbar {
+            background: var(--yellow);
+            padding: 10px 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 1001;
+        }
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--navy);
+        }
+        .topbar-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .topbar-item svg {
+            width: 14px; height: 14px;
+            stroke: var(--navy); fill: none; stroke-width: 2;
+        }
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .topbar-social {
+            width: 28px; height: 28px;
+            background: var(--navy);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--yellow);
+            font-size: 11px; font-weight: 700;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        .topbar-social:hover { background: rgba(10,22,40,0.7); }
+
+        /* NAV */
+        nav {
+            position: fixed;
+            top: 42px; left: 0; right: 0;
+            z-index: 1000;
+            padding: 0 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+            background: var(--navy);
+            border-bottom: 1px solid rgba(245,168,0,0.1);
+            transition: all 0.4s;
+        }
+        nav.scrolled {
+            top: 0;
+            background: rgba(10,22,40,0.98);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 4px 30px rgba(0,0,0,0.3);
+        }
+        .nav-logo {
+            display: flex; align-items: center; gap: 10px;
+            text-decoration: none; cursor: pointer;
+        }
+        .logo-icon {
+            width: 44px; height: 44px;
+            background: var(--yellow);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+        }
+        .logo-text-wrap { display: flex; flex-direction: column; }
+        .logo-main {
+            font-family: 'Playfair Display', serif;
+            font-size: 22px; font-weight: 700;
+            color: var(--white); letter-spacing: 2px;
+            line-height: 1;
+        }
+        .logo-main span { color: var(--yellow); }
+        .logo-sub {
+            font-size: 9px; letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(245,240,232,0.4);
+            margin-top: 2px;
+        }
+        .nav-links {
+            display: flex; align-items: center;
+            gap: 36px; list-style: none;
+        }
+        .nav-links a {
+            color: rgba(245,240,232,0.75);
+            text-decoration: none;
+            font-size: 12px; font-weight: 500;
+            letter-spacing: 1.5px; text-transform: uppercase;
+            position: relative; transition: color 0.3s;
+            cursor: pointer; background: none; border: none;
+            font-family: 'Inter', sans-serif; padding: 0;
+        }
+        .nav-links a::after {
+            content: ''; position: absolute;
+            bottom: -4px; left: 0;
+            width: 0; height: 2px;
+            background: var(--yellow);
+            transition: width 0.3s;
+        }
+        .nav-links a:hover, .nav-links a.active-link { color: var(--yellow); }
+        .nav-links a:hover::after, .nav-links a.active-link::after { width: 100%; }
+        .nav-register {
+            background: var(--yellow) !important;
+            color: var(--navy) !important;
+            padding: 10px 24px !important;
+            font-weight: 700 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+        }
+        .nav-register::after { display: none !important; }
+        .nav-register:hover { background: var(--yellow-dark) !important; color: var(--white) !important; }
+
+        .hamburger {
+            display: none; flex-direction: column;
+            gap: 5px; cursor: pointer;
+            background: none; border: none; padding: 4px;
+        }
+        .hamburger span { display: block; width: 24px; height: 2px; background: var(--yellow); transition: all 0.3s; }
+        .mobile-menu {
+            display: none; position: fixed; inset: 0;
+            background: rgba(10,22,40,0.99); backdrop-filter: blur(20px);
+            z-index: 999; flex-direction: column;
+            align-items: center; justify-content: center; gap: 36px;
+        }
+        .mobile-menu.open { display: flex; }
+        .mobile-menu a {
+            font-family: 'Playfair Display', serif;
+            font-size: 32px; font-weight: 700;
+            color: var(--white); text-decoration: none;
+            cursor: pointer; transition: color 0.3s;
+        }
+        .mobile-menu a:hover { color: var(--yellow); }
+        .mobile-close {
+            position: absolute; top: 24px; right: 28px;
+            font-size: 26px; color: var(--yellow);
+            cursor: pointer; background: none; border: none;
+        }
+
+        /* ANIMATIONS */
+        @keyframes fadeUp { from{opacity:0;transform:translateY(28px);} to{opacity:1;transform:translateY(0);} }
+        @keyframes gridMove { 0%{transform:translateY(0);} 100%{transform:translateY(80px);} }
+        @keyframes orbFloat { 0%,100%{transform:translate(0,0);} 33%{transform:translate(20px,-20px);} 66%{transform:translate(-15px,15px);} }
+        @keyframes marquee { 0%{transform:translateX(0);} 100%{transform:translateX(-50%);} }
+        @keyframes pulse { 0%,100%{opacity:0.3;} 50%{opacity:1;} }
+        @keyframes floatCard { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-10px);} }
+
+        .reveal { opacity:0; transform:translateY(30px); transition:opacity 0.8s cubic-bezier(0.16,1,0.3,1), transform 0.8s cubic-bezier(0.16,1,0.3,1); }
+        .reveal.visible { opacity:1; transform:translateY(0); }
+        .d1{transition-delay:0.1s;} .d2{transition-delay:0.2s;} .d3{transition-delay:0.3s;} .d4{transition-delay:0.4s;}
+
+        /* SHARED */
+        .tag { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+        .tag-line { width:30px; height:1px; background:var(--yellow); flex-shrink:0; }
+        .tag-text { font-size:10px; letter-spacing:4px; text-transform:uppercase; color:var(--yellow); font-weight:600; }
+        .sec-title { font-family:'Playfair Display',serif; font-size:clamp(32px,4vw,54px); font-weight:700; color:var(--white); line-height:1.08; margin-bottom:18px; }
+        .sec-title em { font-style:italic; color:var(--yellow); }
+        .body-txt { font-family:'Cormorant Garamond',serif; font-size:18px; font-weight:300; color:rgba(245,240,232,0.62); line-height:1.82; margin-bottom:16px; }
+
+        .btn-yellow { background:var(--yellow); color:var(--navy); padding:14px 40px; font-size:11px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; text-decoration:none; display:inline-flex; align-items:center; gap:10px; position:relative; overflow:hidden; transition:all 0.3s; cursor:pointer; border:none; font-family:'Inter',sans-serif; border-radius:4px; }
+        .btn-yellow:hover { background:var(--yellow-dark); }
+        .btn-outline { background:transparent; border:2px solid var(--yellow); color:var(--yellow); padding:14px 40px; font-size:11px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; text-decoration:none; display:inline-block; transition:all 0.3s; cursor:pointer; font-family:'Inter',sans-serif; border-radius:4px; }
+        .btn-outline:hover { background:var(--yellow); color:var(--navy); }
+        .btn-white-outline { background:transparent; border:2px solid rgba(255,255,255,0.4); color:var(--white); padding:14px 40px; font-size:11px; font-weight:600; letter-spacing:2.5px; text-transform:uppercase; text-decoration:none; display:inline-block; transition:all 0.3s; cursor:pointer; font-family:'Inter',sans-serif; border-radius:4px; }
+        .btn-white-outline:hover { border-color:var(--yellow); color:var(--yellow); }
+
+        .orb { position:absolute; border-radius:50%; filter:blur(80px); animation:orbFloat 10s ease-in-out infinite; pointer-events:none; }
+        .orb-1 { width:600px; height:600px; background:radial-gradient(circle,rgba(245,168,0,0.08) 0%,transparent 70%); top:-200px; right:-100px; }
+        .orb-2 { width:400px; height:400px; background:radial-gradient(circle,rgba(13,31,60,0.9) 0%,transparent 70%); bottom:-100px; left:100px; animation-delay:-4s; }
+
+        /* MARQUEE */
+        .marquee-wrap { padding:18px 0; background:var(--yellow); overflow:hidden; }
+        .marquee-inner { display:flex; animation:marquee 28s linear infinite; width:max-content; }
+        .m-item { display:flex; align-items:center; gap:24px; padding:0 24px; font-size:11px; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--navy); white-space:nowrap; }
+        .m-dot { width:4px; height:4px; background:rgba(10,22,40,0.35); border-radius:50%; flex-shrink:0; }
+
+        /* ─── HERO ─── */
+        .hero {
+            height: 100vh; min-height: 680px;
+            position: relative; display: flex; align-items: center;
+            overflow: hidden; padding-top: 114px;
+        }
+        .hero-bg { position:absolute; inset:0; background:radial-gradient(ellipse at 20% 50%,rgba(245,168,0,0.07) 0%,transparent 60%),linear-gradient(135deg,#0A1628 0%,#0D1F3C 50%,#0A1628 100%); }
+        .hero-grid { position:absolute; inset:0; background-image:linear-gradient(rgba(245,168,0,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(245,168,0,0.04) 1px,transparent 1px); background-size:80px 80px; animation:gridMove 25s linear infinite; }
+        .hero-content { position:relative; z-index:10; padding:0 60px; max-width:860px; }
+        .hero-eyebrow { display:flex; align-items:center; gap:16px; margin-bottom:22px; animation:fadeUp 0.9s ease 0.2s both; }
+        .eyebrow-line { width:40px; height:2px; background:var(--yellow); }
+        .eyebrow-txt { font-size:11px; letter-spacing:4px; text-transform:uppercase; color:var(--yellow); font-weight:600; }
+        .hero-title { font-family:'Playfair Display',serif; font-size:clamp(48px,8vw,105px); font-weight:900; line-height:0.93; color:var(--white); margin-bottom:26px; animation:fadeUp 0.9s ease 0.4s both; }
+        .hero-title em { font-style:italic; color:var(--yellow); }
+        .hero-title .ghost { -webkit-text-stroke:1px rgba(255,255,255,0.18); color:transparent; }
+        .hero-sub { font-family:'Cormorant Garamond',serif; font-size:20px; font-weight:300; color:rgba(245,240,232,0.65); line-height:1.75; max-width:520px; margin-bottom:42px; animation:fadeUp 0.9s ease 0.6s both; }
+        .hero-actions { display:flex; align-items:center; gap:16px; flex-wrap:wrap; animation:fadeUp 0.9s ease 0.8s both; }
+        .scroll-hint { position:absolute; bottom:130px; left:60px; display:flex; align-items:center; gap:14px; animation:fadeUp 0.9s ease 1s both; }
+        .scroll-bar { width:1px; height:52px; background:linear-gradient(to bottom,transparent,var(--yellow)); animation:pulse 2s ease-in-out infinite; }
+        .scroll-lbl { font-size:9px; letter-spacing:3px; text-transform:uppercase; color:rgba(245,168,0,0.55); writing-mode:vertical-rl; transform:rotate(180deg); }
+
+        /* STATS BAR */
+        .stats-bar { position:absolute; bottom:0; left:0; right:0; display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--glass-border); background:rgba(10,22,40,0.75); backdrop-filter:blur(16px); }
+        .stat-cell { padding:22px 28px; border-right:1px solid var(--glass-border); animation:fadeUp 0.6s ease both; }
+        .stat-cell:nth-child(1){animation-delay:0.9s;} .stat-cell:nth-child(2){animation-delay:1s;} .stat-cell:nth-child(3){animation-delay:1.1s;} .stat-cell:nth-child(4){animation-delay:1.2s;}
+        .stat-cell:last-child { border-right:none; }
+        .stat-num { font-family:'Playfair Display',serif; font-size:34px; font-weight:700; color:var(--yellow); line-height:1; margin-bottom:4px; }
+        .stat-lbl { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:rgba(245,240,232,0.45); }
+
+        /* PAGE HERO (inner pages) */
+        .page-hero { padding:160px 60px 80px; position:relative; overflow:hidden; }
+        .page-hero-bg { position:absolute; inset:0; background:linear-gradient(135deg,#0A1628 0%,#0D1F3C 100%); }
+        .page-hero-grid { position:absolute; inset:0; background-image:linear-gradient(rgba(245,168,0,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(245,168,0,0.04) 1px,transparent 1px); background-size:60px 60px; }
+        .page-hero-inner { position:relative; z-index:10; max-width:800px; }
+        .page-big-title { font-family:'Playfair Display',serif; font-size:clamp(44px,7vw,90px); font-weight:900; color:var(--white); line-height:0.96; margin-bottom:20px; }
+        .page-big-title em { font-style:italic; color:var(--yellow); }
+        .page-hero-sub { font-family:'Cormorant Garamond',serif; font-size:20px; color:rgba(245,240,232,0.58); line-height:1.72; max-width:560px; }
+
+        /* CTA STRIP */
+        .cta-strip { padding:120px 60px; text-align:center; position:relative; overflow:hidden; }
+        .cta-bg { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 50%,rgba(245,168,0,0.1) 0%,transparent 65%),linear-gradient(135deg,var(--navy-mid),var(--navy)); }
+        .cta-grid { position:absolute; inset:0; background-image:linear-gradient(rgba(245,168,0,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(245,168,0,0.04) 1px,transparent 1px); background-size:60px 60px; }
+        .cta-inner { position:relative; z-index:10; }
+        .cta-title { font-family:'Playfair Display',serif; font-size:clamp(38px,5vw,76px); font-weight:900; color:var(--white); line-height:0.96; margin-bottom:16px; }
+        .cta-title em { font-style:italic; color:var(--yellow); }
+        .cta-sub { font-family:'Cormorant Garamond',serif; font-size:20px; color:rgba(245,240,232,0.55); margin-bottom:44px; max-width:460px; margin-left:auto; margin-right:auto; line-height:1.7; }
+        .cta-btns { display:flex; align-items:center; justify-content:center; gap:16px; flex-wrap:wrap; }
+
+        /* FOOTER */
+        footer { background:#050b14; border-top:1px solid rgba(245,168,0,0.12); padding:72px 60px 32px; }
+        .footer-top-bar { background:var(--yellow); padding:20px 60px; display:flex; align-items:center; justify-content:space-between; }
+        .footer-top-bar-txt { font-size:13px; font-weight:600; color:var(--navy); }
+        .footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:48px; margin-bottom:44px; padding-top:48px; }
+        .footer-logo { font-family:'Playfair Display',serif; font-size:24px; font-weight:700; color:var(--white); letter-spacing:2px; margin-bottom:14px; }
+        .footer-logo span { color:var(--yellow); }
+        .footer-desc { font-size:13px; color:rgba(245,240,232,0.38); line-height:1.82; margin-bottom:24px; max-width:280px; }
+        .f-socials { display:flex; gap:10px; }
+        .f-soc { width:36px; height:36px; border:1px solid rgba(245,168,0,0.2); display:flex; align-items:center; justify-content:center; color:rgba(245,240,232,0.38); font-size:11px; font-weight:700; text-decoration:none; transition:all 0.3s; border-radius:50%; }
+        .f-soc:hover { border-color:var(--yellow); color:var(--yellow); background:rgba(245,168,0,0.08); }
+        .fc h4 { font-size:10px; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--yellow); margin-bottom:20px; }
+        .fc ul { list-style:none; display:flex; flex-direction:column; gap:10px; }
+        .fc ul a, .fc ul button { font-size:13px; color:rgba(245,240,232,0.43); text-decoration:none; transition:color 0.3s; background:none; border:none; cursor:pointer; font-family:'Inter',sans-serif; padding:0; text-align:left; }
+        .fc ul a:hover, .fc ul button:hover { color:var(--yellow); }
+        .footer-bottom { display:flex; align-items:center; justify-content:space-between; padding-top:28px; border-top:1px solid rgba(245,168,0,0.07); }
+        .footer-bottom p { font-size:11px; color:rgba(245,240,232,0.25); }
+        .f-links { display:flex; gap:24px; }
+        .f-links a { font-size:11px; color:rgba(245,240,232,0.25); text-decoration:none; transition:color 0.3s; }
+        .f-links a:hover { color:var(--yellow); }
+
+        /* ══════════════════════
+           HOME PAGE
+        ══════════════════════ */
+        /* About */
+        .home-about { padding:110px 60px; display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:center; position:relative; overflow:hidden; }
+        .visual-box { height:540px; background:linear-gradient(135deg,var(--navy-mid),var(--navy-light)); border:1px solid var(--glass-border); position:relative; overflow:hidden; }
+        .vb-glow { position:absolute; inset:0; background:radial-gradient(ellipse at 40% 70%,rgba(245,168,0,0.12) 0%,transparent 65%); }
+        .vb-inner-grid { position:absolute; inset:0; background-image:repeating-linear-gradient(0deg,transparent,transparent 44px,rgba(245,168,0,0.04) 44px,rgba(245,168,0,0.04) 45px),repeating-linear-gradient(90deg,transparent,transparent 44px,rgba(245,168,0,0.04) 44px,rgba(245,168,0,0.04) 45px); }
+        .vb-symbol { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:120px; opacity:0.05; line-height:1; }
+        .vb-bottom { position:absolute; bottom:0; left:0; right:0; padding:30px; background:linear-gradient(to top,rgba(10,22,40,0.97),transparent); }
+        .vb-badge { display:inline-block; background:var(--yellow); color:var(--navy); font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; padding:4px 12px; margin-bottom:8px; border-radius:2px; }
+        .vb-title { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:var(--white); margin-bottom:3px; }
+        .vb-sub { font-size:12px; color:rgba(245,240,232,0.45); letter-spacing:1px; }
+        .float-card { position:absolute; top:40px; right:-24px; width:158px; background:var(--navy-mid); border:1px solid var(--glass-border); padding:22px; box-shadow:0 20px 60px rgba(0,0,0,0.5); animation:floatCard 5s ease-in-out infinite; }
+        .float-num { font-family:'Playfair Display',serif; font-size:42px; font-weight:900; color:var(--yellow); line-height:1; }
+        .float-lbl { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:rgba(245,240,232,0.45); margin-top:5px; line-height:1.4; }
+        .check-list { list-style:none; margin-top:24px; display:flex; flex-direction:column; gap:12px; }
+        .check-list li { display:flex; align-items:flex-start; gap:12px; font-size:14px; color:rgba(245,240,232,0.7); line-height:1.5; }
+        .check-icon { width:20px; height:20px; background:var(--yellow); border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+        .check-icon svg { width:11px; height:11px; stroke:var(--navy); fill:none; stroke-width:3; }
+
+        /* Why Georgia */
+        .why-georgia { padding:110px 60px; background:rgba(13,31,60,0.4); }
+        .why-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin-top:56px; }
+        .why-card { padding:40px 28px; border:1px solid var(--glass-border); background:var(--glass); position:relative; overflow:hidden; transition:all 0.4s; }
+        .why-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; background:var(--yellow); transform:scaleX(0); transition:transform 0.4s; transform-origin:left; }
+        .why-card:hover::after { transform:scaleX(1); }
+        .why-card:hover { border-color:rgba(245,168,0,0.3); transform:translateY(-4px); background:rgba(245,168,0,0.03); }
+        .wc-icon { width:48px; height:48px; background:rgba(245,168,0,0.1); border:1px solid rgba(245,168,0,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:20px; transition:all 0.3s; }
+        .why-card:hover .wc-icon { background:var(--yellow); border-color:var(--yellow); }
+        .why-card:hover .wc-icon svg { stroke:var(--navy); }
+        .wc-icon svg { width:22px; height:22px; stroke:var(--yellow); fill:none; stroke-width:1.5; transition:stroke 0.3s; }
+        .wc-title { font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--white); margin-bottom:10px; }
+        .wc-text { font-size:13px; color:rgba(245,240,232,0.5); line-height:1.72; }
+
+        /* Services preview */
+        .services-preview { padding:110px 60px; }
+        .srv-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin-top:56px; }
+        .srv-card-home { border:1px solid var(--glass-border); padding:36px 28px; background:var(--glass); transition:all 0.4s; cursor:pointer; position:relative; overflow:hidden; }
+        .srv-card-home::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--yellow); transform:scaleX(0); transition:transform 0.4s; transform-origin:left; }
+        .srv-card-home:hover::before { transform:scaleX(1); }
+        .srv-card-home:hover { border-color:rgba(245,168,0,0.3); transform:translateY(-4px); background:rgba(245,168,0,0.03); }
+        .srv-ico { width:52px; height:52px; background:rgba(245,168,0,0.1); border:1px solid rgba(245,168,0,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:20px; transition:all 0.3s; }
+        .srv-card-home:hover .srv-ico { background:var(--yellow); }
+        .srv-card-home:hover .srv-ico svg { stroke:var(--navy); }
+        .srv-ico svg { width:22px; height:22px; stroke:var(--yellow); fill:none; stroke-width:1.5; transition:stroke 0.3s; }
+        .srv-num-tag { font-size:10px; font-weight:700; letter-spacing:3px; color:var(--yellow); margin-bottom:10px; opacity:0.6; }
+        .srv-title { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:var(--white); margin-bottom:12px; }
+        .srv-text { font-size:13px; color:rgba(245,240,232,0.5); line-height:1.72; }
+
+        /* Testimonials */
+        .testimonials { padding:110px 60px; background:rgba(13,31,60,0.4); }
+        .testi-inner { display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:center; }
+        .big-quote { font-family:'Playfair Display',serif; font-size:120px; color:var(--yellow); opacity:0.15; line-height:0.75; margin-bottom:18px; }
+        .stars { display:flex; gap:4px; margin-bottom:18px; }
+        .star { color:var(--yellow); font-size:16px; }
+        .testi-text { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:300; font-style:italic; color:var(--white); line-height:1.62; margin-bottom:28px; }
+        .author { display:flex; align-items:center; gap:16px; }
+        .ava { width:50px; height:50px; border-radius:50%; background:var(--yellow); display:flex; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:18px; font-weight:700; color:var(--navy); flex-shrink:0; }
+        .ava-info h4 { font-size:14px; font-weight:600; color:var(--white); margin-bottom:2px; }
+        .ava-info p { font-size:11px; color:rgba(245,240,232,0.45); letter-spacing:1px; }
+        .mini-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+        .mini-card { padding:24px; border:1px solid var(--glass-border); background:var(--glass); transition:all 0.3s; border-radius:4px; }
+        .mini-card:hover { border-color:rgba(245,168,0,0.3); }
+        .mini-card.wide { grid-column:span 2; background:rgba(245,168,0,0.04); border-color:rgba(245,168,0,0.15); }
+        .mini-stars { display:flex; gap:2px; margin-bottom:10px; }
+        .mini-star { color:var(--yellow); font-size:12px; }
+        .mini-text { font-family:'Cormorant Garamond',serif; font-size:15px; font-style:italic; color:rgba(245,240,232,0.7); line-height:1.6; margin-bottom:10px; }
+        .mini-author { font-size:11px; font-weight:700; color:var(--yellow); letter-spacing:1px; }
+
+        /* ══════════════════════
+           UNIVERSITIES PAGE
+        ══════════════════════ */
+        .uni-intro-section { padding:80px 60px; display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:center; border-bottom:1px solid rgba(245,168,0,0.1); }
+        .uni-intro-stats { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+        .intro-stat { padding:28px; border:1px solid var(--glass-border); background:var(--glass); text-align:center; transition:all 0.3s; }
+        .intro-stat:hover { border-color:rgba(245,168,0,0.3); }
+        .intro-stat-num { font-family:'Playfair Display',serif; font-size:42px; font-weight:700; color:var(--yellow); line-height:1; margin-bottom:6px; }
+        .intro-stat-lbl { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:rgba(245,240,232,0.45); }
+
+        /* University cards grid */
+        .unis-section { padding:60px 60px 100px; }
+        .unis-section-title { font-family:'Playfair Display',serif; font-size:clamp(28px,3vw,42px); font-weight:700; color:var(--white); margin-bottom:8px; text-align:center; }
+        .unis-section-title em { font-style:italic; color:var(--yellow); }
+        .unis-section-sub { text-align:center; font-size:14px; color:rgba(245,240,232,0.45); margin-bottom:48px; letter-spacing:1px; }
+
+        .unis-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; }
+        .uni-card {
+            background: var(--white);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.4s;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .uni-card:hover { transform:translateY(-6px); box-shadow:0 12px 40px rgba(0,0,0,0.35); }
+        .uni-card-img {
+            height: 200px;
+            background: #f8f8f8;
+            display: flex; align-items: center; justify-content: center;
+            padding: 28px; position: relative; overflow: hidden;
+        }
+        .uni-card-img img {
+            max-width: 100%; max-height: 140px;
+            object-fit: contain;
+            transition: transform 0.4s;
+        }
+        .uni-card:hover .uni-card-img img { transform: scale(1.05); }
+        .uni-card-img-fallback {
+            font-family: 'Playfair Display', serif;
+            font-size: 42px; font-weight: 900;
+            color: var(--navy); opacity: 0.2;
+        }
+        .uni-badge {
+            position: absolute; top: 12px; right: 12px;
+            background: var(--yellow); color: var(--navy);
+            font-size: 9px; font-weight: 700;
+            letter-spacing: 1.5px; text-transform: uppercase;
+            padding: 4px 10px; border-radius: 2px;
+        }
+        .uni-card-body { padding:24px; background:var(--navy-mid); }
+        .uni-card-name { font-family:'Playfair Display',serif; font-size:18px; font-weight:700; color:var(--white); margin-bottom:6px; line-height:1.3; }
+        .uni-card-abbr { font-size:11px; font-weight:700; color:var(--yellow); letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; }
+        .uni-card-location { font-size:12px; color:rgba(245,240,232,0.45); margin-bottom:12px; display:flex; align-items:center; gap:5px; }
+        .uni-card-location svg { width:12px; height:12px; stroke:var(--yellow); fill:none; stroke-width:2; flex-shrink:0; }
+        .uni-card-desc { font-size:13px; color:rgba(245,240,232,0.55); line-height:1.65; margin-bottom:18px; }
+        .uni-card-programs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; }
+        .prog-tag { font-size:10px; letter-spacing:1px; text-transform:uppercase; color:rgba(245,240,232,0.5); border:1px solid rgba(245,168,0,0.2); padding:3px 9px; border-radius:2px; }
+        .uni-card-foot { display:flex; align-items:center; justify-content:space-between; padding-top:14px; border-top:1px solid rgba(245,168,0,0.1); }
+        .uni-card-tuition { font-family:'Playfair Display',serif; font-size:18px; color:var(--yellow); font-weight:700; }
+        .uni-card-tuition small { font-family:'Inter',sans-serif; font-size:10px; color:rgba(245,240,232,0.35); font-weight:400; }
+        .uni-apply { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--yellow); background:rgba(245,168,0,0.08); border:1px solid rgba(245,168,0,0.3); padding:8px 16px; cursor:pointer; transition:all 0.3s; font-family:'Inter',sans-serif; border-radius:3px; }
+        .uni-apply:hover { background:var(--yellow); color:var(--navy); }
+
+        /* ══════════════════════
+           SERVICES PAGE
+        ══════════════════════ */
+        .services-full { padding:80px 60px 100px; }
+        .main-services { display:flex; flex-direction:column; gap:2px; margin-bottom:80px; }
+        .main-srv { display:grid; grid-template-columns:1fr 1fr; min-height:380px; border:1px solid rgba(245,168,0,0.1); overflow:hidden; transition:border-color 0.4s; }
+        .main-srv:hover { border-color:rgba(245,168,0,0.3); }
+        .main-srv:nth-child(even) { direction:rtl; }
+        .main-srv:nth-child(even) > * { direction:ltr; }
+        .msrv-visual { position:relative; overflow:hidden; min-height:360px; }
+        .msrv-visual-bg { position:absolute; inset:0; transition:transform 0.6s ease; }
+        .main-srv:hover .msrv-visual-bg { transform:scale(1.04); }
+        .mvbg1 { background:radial-gradient(ellipse at 50% 50%,rgba(245,168,0,0.15) 0%,transparent 60%),linear-gradient(135deg,#162952,#0A1628); }
+        .mvbg2 { background:radial-gradient(ellipse at 50% 50%,rgba(245,168,0,0.12) 0%,transparent 60%),linear-gradient(135deg,#0F2044,#162952); }
+        .mvbg3 { background:radial-gradient(ellipse at 50% 50%,rgba(245,168,0,0.1) 0%,transparent 60%),linear-gradient(135deg,#0A1628,#0F2044); }
+        .mvbg4 { background:radial-gradient(ellipse at 50% 50%,rgba(245,168,0,0.13) 0%,transparent 60%),linear-gradient(135deg,#162952,#0F2044); }
+        .msrv-symbol { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:110px; opacity:0.06; line-height:1; }
+        .msrv-body { padding:52px 48px; display:flex; flex-direction:column; justify-content:center; background:var(--navy-mid); }
+        .msrv-num { font-family:'Playfair Display',serif; font-size:64px; font-weight:900; color:rgba(245,168,0,0.07); line-height:1; margin-bottom:14px; }
+        .msrv-title { font-family:'Playfair Display',serif; font-size:30px; font-weight:700; color:var(--white); margin-bottom:14px; line-height:1.1; }
+        .msrv-title em { font-style:italic; color:var(--yellow); }
+        .msrv-text { font-size:14px; color:rgba(245,240,232,0.55); line-height:1.75; margin-bottom:24px; }
+        .msrv-list { list-style:none; display:flex; flex-direction:column; gap:10px; margin-bottom:28px; }
+        .msrv-list li { display:flex; align-items:center; gap:10px; font-size:13px; color:rgba(245,240,232,0.65); }
+        .msrv-list li::before { content:'✓'; width:20px; height:20px; background:rgba(245,168,0,0.1); border:1px solid rgba(245,168,0,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:11px; color:var(--yellow); font-weight:700; border-radius:50%; }
+        .add-services-section { border-top:1px solid rgba(245,168,0,0.1); padding-top:60px; }
+        .add-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:40px; }
+        .add-card { padding:34px 26px; border:1px solid var(--glass-border); background:var(--glass); transition:all 0.4s; }
+        .add-card:hover { border-color:rgba(245,168,0,0.3); transform:translateY(-4px); background:rgba(245,168,0,0.03); }
+        .add-ico { width:42px; height:42px; background:rgba(245,168,0,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:16px; transition:all 0.3s; }
+        .add-ico svg { width:18px; height:18px; stroke:var(--yellow); fill:none; stroke-width:1.5; transition:stroke 0.3s; }
+        .add-card:hover .add-ico { background:var(--yellow); }
+        .add-card:hover .add-ico svg { stroke:var(--navy); }
+        .add-title { font-family:'Playfair Display',serif; font-size:18px; font-weight:700; color:var(--white); margin-bottom:8px; }
+        .add-text { font-size:12px; color:rgba(245,240,232,0.48); line-height:1.68; }
+
+        /* ══════════════════════
+           ABOUT PAGE
+        ══════════════════════ */
+        .about-story-section { padding:80px 60px; display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:center; }
+        .about-mission { padding:80px 60px; background:rgba(13,31,60,0.4); }
+        .mission-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; margin-top:52px; }
+        .mc { padding:38px 28px; border:1px solid var(--glass-border); background:var(--glass); transition:all 0.4s; }
+        .mc:hover { border-color:rgba(245,168,0,0.3); transform:translateY(-4px); }
+        .mc-ico { width:44px; height:44px; background:rgba(245,168,0,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:18px; transition:all 0.3s; }
+        .mc-ico svg { width:20px; height:20px; stroke:var(--yellow); fill:none; stroke-width:1.5; transition:stroke 0.3s; }
+        .mc:hover .mc-ico { background:var(--yellow); }
+        .mc:hover .mc-ico svg { stroke:var(--navy); }
+        .mc-title { font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--white); margin-bottom:10px; }
+        .mc-text { font-size:13px; color:rgba(245,240,232,0.5); line-height:1.72; }
+        .team-section { padding:80px 60px; }
+        .team-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-top:48px; }
+        .team-card { border:1px solid var(--glass-border); overflow:hidden; text-align:center; transition:all 0.3s; }
+        .team-card:hover { border-color:rgba(245,168,0,0.3); transform:translateY(-4px); }
+        .team-img { height:240px; background:linear-gradient(135deg,var(--navy-mid),var(--navy-light)); display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+        .team-img::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 100%,rgba(245,168,0,0.08) 0%,transparent 60%); }
+        .team-ava { font-family:'Playfair Display',serif; font-size:60px; font-weight:900; color:rgba(245,168,0,0.15); }
+        .team-body { padding:20px 16px; background:var(--navy-mid); }
+        .team-name { font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:var(--white); margin-bottom:4px; }
+        .team-role { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--yellow); }
+        .process-section { padding:80px 60px; border-top:1px solid rgba(245,168,0,0.1); }
+        .process-steps { display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin-top:52px; position:relative; }
+        .process-steps::before { content:''; position:absolute; top:27px; left:12%; right:12%; height:1px; background:linear-gradient(to right,transparent,rgba(245,168,0,0.2),rgba(245,168,0,0.2),transparent); }
+        .step { text-align:center; padding:0 16px; }
+        .step-num { width:54px; height:54px; border:2px solid var(--yellow); border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--yellow); margin:0 auto 18px; background:var(--navy); position:relative; z-index:1; }
+        .step-title { font-family:'Playfair Display',serif; font-size:16px; font-weight:700; color:var(--white); margin-bottom:8px; }
+        .step-text { font-size:12px; color:rgba(245,240,232,0.48); line-height:1.6; }
+
+        /* ══════════════════════
+           CONTACT PAGE
+        ══════════════════════ */
+        .contact-wrap { padding:80px 60px 100px; }
+        .contact-grid { display:grid; grid-template-columns:1fr 1.3fr; gap:72px; align-items:start; }
+        .contact-info-box { padding:40px; border:1px solid rgba(245,168,0,0.12); background:rgba(245,168,0,0.03); margin-bottom:24px; }
+        .contact-item { display:flex; gap:16px; align-items:flex-start; margin-bottom:28px; }
+        .contact-item:last-child { margin-bottom:0; }
+        .c-ico { width:40px; height:40px; background:rgba(245,168,0,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .c-ico svg { width:17px; height:17px; stroke:var(--yellow); fill:none; stroke-width:1.5; }
+        .c-lbl { font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--yellow); margin-bottom:4px; font-weight:700; }
+        .c-val { font-size:15px; color:var(--white); font-weight:500; }
+        .c-val a { color:var(--white); text-decoration:none; transition:color 0.3s; }
+        .c-val a:hover { color:var(--yellow); }
+        .social-row { display:flex; gap:10px; margin-top:24px; }
+        .soc-link { width:40px; height:40px; background:rgba(245,168,0,0.08); border:1px solid rgba(245,168,0,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--yellow); font-size:12px; font-weight:700; text-decoration:none; transition:all 0.3s; }
+        .soc-link:hover { background:var(--yellow); color:var(--navy); }
+        .form-title { font-family:'Playfair Display',serif; font-size:36px; font-weight:700; color:var(--white); margin-bottom:30px; }
+        .form-title em { font-style:italic; color:var(--yellow); }
+        .form-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+        .form-group { margin-bottom:14px; }
+        .form-group label { display:block; font-size:10px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:rgba(245,240,232,0.45); margin-bottom:8px; }
+        .form-group input, .form-group select, .form-group textarea { width:100%; background:rgba(255,255,255,0.04); border:1px solid rgba(245,168,0,0.12); color:var(--white); padding:13px 16px; font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color 0.3s; border-radius:4px; -webkit-appearance:none; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color:rgba(245,168,0,0.5); background:rgba(245,168,0,0.03); }
+        .form-group input::placeholder, .form-group textarea::placeholder { color:rgba(245,240,232,0.2); }
+        .form-group select option { background:var(--navy-mid); }
+        .form-group textarea { height:120px; resize:vertical; }
+        .form-success { display:none; padding:18px; background:rgba(40,167,69,0.15); border:1px solid rgba(40,167,69,0.3); color:#6fcf97; font-size:13px; margin-top:14px; text-align:center; border-radius:4px; }
+
+        /* RESPONSIVE */
+        @media(max-width:1024px){
+            .unis-grid { grid-template-columns:repeat(2,1fr); }
+            .why-grid,.mission-grid,.add-grid { grid-template-columns:1fr 1fr; }
+            .main-srv { grid-template-columns:1fr; }
+            .main-srv:nth-child(even) { direction:ltr; }
+            .msrv-visual { min-height:240px; }
+            .team-grid { grid-template-columns:repeat(2,1fr); }
+        }
+        @media(max-width:768px){
+            .topbar { padding:8px 16px; display:none; }
+            nav { top:0; padding:0 20px; height:64px; }
+            .nav-links { display:none; }
+            .hamburger { display:flex; }
+            .hero { padding-top:64px; }
+            .page-hero { padding:100px 24px 60px; }
+            .hero-content { padding:0 24px; }
+            .hero-title { font-size:44px; }
+            .stats-bar { grid-template-columns:1fr 1fr; }
+            .stat-cell { border-bottom:1px solid var(--glass-border); }
+            .home-about,.about-story-section,.testi-inner,.contact-grid,.uni-intro-section { grid-template-columns:1fr; gap:48px; }
+            .float-card { display:none; }
+            .why-grid,.srv-grid,.mission-grid,.add-grid { grid-template-columns:1fr; }
+            .process-steps { grid-template-columns:1fr 1fr; gap:32px; }
+            .process-steps::before { display:none; }
+            .unis-grid { grid-template-columns:1fr; }
+            .mini-grid { grid-template-columns:1fr; }
+            .mini-card.wide { grid-column:span 1; }
+            .home-about,.why-georgia,.services-preview,.testimonials,.cta-strip,.services-full,.contact-wrap,.team-section,.process-section,.about-mission,.about-story-section,.unis-section,.uni-intro-section { padding-left:20px; padding-right:20px; }
+            .footer-grid { grid-template-columns:1fr; gap:28px; }
+            footer { padding:48px 20px 24px; }
+            .footer-top-bar { padding:16px 20px; flex-direction:column; gap:10px; text-align:center; }
+            .footer-bottom { flex-direction:column; gap:12px; text-align:center; }
+            .form-row-2 { grid-template-columns:1fr; }
+            .scroll-hint { display:none; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+    <div class="topbar-left">
+        <div class="topbar-item">
+            <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+            Vakhtang Chabukiani 2, Tbilisi, Georgia
+        </div>
+        <div class="topbar-item">
+            <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg>
+            info@theway.ge
+        </div>
+        <div class="topbar-item">
+            <svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+            +995 571 009 550
+        </div>
+    </div>
+    <div class="topbar-right">
+        <a href="#" class="topbar-social">in</a>
+        <a href="#" class="topbar-social">ig</a>
+        <a href="#" class="topbar-social">wa</a>
+        <a href="#" class="topbar-social">fb</a>
+    </div>
+</div>
+
+<!-- NAV -->
+<nav id="mainNav">
+    <div class="nav-logo" onclick="showPage('home')">
+        <div class="logo-icon">🎓</div>
+        <div class="logo-text-wrap">
+            <div class="logo-main">THE<span>·</span>WAY</div>
+            <div class="logo-sub">Educational Services</div>
+        </div>
+    </div>
+    <ul class="nav-links">
+        <li><a onclick="showPage('home')" id="nl-home" class="active-link">Home</a></li>
+        <li><a onclick="showPage('universities')" id="nl-universities">Universities</a></li>
+        <li><a onclick="showPage('services')" id="nl-services">Our Services</a></li>
+        <li><a onclick="showPage('about')" id="nl-about">About Us</a></li>
+        <li><a onclick="showPage('contact')" id="nl-contact" class="nav-register">Register Now ›</a></li>
+    </ul>
+    <button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
+</nav>
+
+<div class="mobile-menu" id="mMenu">
+    <button class="mobile-close" onclick="toggleMenu()">✕</button>
+    <a onclick="showPage('home');toggleMenu()">Home</a>
+    <a onclick="showPage('universities');toggleMenu()">Universities</a>
+    <a onclick="showPage('services');toggleMenu()">Our Services</a>
+    <a onclick="showPage('about');toggleMenu()">About Us</a>
+    <a onclick="showPage('contact');toggleMenu()">Contact Us</a>
+</div>
+
+<!-- ══════════════════════════════════
+     HOME
+══════════════════════════════════ -->
+<div class="page active" id="page-home">
+
+    <section class="hero">
+        <div class="hero-bg"></div>
+        <div class="hero-grid"></div>
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="hero-content">
+            <div class="hero-eyebrow">
+                <div class="eyebrow-line"></div>
+                <div class="eyebrow-txt">Your Gateway to Education in Georgia</div>
+            </div>
+            <h1 class="hero-title">
+                Study in<br>
+                <em>Georgia</em><br>
+                <span class="ghost">The Right Way</span>
+            </h1>
+            <p class="hero-sub">We guide international students through every step of enrolling in Georgia's top universities — from application to graduation and beyond.</p>
+            <div class="hero-actions">
+                <button class="btn-yellow" onclick="showPage('universities')">
+                    Explore Universities ›
+                </button>
+                <button class="btn-white-outline" onclick="showPage('contact')">Apply Now — Free</button>
+            </div>
+        </div>
+        <div class="scroll-hint">
+            <div class="scroll-bar"></div>
+            <div class="scroll-lbl">Scroll</div>
+        </div>
+        <div class="stats-bar">
+            <div class="stat-cell"><div class="stat-num" data-target="5000" data-suffix="+">0</div><div class="stat-lbl">Students Enrolled</div></div>
+            <div class="stat-cell"><div class="stat-num" data-target="40" data-suffix="+">0</div><div class="stat-lbl">Partner Universities</div></div>
+            <div class="stat-cell"><div class="stat-num" data-target="15" data-suffix="+">0</div><div class="stat-lbl">Years Experience</div></div>
+            <div class="stat-cell"><div class="stat-num" data-target="98" data-suffix="%">0</div><div class="stat-lbl">Success Rate</div></div>
+        </div>
+    </section>
+
+    <div class="marquee-wrap">
+        <div class="marquee-inner">
+            <div class="m-item">Medicine<span class="m-dot"></span></div>
+            <div class="m-item">Dentistry<span class="m-dot"></span></div>
+            <div class="m-item">Pharmacy<span class="m-dot"></span></div>
+            <div class="m-item">Engineering<span class="m-dot"></span></div>
+            <div class="m-item">Law<span class="m-dot"></span></div>
+            <div class="m-item">Business<span class="m-dot"></span></div>
+            <div class="m-item">Architecture<span class="m-dot"></span></div>
+            <div class="m-item">Computer Science<span class="m-dot"></span></div>
+            <div class="m-item">Medicine<span class="m-dot"></span></div>
+            <div class="m-item">Dentistry<span class="m-dot"></span></div>
+            <div class="m-item">Pharmacy<span class="m-dot"></span></div>
+            <div class="m-item">Engineering<span class="m-dot"></span></div>
+            <div class="m-item">Law<span class="m-dot"></span></div>
+            <div class="m-item">Business<span class="m-dot"></span></div>
+            <div class="m-item">Architecture<span class="m-dot"></span></div>
+            <div class="m-item">Computer Science<span class="m-dot"></span></div>
+        </div>
+    </div>
+
+    <!-- About -->
+    <section class="home-about">
+        <div style="position:relative;">
+            <div class="visual-box reveal">
+                <div class="vb-inner-grid"></div>
+                <div class="vb-glow"></div>
+                <div class="vb-symbol">🎓</div>
+                <div class="vb-bottom">
+                    <div class="vb-badge">Trusted Since 2009</div>
+                    <div class="vb-title">Your Education Partner</div>
+                    <div class="vb-sub">Tbilisi · Batumi · Kutaisi · Georgia</div>
+                </div>
+            </div>
+            <div class="float-card">
+                <div class="float-num">40+</div>
+                <div class="float-lbl">Partner Universities</div>
+            </div>
+        </div>
+        <div>
+            <div class="tag reveal"><div class="tag-line"></div><div class="tag-text">About The Way</div></div>
+            <h2 class="sec-title reveal d1">Your Bridge to<br><em>World-Class</em><br>Education in Georgia</h2>
+            <p class="body-txt reveal d2">The Way is a leading student recruitment and consultancy company helping international students gain admission to Georgia's top universities. We simplify every step of the process of studying abroad.</p>
+            <p class="body-txt reveal d2">From choosing the right university and program, to visa support, accommodation, and ongoing student care — we are with you every step of the way.</p>
+            <ul class="check-list reveal d3">
+                <li><div class="check-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></div>Free university admission consulting</li>
+                <li><div class="check-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></div>Official partner of 40+ Georgian universities</li>
+                <li><div class="check-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></div>Full visa & document support</li>
+                <li><div class="check-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></div>Accommodation assistance</li>
+                <li><div class="check-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></div>Airport pickup & arrival support</li>
+                <li><div class="check-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></div>Ongoing student care throughout your studies</li>
+            </ul>
+            <div style="margin-top:28px;display:flex;gap:14px;flex-wrap:wrap;" class="reveal d4">
+                <button class="btn-yellow" onclick="showPage('about')">Learn More About Us</button>
+                <button class="btn-outline" onclick="showPage('contact')">Apply Free</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why Georgia -->
+    <section class="why-georgia">
+        <div style="text-align:center;">
+            <div class="tag reveal" style="justify-content:center;"><div class="tag-line"></div><div class="tag-text">Why Georgia</div><div class="tag-line"></div></div>
+            <h2 class="sec-title reveal d1" style="text-align:center;">Why Study in <em>Georgia?</em></h2>
+        </div>
+        <div class="why-grid">
+            <div class="why-card reveal">
+                <div class="wc-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z"/></svg></div>
+                <div class="wc-title">WHO-Recognized Degrees</div>
+                <div class="wc-text">Georgian university degrees are recognized worldwide by WHO, UNESCO, and international medical councils — your degree opens doors globally.</div>
+            </div>
+            <div class="why-card reveal d1">
+                <div class="wc-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                <div class="wc-title">Affordable Tuition Fees</div>
+                <div class="wc-text">Study medicine, dentistry, and more at a fraction of the cost compared to Europe or the US — without compromising on education quality.</div>
+            </div>
+            <div class="why-card reveal d2">
+                <div class="wc-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802"/></svg></div>
+                <div class="wc-title">English-Taught Programs</div>
+                <div class="wc-text">Most programs are offered fully in English, making Georgia accessible to international students without a language barrier.</div>
+            </div>
+            <div class="why-card reveal">
+                <div class="wc-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg></div>
+                <div class="wc-title">Safe & Welcoming Country</div>
+                <div class="wc-text">Georgia is consistently ranked among the safest countries in the world with a warm culture that truly welcomes international students.</div>
+            </div>
+            <div class="why-card reveal d1">
+                <div class="wc-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/></svg></div>
+                <div class="wc-title">Modern Universities</div>
+                <div class="wc-text">Georgia's universities feature state-of-the-art facilities, modern hospitals for clinical training, and internationally qualified professors.</div>
+            </div>
+            <div class="why-card reveal d2">
+                <div class="wc-icon"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg></div>
+                <div class="wc-title">Vibrant Student Life</div>
+                <div class="wc-text">Join a thriving international student community in beautiful Tbilisi — a city that blends ancient history with a modern, cosmopolitan energy.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services preview -->
+    <section class="services-preview">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;">
+            <div>
+                <div class="tag reveal"><div class="tag-line"></div><div class="tag-text">What We Offer</div></div>
+                <h2 class="sec-title reveal d1">Our <em>Services</em></h2>
+            </div>
+            <button class="btn-outline reveal d2" onclick="showPage('services')" style="padding:10px 24px;font-size:10px;">View All Services</button>
+        </div>
+        <div class="srv-grid">
+            <div class="srv-card-home reveal" onclick="showPage('services')">
+                <div class="srv-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z"/></svg></div>
+                <div class="srv-num-tag">01 ——</div>
+                <div class="srv-title">University Admission</div>
+                <div class="srv-text">Free consultation and complete application support to get you admitted into your chosen Georgian university and program.</div>
+            </div>
+            <div class="srv-card-home reveal d1" onclick="showPage('services')">
+                <div class="srv-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg></div>
+                <div class="srv-num-tag">02 ——</div>
+                <div class="srv-title">Visa & Documents</div>
+                <div class="srv-text">Full support with student visa applications, document translation, notarization, and all official paperwork required for your studies.</div>
+            </div>
+            <div class="srv-card-home reveal d2" onclick="showPage('services')">
+                <div class="srv-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21"/></svg></div>
+                <div class="srv-num-tag">03 ——</div>
+                <div class="srv-title">Accommodation</div>
+                <div class="srv-text">We help you find safe, comfortable, and affordable accommodation near your university before you even arrive in Georgia.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials">
+        <div class="testi-inner">
+            <div>
+                <div class="tag reveal"><div class="tag-line"></div><div class="tag-text">Student Stories</div></div>
+                <div class="big-quote reveal">"</div>
+                <div class="stars reveal d1"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
+                <p class="testi-text reveal d2">"The Way made my dream of studying medicine in Georgia a reality. They handled everything — my admission, visa, and even my accommodation. I arrived feeling prepared and supported."</p>
+                <div class="author reveal d3">
+                    <div class="ava">A</div>
+                    <div class="ava-info"><h4>Ahmed Al-Rashidi</h4><p>Medical Student · From Jordan</p></div>
+                </div>
+            </div>
+            <div class="mini-grid reveal d2">
+                <div class="mini-card wide">
+                    <div class="mini-stars"><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span></div>
+                    <p class="mini-text">"I was confused about which university to choose for dentistry. The Way's consultants guided me perfectly. Now I'm in my second year and couldn't be happier with my choice."</p>
+                    <div class="mini-author">— Priya Sharma · Dentistry Student, India</div>
+                </div>
+                <div class="mini-card">
+                    <div class="mini-stars"><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span></div>
+                    <p class="mini-text">"Fast, professional, genuinely caring. Best decision I ever made."</p>
+                    <div class="mini-author">— David Osei · Ghana</div>
+                </div>
+                <div class="mini-card">
+                    <div class="mini-stars"><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span><span class="mini-star">★</span></div>
+                    <p class="mini-text">"They answered every question instantly. Outstanding support team."</p>
+                    <div class="mini-author">— Fatima Malik · Pakistan</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-strip">
+        <div class="cta-bg"></div><div class="cta-grid"></div>
+        <div class="cta-inner">
+            <div class="tag reveal" style="justify-content:center;margin-bottom:18px;"><div class="tag-line"></div><div class="tag-text">Begin Your Journey</div><div class="tag-line"></div></div>
+            <h2 class="cta-title reveal d1">Start Your Studies<br><em>in Georgia Today</em></h2>
+            <p class="cta-sub reveal d2">Free consultation. No hidden fees. Expert guidance to get you into the university of your dreams.</p>
+            <div class="cta-btns reveal d3">
+                <button class="btn-yellow" onclick="showPage('contact')">Apply Now — It's Free</button>
+                <button class="btn-white-outline" onclick="showPage('universities')">Browse Universities</button>
+            </div>
+        </div>
+    </section>
+
+</div><!-- /home -->
+
+<!-- ══════════════════════════════════
+     UNIVERSITIES
+══════════════════════════════════ -->
+<div class="page" id="page-universities">
+
+    <div class="page-hero">
+        <div class="page-hero-bg"></div>
+        <div class="page-hero-grid"></div>
+        <div class="orb orb-1"></div>
+        <div class="page-hero-inner">
+            <div class="tag"><div class="tag-line"></div><div class="tag-text">Our Partners</div></div>
+            <h1 class="page-big-title">All<br><em>Universities</em></h1>
+            <p class="page-hero-sub">Explore our partner universities across Georgia. All institutions are officially accredited and internationally recognized.</p>
+        </div>
+    </div>
+
+    <!-- Intro -->
+    <div class="uni-intro-section">
+        <div class="reveal">
+            <div class="tag"><div class="tag-line"></div><div class="tag-text">Why Our Universities</div></div>
+            <h2 class="sec-title">Internationally<br><em>Recognized</em><br>Institutions</h2>
+            <p class="body-txt">All of our partner universities are fully accredited by the Georgian Ministry of Education and internationally recognized by the World Health Organization (WHO), the Educational Commission for Foreign Medical Graduates (ECFMG), and other major international bodies.</p>
+            <p class="body-txt">Whether you want to study medicine, engineering, law, business, or any other field — we have the right university for your goals and budget.</p>
+        </div>
+        <div class="uni-intro-stats reveal d2">
+            <div class="intro-stat"><div class="intro-stat-num" data-target="40" data-suffix="+">0</div><div class="intro-stat-lbl">Partner Universities</div></div>
+            <div class="intro-stat"><div class="intro-stat-num" data-target="5000" data-suffix="+">0</div><div class="intro-stat-lbl">Students Enrolled</div></div>
+            <div class="intro-stat"><div class="intro-stat-num" data-target="50" data-suffix="+">0</div><div class="intro-stat-lbl">Programs Available</div></div>
+            <div class="intro-stat"><div class="intro-stat-num" data-target="30" data-suffix="+">0</div><div class="intro-stat-lbl">Countries Represented</div></div>
+        </div>
+    </div>
+
+    <!-- University List -->
+    <div class="unis-section">
+        <div style="text-align:center;">
+            <p style="font-size:13px;color:var(--yellow);letter-spacing:3px;text-transform:uppercase;font-weight:700;margin-bottom:8px;">اختر جامعتك</p>
+            <h2 class="unis-section-title">List of <em>Universities in Georgia</em></h2>
+            <p class="unis-section-sub">All universities below are our official partners — click any to enquire</p>
+        </div>
+
+        <div class="unis-grid">
+
+            <div class="uni-card reveal">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://upload.wikimedia.org/wikipedia/en/thumb/d/d9/University_of_Georgia_%28country%29_logo.svg/200px-University_of_Georgia_%28country%29_logo.svg.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="University of Georgia">
+                    <div class="uni-card-img-fallback" style="display:none;">UG</div>
+                    <div class="uni-badge">Top Ranked</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">UG</div>
+                    <div class="uni-card-name">University of Georgia</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">One of Georgia's leading private universities offering programs in business, law, social sciences, medicine, and technology in a modern campus environment.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Medicine</span><span class="prog-tag">Law</span><span class="prog-tag">Business</span><span class="prog-tag">IT</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $4,500 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal d1">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/GAU_logo.png/200px-GAU_logo.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="Georgian American University">
+                    <div class="uni-card-img-fallback" style="display:none;">GAU</div>
+                    <div class="uni-badge">Accredited</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">GAU</div>
+                    <div class="uni-card-name">Georgian American University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">A prestigious private university with American-style education system, offering programs in business administration, law, and social sciences fully in English.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Business</span><span class="prog-tag">Law</span><span class="prog-tag">Social Sciences</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $5,500 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal d2">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://upload.wikimedia.org/wikipedia/en/thumb/5/5a/Tbilisi_State_University_logo.svg/200px-Tbilisi_State_University_logo.svg.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="Ivane Javakhishvili Tbilisi State University">
+                    <div class="uni-card-img-fallback" style="display:none;">TSU</div>
+                    <div class="uni-badge">#1 Georgia</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">TSU</div>
+                    <div class="uni-card-name">Ivane Javakhishvili Tbilisi State University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">Georgia's oldest and most prestigious university, founded in 1918. The #1 ranked university in Georgia offering a wide range of internationally accredited programs.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Medicine</span><span class="prog-tag">Law</span><span class="prog-tag">Sciences</span><span class="prog-tag">Humanities</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $4,000 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/TSMU.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="Tbilisi State Medical University">
+                    <div class="uni-card-img-fallback" style="display:none;">TSMU</div>
+                    <div class="uni-badge">WHO Recognized</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">TSMU</div>
+                    <div class="uni-card-name">Tbilisi State Medical University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">Established in 1918, TSMU is one of the oldest medical universities in the Caucasus. Fully WHO-recognized MD program delivered in English with top clinical training.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Medicine MD</span><span class="prog-tag">Dentistry</span><span class="prog-tag">Pharmacy</span><span class="prog-tag">Public Health</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $7,000 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal d1">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/GTU.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="Georgian Technical University">
+                    <div class="uni-card-img-fallback" style="display:none;">GTU</div>
+                    <div class="uni-badge">Accredited</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">GTU</div>
+                    <div class="uni-card-name">Georgian Technical University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">The country's leading technical university offering cutting-edge programs in civil engineering, computer science, electrical engineering, and information technology.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Engineering</span><span class="prog-tag">IT</span><span class="prog-tag">Architecture</span><span class="prog-tag">Geology</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $3,500 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal d2">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/David-Tvildiani.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="David Tvildiani Medical University">
+                    <div class="uni-card-img-fallback" style="display:none;">AIETI</div>
+                    <div class="uni-badge">WHO Recognized</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">DTMU / AIETI</div>
+                    <div class="uni-card-name">David Tvildiani Medical University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">One of Georgia's leading medical universities, fully recognized by WHO and global medical councils. Excellent clinical training with modern simulation labs and teaching hospitals.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Medicine MD</span><span class="prog-tag">Dentistry</span><span class="prog-tag">Pharmacy</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $6,000 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/Caucasus-University.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="Caucasus University">
+                    <div class="uni-card-img-fallback" style="display:none;">CU</div>
+                    <div class="uni-badge">Accredited</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">CU</div>
+                    <div class="uni-card-name">Caucasus University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">A dynamic private university known for innovative teaching methods. Offers strong programs in business, technology, law, and social sciences with an international outlook.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Business</span><span class="prog-tag">Technology</span><span class="prog-tag">Law</span><span class="prog-tag">Media</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $4,800 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal d1">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/Ilia-State-University.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="Ilia State University">
+                    <div class="uni-card-img-fallback" style="display:none;">ISU</div>
+                    <div class="uni-badge">State University</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">ISU</div>
+                    <div class="uni-card-name">Ilia State University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">A prestigious state university combining liberal arts traditions with modern research. Known for excellence in natural sciences, humanities, and social sciences.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Natural Sciences</span><span class="prog-tag">Humanities</span><span class="prog-tag">Psychology</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $3,200 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal d2">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/Akaki-Tsereteli-State-University.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="Akaki Tsereteli State University">
+                    <div class="uni-card-img-fallback" style="display:none;">ATSU</div>
+                    <div class="uni-badge">State University</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">ATSU</div>
+                    <div class="uni-card-name">Akaki Tsereteli State University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Kutaisi, Georgia</div>
+                    <div class="uni-card-desc">Located in Kutaisi, Georgia's third-largest city. A reputable state university offering diverse programs at very affordable tuition rates in a smaller city environment.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Medicine</span><span class="prog-tag">Engineering</span><span class="prog-tag">Pedagogy</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $2,800 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/Batumi-Shota-Rustaveli-State-University.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="Batumi Shota Rustaveli State University">
+                    <div class="uni-card-img-fallback" style="display:none;">BSU</div>
+                    <div class="uni-badge">State University</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">BSU</div>
+                    <div class="uni-card-name">Batumi Shota Rustaveli State University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Batumi, Georgia</div>
+                    <div class="uni-card-desc">Located in the vibrant coastal city of Batumi on the Black Sea. Excellent programs at very affordable tuition rates with a beautiful city and stunning surroundings.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Medicine</span><span class="prog-tag">Business</span><span class="prog-tag">Tourism</span><span class="prog-tag">Law</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $3,000 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal d1">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/New-Vision-University.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="New Vision University">
+                    <div class="uni-card-img-fallback" style="display:none;">NVU</div>
+                    <div class="uni-badge">WHO Recognized</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">NVU</div>
+                    <div class="uni-card-name">New Vision University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">A modern international university offering WHO-recognized programs in medicine, business, and technology. Known for its contemporary campus and international faculty.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Medicine MD</span><span class="prog-tag">Business</span><span class="prog-tag">Computer Science</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $6,500 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="uni-card reveal d2">
+                <div class="uni-card-img" style="background:#fff;">
+                    <img src="https://theway.ge/wp-content/uploads/2022/02/East-European-University.png" onerror="this.parentElement.querySelector('.uni-card-img-fallback').style.display='flex';this.style.display='none'" alt="East European University">
+                    <div class="uni-card-img-fallback" style="display:none;">EEU</div>
+                    <div class="uni-badge">Accredited</div>
+                </div>
+                <div class="uni-card-body">
+                    <div class="uni-card-abbr">EEU</div>
+                    <div class="uni-card-name">East European University</div>
+                    <div class="uni-card-location"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg> Tbilisi, Georgia</div>
+                    <div class="uni-card-desc">An internationally oriented university with programs in law, business, social sciences, and healthcare management. Strong focus on practical skills and career readiness.</div>
+                    <div class="uni-card-programs"><span class="prog-tag">Law</span><span class="prog-tag">Business</span><span class="prog-tag">Healthcare Mgmt</span></div>
+                    <div class="uni-card-foot">
+                        <div class="uni-card-tuition">From $3,800 <small>/ year</small></div>
+                        <button class="uni-apply" onclick="showPage('contact')">Apply Now</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <section class="cta-strip" style="padding:100px 60px;">
+        <div class="cta-bg"></div><div class="cta-grid"></div>
+        <div class="cta-inner">
+            <h2 class="cta-title reveal d1">Not Sure Which<br><em>University Is Right?</em></h2>
+            <p class="cta-sub reveal d2">Our expert consultants will match you to the perfect university based on your goals, budget, and field — completely free.</p>
+            <div class="cta-btns reveal d3">
+                <button class="btn-yellow" onclick="showPage('contact')">Free Consultation</button>
+            </div>
+        </div>
+    </section>
+
+</div><!-- /universities -->
+
+<!-- ══════════════════════════════════
+     SERVICES
+══════════════════════════════════ -->
+<div class="page" id="page-services">
+    <div class="page-hero">
+        <div class="page-hero-bg"></div><div class="page-hero-grid"></div><div class="orb orb-1"></div>
+        <div class="page-hero-inner">
+            <div class="tag"><div class="tag-line"></div><div class="tag-text">What We Offer</div></div>
+            <h1 class="page-big-title">Our<br><em>Services</em></h1>
+            <p class="page-hero-sub">Comprehensive support from your very first inquiry all the way through graduation. We handle everything so you can focus on your future.</p>
+        </div>
+    </div>
+    <div class="services-full">
+        <div class="main-services">
+            <div class="main-srv reveal">
+                <div class="msrv-visual"><div class="msrv-visual-bg mvbg1"></div><div class="msrv-symbol">🎓</div></div>
+                <div class="msrv-body">
+                    <div class="msrv-num">01</div>
+                    <h3 class="msrv-title">University <em>Admission</em></h3>
+                    <p class="msrv-text">We guide you through the entire university application process — from selecting the right institution to receiving your official acceptance letter.</p>
+                    <ul class="msrv-list">
+                        <li>Free university selection consultation</li>
+                        <li>Application form preparation & submission</li>
+                        <li>Document checklist & verification</li>
+                        <li>Admission letter follow-up</li>
+                        <li>University enrollment support</li>
+                    </ul>
+                    <button class="btn-yellow" onclick="showPage('contact')">Apply Now</button>
+                </div>
+            </div>
+            <div class="main-srv reveal d1">
+                <div class="msrv-visual"><div class="msrv-visual-bg mvbg2"></div><div class="msrv-symbol">📋</div></div>
+                <div class="msrv-body">
+                    <div class="msrv-num">02</div>
+                    <h3 class="msrv-title">Visa & Document <em>Support</em></h3>
+                    <p class="msrv-text">Our team handles all paperwork with precision and expertise, ensuring a smooth and stress-free process for all your visa and document needs.</p>
+                    <ul class="msrv-list">
+                        <li>Student visa application assistance</li>
+                        <li>Document translation & notarization</li>
+                        <li>Credential evaluation & verification</li>
+                        <li>Embassy appointment guidance</li>
+                        <li>Residence permit support in Georgia</li>
+                    </ul>
+                    <button class="btn-yellow" onclick="showPage('contact')">Get Support</button>
+                </div>
+            </div>
+            <div class="main-srv reveal">
+                <div class="msrv-visual"><div class="msrv-visual-bg mvbg3"></div><div class="msrv-symbol">🏠</div></div>
+                <div class="msrv-body">
+                    <div class="msrv-num">03</div>
+                    <h3 class="msrv-title">Accommodation <em>Assistance</em></h3>
+                    <p class="msrv-text">We help you secure safe, affordable, and convenient accommodation before you even arrive in Georgia — so you arrive stress-free.</p>
+                    <ul class="msrv-list">
+                        <li>University dormitory arrangements</li>
+                        <li>Private apartment sourcing</li>
+                        <li>Shared student housing options</li>
+                        <li>Pre-arrival accommodation booking</li>
+                        <li>Airport pickup coordination</li>
+                    </ul>
+                    <button class="btn-yellow" onclick="showPage('contact')">Find Housing</button>
+                </div>
+            </div>
+            <div class="main-srv reveal d1">
+                <div class="msrv-visual"><div class="msrv-visual-bg mvbg4"></div><div class="msrv-symbol">🤝</div></div>
+                <div class="msrv-body">
+                    <div class="msrv-num">04</div>
+                    <h3 class="msrv-title">Ongoing Student <em>Care</em></h3>
+                    <p class="msrv-text">Our relationship doesn't end when you arrive. We provide continuous support throughout your entire study journey in Georgia.</p>
+                    <ul class="msrv-list">
+                        <li>Airport reception on arrival day</li>
+                        <li>University registration assistance</li>
+                        <li>Local SIM card & bank account setup</li>
+                        <li>Ongoing academic guidance & support</li>
+                        <li>24/7 emergency helpline</li>
+                    </ul>
+                    <button class="btn-yellow" onclick="showPage('contact')">Learn More</button>
+                </div>
+            </div>
+        </div>
+        <div class="add-services-section">
+            <div class="tag reveal"><div class="tag-line"></div><div class="tag-text">Also Available</div></div>
+            <h2 class="sec-title reveal d1">Additional <em>Support Services</em></h2>
+            <div class="add-grid">
+                <div class="add-card reveal"><div class="add-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802"/></svg></div><div class="add-title">Language Preparation</div><div class="add-text">Georgian and English language preparation courses to help you settle in and communicate effectively from day one.</div></div>
+                <div class="add-card reveal d1"><div class="add-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div class="add-title">Scholarship Guidance</div><div class="add-text">We inform you about available scholarships, grants, and financial aid options to help reduce your total study costs.</div></div>
+                <div class="add-card reveal d2"><div class="add-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg></div><div class="add-title">Health Insurance</div><div class="add-text">Assistance in obtaining affordable student health insurance coverage required for studies and residence in Georgia.</div></div>
+                <div class="add-card reveal"><div class="add-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg></div><div class="add-title">Student Community</div><div class="add-text">Connect with our network of thousands of international students already studying in Georgia — never feel alone abroad.</div></div>
+                <div class="add-card reveal d1"><div class="add-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg></div><div class="add-title">Transfer Assistance</div><div class="add-text">Already studying elsewhere? We guide students through the credit transfer and degree recognition process into Georgian universities.</div></div>
+                <div class="add-card reveal d2"><div class="add-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg></div><div class="add-title">Document Attestation</div><div class="add-text">Full support with apostille, notarization, and official translation of all your academic and personal documents.</div></div>
+            </div>
+        </div>
+    </div>
+    <section class="cta-strip" style="padding:100px 60px;">
+        <div class="cta-bg"></div><div class="cta-grid"></div>
+        <div class="cta-inner">
+            <h2 class="cta-title reveal d1">Ready to Get<br><em>Started?</em></h2>
+            <p class="cta-sub reveal d2">All consultations are completely free. Contact us today and let's begin your journey to Georgia.</p>
+            <div class="cta-btns reveal d3">
+                <button class="btn-yellow" onclick="showPage('contact')">Contact Us Now</button>
+                <button class="btn-white-outline" onclick="showPage('universities')">View Universities</button>
+            </div>
+        </div>
+    </section>
+</div><!-- /services -->
+
+<!-- ══════════════════════════════════
+     ABOUT
+══════════════════════════════════ -->
+<div class="page" id="page-about">
+    <div class="page-hero">
+        <div class="page-hero-bg"></div><div class="page-hero-grid"></div><div class="orb orb-1"></div>
+        <div class="page-hero-inner">
+            <div class="tag"><div class="tag-line"></div><div class="tag-text">Who We Are</div></div>
+            <h1 class="page-big-title">About<br><em>The Way</em></h1>
+            <p class="page-hero-sub">A passionate team of education consultants dedicated to helping international students build their futures in Georgia.</p>
+        </div>
+    </div>
+    <div class="about-story-section">
+        <div style="position:relative;" class="reveal">
+            <div class="visual-box">
+                <div class="vb-inner-grid"></div><div class="vb-glow"></div>
+                <div class="vb-symbol">🎓</div>
+                <div class="vb-bottom">
+                    <div class="vb-badge">Est. 2009</div>
+                    <div class="vb-title">15+ Years of Excellence</div>
+                    <div class="vb-sub">Helping students since 2009</div>
+                </div>
+            </div>
+            <div class="float-card"><div class="float-num">5K+</div><div class="float-lbl">Students Successfully Enrolled</div></div>
+        </div>
+        <div>
+            <div class="tag reveal"><div class="tag-line"></div><div class="tag-text">Our Story</div></div>
+            <h2 class="sec-title reveal d1">15 Years Connecting<br><em>Students</em> to Georgia's Best Universities</h2>
+            <p class="body-txt reveal d2">The Way was founded in 2009 with a clear mission: to make quality higher education in Georgia accessible to students from around the world. What began as a small consultancy has grown into one of Georgia's most trusted student recruitment agencies.</p>
+            <p class="body-txt reveal d2">Over the past 15 years, we have helped more than 5,000 students from over 30 countries successfully enroll in Georgian universities, guiding them through every step of their educational journey from application to graduation.</p>
+            <p class="body-txt reveal d2">We work directly with Georgia's top universities as official partners, giving our students priority access, exclusive support, and the best possible start to their academic careers.</p>
+            <div style="margin-top:28px;display:flex;gap:14px;flex-wrap:wrap;" class="reveal d3">
+                <button class="btn-yellow" onclick="showPage('contact')">Work With Us</button>
+                <button class="btn-outline" onclick="showPage('services')">Our Services</button>
+            </div>
+        </div>
+    </div>
+    <div class="about-mission">
+        <div class="tag reveal"><div class="tag-line"></div><div class="tag-text">What Drives Us</div></div>
+        <h2 class="sec-title reveal d1">Our Mission & <em>Values</em></h2>
+        <div class="mission-grid">
+            <div class="mc reveal"><div class="mc-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5"/></svg></div><div class="mc-title">Student Success First</div><div class="mc-text">Every decision we make is guided by one question: is this the best outcome for our students? Your academic success and personal wellbeing are our absolute top priority.</div></div>
+            <div class="mc reveal d1"><div class="mc-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z"/></svg></div><div class="mc-title">Complete Transparency</div><div class="mc-text">No hidden fees, no false promises. We give honest, accurate information about universities, costs, and processes — always. What you see is what you get.</div></div>
+            <div class="mc reveal d2"><div class="mc-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/></svg></div><div class="mc-title">Long-Term Relationships</div><div class="mc-text">We don't just place students and walk away. We build lasting relationships, supporting every student throughout their entire academic journey in Georgia.</div></div>
+        </div>
+    </div>
+    <div class="team-section">
+        <div class="tag reveal"><div class="tag-line"></div><div class="tag-text">Our People</div></div>
+        <h2 class="sec-title reveal d1">The Team Behind <em>The Way</em></h2>
+        <div class="team-grid">
+            <div class="team-card reveal"><div class="team-img"><div class="team-ava">G</div></div><div class="team-body"><div class="team-name">Giorgi Beridze</div><div class="team-role">Founder & CEO</div></div></div>
+            <div class="team-card reveal d1"><div class="team-img"><div class="team-ava">N</div></div><div class="team-body"><div class="team-name">Nino Kvaratskhelia</div><div class="team-role">Head of Admissions</div></div></div>
+            <div class="team-card reveal d2"><div class="team-img"><div class="team-ava">M</div></div><div class="team-body"><div class="team-name">Mariam Lomidze</div><div class="team-role">Student Relations</div></div></div>
+            <div class="team-card reveal d3"><div class="team-img"><div class="team-ava">D</div></div><div class="team-body"><div class="team-name">David Tsiklauri</div><div class="team-role">Visa Specialist</div></div></div>
+        </div>
+    </div>
+    <div class="process-section">
+        <div style="text-align:center;">
+            <div class="tag reveal" style="justify-content:center;"><div class="tag-line"></div><div class="tag-text">How It Works</div><div class="tag-line"></div></div>
+            <h2 class="sec-title reveal d1" style="text-align:center;">Your Journey in <em>4 Simple Steps</em></h2>
+        </div>
+        <div class="process-steps">
+            <div class="step reveal"><div class="step-num">01</div><div class="step-title">Free Consultation</div><div class="step-text">Contact us and speak with an expert consultant about your goals, field of study, and budget.</div></div>
+            <div class="step reveal d1"><div class="step-num">02</div><div class="step-title">Choose University</div><div class="step-text">We match you with the best university and program based on your profile and aspirations.</div></div>
+            <div class="step reveal d2"><div class="step-num">03</div><div class="step-title">Apply & Get Admitted</div><div class="step-text">We handle your full application and all documents to secure your official admission letter.</div></div>
+            <div class="step reveal d3"><div class="step-num">04</div><div class="step-title">Arrive & Start</div><div class="step-text">We receive you at the airport, help you settle in Georgia, and support you throughout your studies.</div></div>
+        </div>
+    </div>
+    <section class="cta-strip" style="padding:100px 60px;">
+        <div class="cta-bg"></div><div class="cta-grid"></div>
+        <div class="cta-inner">
+            <h2 class="cta-title reveal d1">Join 5,000+ <em>Students</em></h2>
+            <p class="cta-sub reveal d2">Who have already started their journey with The Way. Your future begins with one free conversation.</p>
+            <div class="cta-btns reveal d3"><button class="btn-yellow" onclick="showPage('contact')">Start Today — Free</button></div>
+        </div>
+    </section>
+</div><!-- /about -->
+
+<!-- ══════════════════════════════════
+     CONTACT
+══════════════════════════════════ -->
+<div class="page" id="page-contact">
+    <div class="page-hero">
+        <div class="page-hero-bg"></div><div class="page-hero-grid"></div><div class="orb orb-1"></div>
+        <div class="page-hero-inner">
+            <div class="tag"><div class="tag-line"></div><div class="tag-text">Get In Touch</div></div>
+            <h1 class="page-big-title">Contact<br><em>Us</em></h1>
+            <p class="page-hero-sub">Have questions? Ready to apply? Our consultants are here to help — all consultations are completely free of charge.</p>
+        </div>
+    </div>
+    <div class="contact-wrap">
+        <div class="contact-grid">
+            <div>
+                <div class="contact-info-box reveal">
+                    <div class="tag" style="margin-bottom:24px;"><div class="tag-line"></div><div class="tag-text">Our Details</div></div>
+                    <div class="contact-item"><div class="c-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg></div><div><div class="c-lbl">Address</div><div class="c-val">Vakhtang Chabukiani 2, Tbilisi, Georgia</div></div></div>
+                    <div class="contact-item"><div class="c-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg></div><div><div class="c-lbl">Phone / WhatsApp</div><div class="c-val"><a href="tel:+995571009550">+995 571 009 550</a></div></div></div>
+                    <div class="contact-item"><div class="c-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg></div><div><div class="c-lbl">Email</div><div class="c-val"><a href="mailto:info@theway.ge">info@theway.ge</a></div></div></div>
+                    <div class="contact-item"><div class="c-ico"><svg viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><div class="c-lbl">Working Hours</div><div class="c-val">Monday – Saturday: 9:00 – 19:00</div></div></div>
+                    <div class="social-row">
+                        <a href="#" class="soc-link">FB</a>
+                        <a href="#" class="soc-link">IG</a>
+                        <a href="#" class="soc-link">in</a>
+                        <a href="#" class="soc-link">WA</a>
+                        <a href="#" class="soc-link">YT</a>
+                    </div>
+                </div>
+            </div>
+            <div class="reveal d1">
+                <h2 class="form-title">Send Us a <em>Message</em></h2>
+                <form onsubmit="handleForm(event)">
+                    <div class="form-row-2">
+                        <div class="form-group"><label>First Name</label><input type="text" placeholder="John" required></div>
+                        <div class="form-group"><label>Last Name</label><input type="text" placeholder="Smith" required></div>
+                    </div>
+                    <div class="form-group"><label>Email Address</label><input type="email" placeholder="john@example.com" required></div>
+                    <div class="form-group"><label>Phone / WhatsApp</label><input type="tel" placeholder="+1 234 567 8900"></div>
+                    <div class="form-group"><label>Country of Origin</label><input type="text" placeholder="Your country"></div>
+                    <div class="form-group">
+                        <label>Field of Study</label>
+                        <select>
+                            <option value="">Select your field...</option>
+                            <option>Medicine (MD)</option>
+                            <option>Dentistry</option>
+                            <option>Pharmacy</option>
+                            <option>Engineering</option>
+                            <option>Business & Management</option>
+                            <option>Law</option>
+                            <option>Computer Science & IT</option>
+                            <option>Architecture</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Your Message</label><textarea placeholder="Tell us about yourself and what you are looking for..."></textarea></div>
+                    <button type="submit" class="btn-yellow" style="width:100%;justify-content:center;padding:16px;">Send Message — It's Free</button>
+                    <div class="form-success" id="formSuccess">✓ Thank you! We will be in touch within 24 hours.</div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div><!-- /contact -->
+
+<!-- FOOTER -->
+<div class="footer-top-bar">
+    <div class="footer-top-bar-txt">📍 Vakhtang Chabukiani 2, Tbilisi, Georgia &nbsp;|&nbsp; ✉ info@theway.ge &nbsp;|&nbsp; 📞 +995 571 009 550</div>
+    <div style="display:flex;gap:10px;">
+        <a href="#" class="topbar-social">ig</a>
+        <a href="#" class="topbar-social">in</a>
+        <a href="#" class="topbar-social">wa</a>
+        <a href="#" class="topbar-social">fb</a>
+    </div>
+</div>
+<footer>
+    <div class="footer-grid">
+        <div>
+            <div class="footer-logo">THE<span>·</span>WAY</div>
+            <p class="footer-desc">Georgia's leading student recruitment and education consultancy. Helping international students study in Georgia since 2009.</p>
+            <div class="f-socials">
+                <a href="#" class="f-soc">FB</a>
+                <a href="#" class="f-soc">IG</a>
+                <a href="#" class="f-soc">in</a>
+                <a href="#" class="f-soc">WA</a>
+            </div>
+        </div>
+        <div class="fc">
+            <h4>Navigation</h4>
+            <ul>
+                <li><button onclick="showPage('home')">Home</button></li>
+                <li><button onclick="showPage('universities')">Universities</button></li>
+                <li><button onclick="showPage('services')">Our Services</button></li>
+                <li><button onclick="showPage('about')">About Us</button></li>
+                <li><button onclick="showPage('contact')">Contact Us</button></li>
+            </ul>
+        </div>
+        <div class="fc">
+            <h4>Programs</h4>
+            <ul>
+                <li><a href="#">Medicine (MD)</a></li>
+                <li><a href="#">Dentistry</a></li>
+                <li><a href="#">Pharmacy</a></li>
+                <li><a href="#">Engineering</a></li>
+                <li><a href="#">Business & Law</a></li>
+                <li><a href="#">Computer Science</a></li>
+            </ul>
+        </div>
+        <div class="fc">
+            <h4>Contact</h4>
+            <ul>
+                <li><a href="mailto:info@theway.ge">info@theway.ge</a></li>
+                <li><a href="tel:+995571009550">+995 571 009 550</a></li>
+                <li><a href="#">Vakhtang Chabukiani 2</a></li>
+                <li><a href="#">Tbilisi, Georgia</a></li>
+                <li><a href="#">Mon–Sat 9am–7pm</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        <p>© 2024 The Way Georgia — Educational Services. All rights reserved.</p>
+        <div class="f-links">
+            <a href="#">Privacy Policy</a>
+            <a href="#">Terms of Service</a>
+        </div>
+    </div>
+</footer>
+
+<script>
+function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active-link'));
+    const nl = document.getElementById('nl-' + name);
+    if (nl) nl.classList.add('active-link');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(initReveal, 80);
+    setTimeout(initCounters, 150);
+}
+
+window.addEventListener('scroll', () => {
+    const nav = document.getElementById('mainNav');
+    nav.classList.toggle('scrolled', window.scrollY > 50);
+}, { passive: true });
+
+function toggleMenu() {
+    document.getElementById('mMenu').classList.toggle('open');
+}
+
+function initReveal() {
+    const els = document.querySelectorAll('.page.active .reveal:not(.visible)');
+    const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
+    }, { threshold: 0.07, rootMargin: '0px 0px -20px 0px' });
+    els.forEach(el => obs.observe(el));
+}
+initReveal();
+
+function countUp(el) {
+    if (el.dataset.counted) return;
+    el.dataset.counted = 'true';
+    const target = parseInt(el.dataset.target);
+    const suffix = el.dataset.suffix || '';
+    let cur = 0;
+    const step = target / (1600 / 16);
+    const t = setInterval(() => {
+        cur = Math.min(cur + step, target);
+        el.textContent = (target >= 1000 ? Math.floor(cur).toLocaleString() : Math.floor(cur)) + suffix;
+        if (cur >= target) clearInterval(t);
+    }, 16);
+}
+
+function initCounters() {
+    const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+            if (e.isIntersecting) e.target.querySelectorAll('[data-target]').forEach(countUp);
+        });
+    }, { threshold: 0.3 });
+    document.querySelectorAll('.page.active .stats-bar, .page.active .uni-intro-stats').forEach(b => obs.observe(b));
+}
+initCounters();
+
+window.addEventListener('scroll', () => {
+    const s = window.scrollY;
+    document.querySelectorAll('.page.active .hero-content').forEach(hc => {
+        if (s < window.innerHeight) {
+            hc.style.transform = `translateY(${s * 0.2}px)`;
+            hc.style.opacity = Math.max(0, 1 - s / (window.innerHeight * 0.7));
+        }
+    });
+}, { passive: true });
+
+function handleForm(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.textContent = 'Sending...';
+    btn.style.opacity = '0.7';
+    setTimeout(() => {
+        btn.textContent = '✓ Message Sent!';
+        btn.style.background = '#28a745';
+        document.getElementById('formSuccess').style.display = 'block';
+        setTimeout(() => {
+            btn.textContent = "Send Message — It's Free";
+            btn.style.background = '';
+            btn.style.opacity = '';
+            document.getElementById('formSuccess').style.display = 'none';
+            e.target.reset();
+        }, 4000);
+    }, 1500);
+}
+</script>
+</body>
+</html>
