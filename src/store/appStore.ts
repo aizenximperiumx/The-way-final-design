@@ -288,7 +288,7 @@ const useAppStore = create<AppStoreState>()(
           visaExpiry: typeof (profile as Record<string, unknown>).visa_expiry === 'string' ? String((profile as Record<string, unknown>).visa_expiry) : undefined,
           residenceExpiry: typeof (profile as Record<string, unknown>).residence_expiry === 'string' ? String((profile as Record<string, unknown>).residence_expiry) : undefined,
         };
-        const authStatus: AuthStatus = user.role === 'student' ? 'signed_in' : 'pending_2fa';
+        const authStatus: AuthStatus = (user.role === 'student' || user.role === 'ceo') ? 'signed_in' : 'pending_2fa';
         set({ currentUser: user, authStatus });
         await get().refreshUsersFromBackend();
         if (authStatus === 'signed_in') {
@@ -354,7 +354,7 @@ const useAppStore = create<AppStoreState>()(
         const existing = get().currentUser;
         const existingStatus = get().authStatus;
         if (existing?.id === user.id && existingStatus !== 'signed_out') return;
-        const authStatus: AuthStatus = user.role === 'student' ? 'signed_in' : 'pending_2fa';
+        const authStatus: AuthStatus = (user.role === 'student' || user.role === 'ceo') ? 'signed_in' : 'pending_2fa';
         set({ currentUser: user, authStatus });
         await get().refreshUsersFromBackend();
         if (authStatus === 'signed_in') {

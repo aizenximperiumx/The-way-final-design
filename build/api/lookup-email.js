@@ -43,6 +43,10 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     }
     return '';
 };
+const adminAuthHeaders = (adminKey) => {
+    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -63,6 +67,7 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = serviceKey;
+        const adminHeaders = adminAuthHeaders(adminKey);
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const username = asString(body.username).trim();
         if (!username) {
@@ -70,7 +75,7 @@ export default async function handler(req, res) {
             return;
         }
         const q = `${base}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=email`;
-        const r = await fetchJson(q, { method: 'GET', headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` } });
+        const r = await fetchJson(q, { method: 'GET', headers: adminHeaders });
         const email = (r.ok && Array.isArray(r.json) && r.json[0] && typeof r.json[0].email === 'string') ? r.json[0].email : '';
         res.status(200).json({ email });
     }

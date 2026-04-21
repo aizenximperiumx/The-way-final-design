@@ -53,6 +53,10 @@ const getForcedInternal2faCode = () => {
     const v = process.env.FORCE_INTERNAL_2FA_CODE;
     return typeof v === 'string' ? v.trim() : '';
 };
+const adminAuthHeaders = (adminKey) => {
+    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -69,6 +73,7 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = serviceKey;
+        const adminHeaders = adminAuthHeaders(adminKey);
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
@@ -85,7 +90,7 @@ export default async function handler(req, res) {
         const callerId = who.json.id;
         const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
             method: 'GET',
-            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+            headers: adminHeaders,
         });
         const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
             ? callerProfile.json[0].role
@@ -107,7 +112,7 @@ export default async function handler(req, res) {
         if (password) {
             const updated = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
                 method: 'PUT',
-                headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
+                headers: { ...adminHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password }),
             });
             if (!updated.ok) {
@@ -123,7 +128,7 @@ export default async function handler(req, res) {
                 patch.two_factor_code = twoFactorCode;
             const updatedProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
                 method: 'PATCH',
-                headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
+                headers: { ...adminHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify(patch),
             });
             if (!updatedProfile.ok) {
@@ -133,7 +138,7 @@ export default async function handler(req, res) {
         }
         const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email,username,two_factor_code,role,name`, {
             method: 'GET',
-            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+            headers: adminHeaders,
         });
         const row = Array.isArray(profile.json) ? profile.json[0] : null;
         const email = row && typeof row.email === 'string' ? row.email : '';

@@ -33,6 +33,10 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     }
     return '';
 };
+const adminAuthHeaders = (adminKey) => {
+    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'GET') {
@@ -59,6 +63,7 @@ export default async function handler(req, res) {
             return;
         }
         const base = supabaseUrl.replace(/\/$/, '');
+        const adminHeaders = adminAuthHeaders(serviceKey);
         const who = await fetchJson(`${base}/auth/v1/user`, {
             method: 'GET',
             headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
@@ -87,18 +92,18 @@ export default async function handler(req, res) {
         if (supabaseUrl && serviceKey) {
             const pingProfiles = await fetchText(`${base}/rest/v1/profiles?select=id&limit=1`, {
                 method: 'GET',
-                headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+                headers: adminHeaders,
             });
             checks.push({ name: 'DB:profiles', ok: pingProfiles.ok, details: pingProfiles.ok ? undefined : pingProfiles.text.slice(0, 200) });
             const pingState = await fetchText(`${base}/rest/v1/app_state?select=org_id&org_id=eq.default&limit=1`, {
                 method: 'GET',
-                headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+                headers: adminHeaders,
             });
             checks.push({ name: 'DB:app_state', ok: pingState.ok, details: pingState.ok ? undefined : pingState.text.slice(0, 200) });
             if (bucket) {
                 const pingStorage = await fetchText(`${base}/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
                     method: 'GET',
-                    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+                    headers: adminHeaders,
                 });
                 checks.push({ name: 'Storage:bucket', ok: pingStorage.ok, details: pingStorage.ok ? undefined : pingStorage.text.slice(0, 200) });
             }

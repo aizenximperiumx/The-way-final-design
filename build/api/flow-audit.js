@@ -28,6 +28,10 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     }
     return '';
 };
+const adminAuthHeaders = (adminKey) => {
+    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'GET') {
@@ -43,6 +47,7 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = serviceKey;
+        const adminHeaders = adminAuthHeaders(adminKey);
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
@@ -59,7 +64,7 @@ export default async function handler(req, res) {
         const callerId = who.json.id;
         const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
             method: 'GET',
-            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+            headers: adminHeaders,
         });
         const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
             ? callerProfile.json[0].role
@@ -70,7 +75,7 @@ export default async function handler(req, res) {
         }
         const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
             method: 'GET',
-            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+            headers: adminHeaders,
         });
         const state = Array.isArray(stateResp.json) && stateResp.json[0] && typeof stateResp.json[0].state === 'object'
             ? stateResp.json[0].state

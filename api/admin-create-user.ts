@@ -85,6 +85,11 @@ const getForcedInternal2faCode = () => {
   return typeof v === 'string' ? v.trim() : '';
 };
 
+const adminAuthHeaders = (adminKey: string) => {
+  const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+  return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'POST') {
@@ -102,6 +107,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const base = (supabaseUrl as string).replace(/\/$/, '');
     const adminKey = serviceKey as string;
+    const adminHeaders = adminAuthHeaders(adminKey);
     const bootstrapSecret = process.env.BOOTSTRAP_SECRET || '';
     const bootstrapProvided = getHeader(req, 'x-bootstrap-secret').trim();
     const isBootstrap = Boolean(bootstrapSecret && bootstrapProvided && bootstrapProvided === bootstrapSecret);
@@ -125,7 +131,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const callerId = who.json.id as string;
       const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
         method: 'GET',
-        headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+        headers: adminHeaders,
       });
       const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
         ? (callerProfile.json[0].role as string)
@@ -137,7 +143,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     } else {
       const existingCeo = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, {
         method: 'GET',
-        headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+        headers: adminHeaders,
       });
       if (existingCeo.ok && Array.isArray(existingCeo.json) && existingCeo.json.length > 0) {
         res.status(403).json({ error: 'Bootstrap is disabled after CEO exists' });
@@ -172,7 +178,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     for (let i = 0; i < 6; i++) {
       const check = await fetchJson(`${base}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id&limit=1`, {
         method: 'GET',
-        headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+        headers: adminHeaders,
       });
       if (check.ok && Array.isArray(check.json) && check.json.length === 0) break;
       username = `${usernameBase}${Math.floor(100 + Math.random() * 900)}${i}`;
@@ -183,7 +189,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const created = await fetchJson(`${base}/auth/v1/admin/users`, {
       method: 'POST',
-      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
+      headers: { ...adminHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, email_confirm: true }),
     });
     if (!created.ok || !created.json || typeof created.json.id !== 'string') {
@@ -195,8 +201,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const inserted = await fetchJson(`${base}/rest/v1/profiles`, {
       method: 'POST',
       headers: {
-        apikey: adminKey,
-        Authorization: `Bearer ${adminKey}`,
+        ...adminHeaders,
         'Content-Type': 'application/json',
         Prefer: 'return=representation',
       },

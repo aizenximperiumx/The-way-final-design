@@ -27,6 +27,11 @@ const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
   return '';
 };
 
+const adminAuthHeaders = (adminKey: string) => {
+  const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+  return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
+
 type AppState = {
   applications: unknown[];
   documents: unknown[];
@@ -81,6 +86,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const base = (supabaseUrl as string).replace(/\/$/, '');
     const adminKey = serviceKey as string;
+    const adminHeaders = adminAuthHeaders(adminKey);
 
     const token = getBearer(req);
     if (!token) {
@@ -100,7 +106,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const userId = who.json.id as string;
     const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role`, {
       method: 'GET',
-      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+      headers: adminHeaders,
     });
     const role = Array.isArray(profile.json) && profile.json[0] && typeof profile.json[0].role === 'string'
       ? (profile.json[0].role as string)
@@ -111,7 +117,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
       method: 'GET',
-      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+      headers: adminHeaders,
     });
     const currentRaw = Array.isArray(stateResp.json) && stateResp.json[0] ? (stateResp.json[0].state as unknown) : {};
     const current = asState(currentRaw);
@@ -237,8 +243,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const upserted = await fetchJson(`${base}/rest/v1/app_state`, {
       method: 'POST',
       headers: {
-        apikey: adminKey,
-        Authorization: `Bearer ${adminKey}`,
+        ...adminHeaders,
         'Content-Type': 'application/json',
         Prefer: 'resolution=merge-duplicates',
       },

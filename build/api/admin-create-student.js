@@ -49,6 +49,10 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     }
     return '';
 };
+const adminAuthHeaders = (adminKey) => {
+    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -65,6 +69,7 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = serviceKey;
+        const adminHeaders = adminAuthHeaders(adminKey);
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
@@ -81,7 +86,7 @@ export default async function handler(req, res) {
         const callerId = who.json.id;
         const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
             method: 'GET',
-            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+            headers: adminHeaders,
         });
         const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
             ? callerProfile.json[0].role
@@ -102,7 +107,7 @@ export default async function handler(req, res) {
         }
         const created = await fetchJson(`${base}/auth/v1/admin/users`, {
             method: 'POST',
-            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
+            headers: { ...adminHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, email_confirm: true }),
         });
         if (!created.ok || !created.json || typeof created.json.id !== 'string') {
@@ -113,8 +118,7 @@ export default async function handler(req, res) {
         const inserted = await fetchJson(`${base}/rest/v1/profiles`, {
             method: 'POST',
             headers: {
-                apikey: adminKey,
-                Authorization: `Bearer ${adminKey}`,
+                ...adminHeaders,
                 'Content-Type': 'application/json',
                 Prefer: 'return=representation',
             },

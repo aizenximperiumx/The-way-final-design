@@ -55,6 +55,11 @@ const getForcedInternal2faCode = () => {
   return typeof v === 'string' ? v.trim() : '';
 };
 
+const adminAuthHeaders = (adminKey: string) => {
+  const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+  return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'POST') {
@@ -71,6 +76,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const base = (supabaseUrl as string).replace(/\/$/, '');
     const adminKey = serviceKey as string;
+    const adminHeaders = adminAuthHeaders(adminKey);
 
     const ip = getIp(req);
     if (!allow(`verify2fa:${ip}`, 20, 60_000)) {
@@ -103,7 +109,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const userId = who.json.id as string;
     const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=two_factor_code,role`, {
       method: 'GET',
-      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+      headers: adminHeaders,
     });
     const row = Array.isArray(profile.json) ? profile.json[0] : null;
     const stored = row && typeof row.two_factor_code === 'string' ? (row.two_factor_code as string) : '';

@@ -30,6 +30,11 @@ const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
   return '';
 };
 
+const adminAuthHeaders = (adminKey: string) => {
+  const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
+  return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'POST') {
@@ -45,6 +50,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const base = (supabaseUrl as string).replace(/\/$/, '');
     const adminKey = serviceKey as string;
+    const adminHeaders = adminAuthHeaders(adminKey);
     const token = getBearer(req);
     if (!token) {
       res.status(401).json({ error: 'Missing token' });
@@ -61,7 +67,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const callerId = who.json.id as string;
     const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
       method: 'GET',
-      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+      headers: adminHeaders,
     });
     const role = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
       ? (callerProfile.json[0].role as string)
