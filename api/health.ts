@@ -22,6 +22,17 @@ const getBearer = (req: ApiRequest) => {
   return m?.[1] ?? '';
 };
 
+const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
+  if (!supabaseUrl || !serviceKey) return 'Supabase is not configured';
+  if (!/^https?:\/\//i.test(supabaseUrl)) {
+    return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+  }
+  if (/^https?:\/\//i.test(serviceKey)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+  }
+  return '';
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'GET') {
@@ -39,8 +50,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       res.status(401).json({ error: 'Missing token' });
       return;
     }
-    if (!supabaseUrl || !serviceKey) {
-      res.status(500).json({ error: 'Supabase is not configured' });
+    const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
+    if (envError) {
+      const checks: Array<{ name: string; ok: boolean; details?: string }> = [];
+      checks.push({ name: 'SUPABASE_URL', ok: /^https?:\/\//i.test(supabaseUrl) });
+      checks.push({ name: 'SUPABASE_SERVICE_ROLE_KEY', ok: Boolean(serviceKey) && !/^https?:\/\//i.test(serviceKey) });
+      checks.push({ name: 'SUPABASE_STORAGE_BUCKET', ok: Boolean(bucket) });
+      checks.push({ name: 'RESEND_API_KEY', ok: Boolean(resend) });
+      res.status(500).json({ ok: false, error: envError, checks });
       return;
     }
 

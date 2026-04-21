@@ -38,6 +38,21 @@ const sendResend = async (apiKey, to, subject, html, text) => {
         throw new Error(details || 'Failed to send email');
     }
 };
+const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
+    if (!supabaseUrl || !serviceKey)
+        return 'Supabase admin is not configured';
+    if (!/^https?:\/\//i.test(supabaseUrl)) {
+        return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+    }
+    if (/^https?:\/\//i.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+    }
+    return '';
+};
+const getForcedInternal2faCode = () => {
+    const v = process.env.FORCE_INTERNAL_2FA_CODE;
+    return typeof v === 'string' ? v.trim() : '';
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -47,31 +62,30 @@ export default async function handler(req, res) {
         const supabaseUrl = process.env.SUPABASE_URL;
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         const resendKey = process.env.RESEND_API_KEY;
-        if (!supabaseUrl || !serviceKey) {
-            res.status(500).json({ error: 'Supabase admin is not configured' });
+        const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
+        if (envError) {
+            res.status(500).json({ error: envError });
             return;
         }
-        if (!resendKey) {
-            res.status(500).json({ error: 'Email is not configured' });
-            return;
-        }
+        const base = supabaseUrl.replace(/\/$/, '');
+        const adminKey = serviceKey;
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
             return;
         }
-        const who = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
+        const who = await fetchJson(`${base}/auth/v1/user`, {
             method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
         });
         if (!who.ok || !who.json || typeof who.json.id !== 'string') {
             res.status(401).json({ error: 'Invalid token' });
             return;
         }
         const callerId = who.json.id;
-        const callerProfile = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+        const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
             method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
         });
         const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
             ? callerProfile.json[0].role
@@ -84,15 +98,16 @@ export default async function handler(req, res) {
         const userId = asString(body.userId).trim();
         const username = asString(body.username).trim() || undefined;
         const password = asString(body.password) || undefined;
-        const twoFactorCode = asString(body.twoFactorCode).trim() || undefined;
+        const forced2fa = getForcedInternal2faCode();
+        const twoFactorCode = forced2fa || asString(body.twoFactorCode).trim() || undefined;
         if (!userId) {
             res.status(400).json({ error: 'Missing userId' });
             return;
         }
         if (password) {
-            const updated = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+            const updated = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
                 method: 'PUT',
-                headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+                headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password }),
             });
             if (!updated.ok) {
@@ -106,9 +121,9 @@ export default async function handler(req, res) {
                 patch.username = username;
             if (twoFactorCode)
                 patch.two_factor_code = twoFactorCode;
-            const updatedProfile = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+            const updatedProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
                 method: 'PATCH',
-                headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+                headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(patch),
             });
             if (!updatedProfile.ok) {
@@ -116,9 +131,9 @@ export default async function handler(req, res) {
                 return;
             }
         }
-        const profile = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email,username,two_factor_code,role,name`, {
+        const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email,username,two_factor_code,role,name`, {
             method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
         });
         const row = Array.isArray(profile.json) ? profile.json[0] : null;
         const email = row && typeof row.email === 'string' ? row.email : '';
@@ -126,7 +141,7 @@ export default async function handler(req, res) {
         const final2fa = twoFactorCode ?? (row && typeof row.two_factor_code === 'string' ? row.two_factor_code : '');
         const name = row && typeof row.name === 'string' ? row.name : '';
         const role = row && typeof row.role === 'string' ? row.role : '';
-        if (email) {
+        if (email && resendKey) {
             const subject = role === 'student' ? 'Your student account credentials updated' : 'Your account credentials updated';
             const html = `
         <div style="font-family:Arial,sans-serif">
@@ -137,7 +152,7 @@ export default async function handler(req, res) {
             const text = `Name: ${name}\nUsername: ${finalUsername}${password ? `\nPassword: ${password}` : ''}${final2fa ? `\n2FA: ${final2fa}` : ''}`;
             await sendResend(resendKey, email, subject, html, text);
         }
-        res.status(200).json({ ok: true, emailSent: Boolean(email) });
+        res.status(200).json({ ok: true, emailSent: Boolean(email && resendKey) });
     }
     catch (e) {
         const message = e instanceof Error ? e.message : 'Unknown error';

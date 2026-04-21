@@ -29,6 +29,17 @@ const fetchJson = async (url, init) => {
     } })() : null;
     return { ok: resp.ok, status: resp.status, text, json };
 };
+const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
+    if (!supabaseUrl || !serviceKey)
+        return 'Upload storage is not configured';
+    if (!/^https?:\/\//i.test(supabaseUrl)) {
+        return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+    }
+    if (/^https?:\/\//i.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+    }
+    return '';
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -50,19 +61,25 @@ export default async function handler(req, res) {
         const supabaseUrl = process.env.SUPABASE_URL;
         const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         const bucket = process.env.SUPABASE_STORAGE_BUCKET;
-        if (!supabaseUrl || !supabaseServiceKey || !bucket) {
+        const envError = validateSupabaseEnv(supabaseUrl, supabaseServiceKey);
+        if (envError) {
+            res.status(500).json({ error: envError });
+            return;
+        }
+        if (!bucket) {
             res.status(500).json({ error: 'Upload storage is not configured' });
             return;
         }
+        const base = supabaseUrl.replace(/\/$/, '');
+        const adminKey = supabaseServiceKey;
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
             return;
         }
-        const base = supabaseUrl.replace(/\/$/, '');
         const who = await fetchJson(`${base}/auth/v1/user`, {
             method: 'GET',
-            headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${token}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
         });
         if (!who.ok || !who.json || typeof who.json.id !== 'string') {
             res.status(401).json({ error: 'Invalid token' });
@@ -71,7 +88,7 @@ export default async function handler(req, res) {
         const callerId = who.json.id;
         const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
             method: 'GET',
-            headers: { apikey: supabaseServiceKey, Authorization: `Bearer ${supabaseServiceKey}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
         });
         const role = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
             ? callerProfile.json[0].role
@@ -88,12 +105,12 @@ export default async function handler(req, res) {
         }
         const random = Math.random().toString(16).slice(2);
         const objectPath = `${Date.now()}-${random}-${filename}`;
-        const putUrl = `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
+        const putUrl = `${base}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
         const putResp = await fetch(putUrl, {
             method: 'POST',
             headers: {
-                apikey: supabaseServiceKey,
-                Authorization: `Bearer ${supabaseServiceKey}`,
+                apikey: adminKey,
+                Authorization: `Bearer ${adminKey}`,
                 'Content-Type': contentType,
                 'x-upsert': 'true',
             },
@@ -104,7 +121,7 @@ export default async function handler(req, res) {
             res.status(500).json({ error: 'Failed to upload', details });
             return;
         }
-        const publicUrl = `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
+        const publicUrl = `${base}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
         res.status(200).json({ url: publicUrl });
     }
     catch (e) {

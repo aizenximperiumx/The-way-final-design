@@ -1,6 +1,14 @@
 import { randomBytes } from 'crypto';
 const asString = (v) => (typeof v === 'string' ? v : '');
 const asStringArray = (v) => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
+const getHeader = (req, name) => {
+    const target = name.toLowerCase();
+    const headers = req.headers || {};
+    const foundKey = Object.keys(headers).find(k => k.toLowerCase() === target);
+    const raw = foundKey ? headers[foundKey] : undefined;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return typeof value === 'string' ? value : '';
+};
 const getBearer = (req) => {
     const raw = req.headers?.authorization || req.headers?.Authorization;
     const value = Array.isArray(raw) ? raw[0] : raw;
@@ -45,6 +53,21 @@ const randomPassword = () => {
     return `Tw-${buf}`;
 };
 const random2fa = () => String(Math.floor(100000 + Math.random() * 900000));
+const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
+    if (!supabaseUrl || !serviceKey)
+        return 'Supabase admin is not configured';
+    if (!/^https?:\/\//i.test(supabaseUrl)) {
+        return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+    }
+    if (/^https?:\/\//i.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+    }
+    return '';
+};
+const getForcedInternal2faCode = () => {
+    const v = process.env.FORCE_INTERNAL_2FA_CODE;
+    return typeof v === 'string' ? v.trim() : '';
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -54,38 +77,52 @@ export default async function handler(req, res) {
         const supabaseUrl = process.env.SUPABASE_URL;
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         const resendKey = process.env.RESEND_API_KEY;
-        if (!supabaseUrl || !serviceKey) {
-            res.status(500).json({ error: 'Supabase admin is not configured' });
+        const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
+        if (envError) {
+            res.status(500).json({ error: envError });
             return;
         }
-        if (!resendKey) {
-            res.status(500).json({ error: 'Email is not configured' });
-            return;
+        const base = supabaseUrl.replace(/\/$/, '');
+        const adminKey = serviceKey;
+        const bootstrapSecret = process.env.BOOTSTRAP_SECRET || '';
+        const bootstrapProvided = getHeader(req, 'x-bootstrap-secret').trim();
+        const isBootstrap = Boolean(bootstrapSecret && bootstrapProvided && bootstrapProvided === bootstrapSecret);
+        if (!isBootstrap) {
+            const token = getBearer(req);
+            if (!token) {
+                res.status(401).json({ error: 'Missing token' });
+                return;
+            }
+            const who = await fetchJson(`${base}/auth/v1/user`, {
+                method: 'GET',
+                headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
+            });
+            if (!who.ok || !who.json || typeof who.json.id !== 'string') {
+                res.status(401).json({ error: 'Invalid token' });
+                return;
+            }
+            const callerId = who.json.id;
+            const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+                method: 'GET',
+                headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+            });
+            const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
+                ? callerProfile.json[0].role
+                : '';
+            if (callerRole !== 'ceo') {
+                res.status(403).json({ error: 'Forbidden' });
+                return;
+            }
         }
-        const token = getBearer(req);
-        if (!token) {
-            res.status(401).json({ error: 'Missing token' });
-            return;
-        }
-        const who = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
-            method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
-        });
-        if (!who.ok || !who.json || typeof who.json.id !== 'string') {
-            res.status(401).json({ error: 'Invalid token' });
-            return;
-        }
-        const callerId = who.json.id;
-        const callerProfile = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
-            method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-        });
-        const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
-            ? callerProfile.json[0].role
-            : '';
-        if (callerRole !== 'ceo') {
-            res.status(403).json({ error: 'Forbidden' });
-            return;
+        else {
+            const existingCeo = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, {
+                method: 'GET',
+                headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+            });
+            if (existingCeo.ok && Array.isArray(existingCeo.json) && existingCeo.json.length > 0) {
+                res.status(403).json({ error: 'Bootstrap is disabled after CEO exists' });
+                return;
+            }
         }
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const email = asString(body.email).trim();
@@ -106,22 +143,22 @@ export default async function handler(req, res) {
             return;
         }
         const password = passwordIn || randomPassword();
-        const base = supabaseUrl.replace(/\/$/, '');
         const usernameBase = (usernameIn || role).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 10) || 'user';
         let username = usernameIn || `${usernameBase}${Math.floor(100 + Math.random() * 900)}`;
         for (let i = 0; i < 6; i++) {
             const check = await fetchJson(`${base}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id&limit=1`, {
                 method: 'GET',
-                headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+                headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
             });
             if (check.ok && Array.isArray(check.json) && check.json.length === 0)
                 break;
             username = `${usernameBase}${Math.floor(100 + Math.random() * 900)}${i}`;
         }
-        const twoFactorCode = twoFactorIn || random2fa();
-        const created = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/admin/users`, {
+        const forced2fa = getForcedInternal2faCode();
+        const twoFactorCode = forced2fa || twoFactorIn || random2fa();
+        const created = await fetchJson(`${base}/auth/v1/admin/users`, {
             method: 'POST',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, email_confirm: true }),
         });
         if (!created.ok || !created.json || typeof created.json.id !== 'string') {
@@ -129,11 +166,11 @@ export default async function handler(req, res) {
             return;
         }
         const id = created.json.id;
-        const inserted = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles`, {
+        const inserted = await fetchJson(`${base}/rest/v1/profiles`, {
             method: 'POST',
             headers: {
-                apikey: serviceKey,
-                Authorization: `Bearer ${serviceKey}`,
+                apikey: adminKey,
+                Authorization: `Bearer ${adminKey}`,
                 'Content-Type': 'application/json',
                 Prefer: 'return=representation',
             },
@@ -153,14 +190,16 @@ export default async function handler(req, res) {
             res.status(500).json({ error: 'Failed to create profile', details: inserted.text });
             return;
         }
-        const html = `
-      <div style="font-family:Arial,sans-serif">
-        <h2 style="margin:0 0 12px">Your account is ready</h2>
-        <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}<br/><b>2FA:</b> ${twoFactorCode ?? ''}</p>
-      </div>`;
-        const text = `Username: ${username}\nPassword: ${password}\n2FA: ${twoFactorCode ?? ''}`;
-        await sendResend(resendKey, email, 'Your account credentials', html, text);
-        res.status(200).json({ id, email, username, role, name, emailSent: true });
+        if (resendKey) {
+            const html = `
+        <div style="font-family:Arial,sans-serif">
+          <h2 style="margin:0 0 12px">Your account is ready</h2>
+          <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}<br/><b>2FA:</b> ${twoFactorCode ?? ''}</p>
+        </div>`;
+            const text = `Username: ${username}\nPassword: ${password}\n2FA: ${twoFactorCode ?? ''}`;
+            await sendResend(resendKey, email, 'Your account credentials', html, text);
+        }
+        res.status(200).json({ id, email, username, role, name, emailSent: Boolean(resendKey) });
     }
     catch (e) {
         const message = e instanceof Error ? e.message : 'Unknown error';

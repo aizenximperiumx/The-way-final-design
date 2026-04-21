@@ -18,6 +18,17 @@ const fetchJson = async (url: string, init: RequestInit) => {
 
 type Issue = { severity: 'high' | 'medium' | 'low'; code: string; message: string; context?: Record<string, unknown> };
 
+const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
+  if (!supabaseUrl || !serviceKey) return 'Supabase is not configured';
+  if (!/^https?:\/\//i.test(supabaseUrl)) {
+    return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+  }
+  if (/^https?:\/\//i.test(serviceKey)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+  }
+  return '';
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'GET') {
@@ -27,10 +38,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey) {
-      res.status(500).json({ error: 'Supabase is not configured' });
+    const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
+    if (envError) {
+      res.status(500).json({ error: envError });
       return;
     }
+    const base = (supabaseUrl as string).replace(/\/$/, '');
+    const adminKey = serviceKey as string;
 
     const token = getBearer(req);
     if (!token) {
@@ -38,10 +52,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const base = supabaseUrl.replace(/\/$/, '');
     const who = await fetchJson(`${base}/auth/v1/user`, {
       method: 'GET',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+      headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
     });
     if (!who.ok || !who.json || typeof who.json.id !== 'string') {
       res.status(401).json({ error: 'Invalid token' });
@@ -51,7 +64,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const callerId = who.json.id as string;
     const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
       method: 'GET',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
     });
     const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
       ? (callerProfile.json[0].role as string)
@@ -63,7 +76,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
       method: 'GET',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
     });
     const state = Array.isArray(stateResp.json) && stateResp.json[0] && typeof stateResp.json[0].state === 'object'
       ? (stateResp.json[0].state as Record<string, unknown>)
@@ -122,4 +135,3 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     res.status(500).json({ error: message });
   }
 }
-

@@ -41,6 +41,17 @@ const fetchJson = async (url, init) => {
     } })() : null;
     return { ok: resp.ok, status: resp.status, text, json };
 };
+const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
+    if (!supabaseUrl || !serviceKey)
+        return 'Supabase is not configured';
+    if (!/^https?:\/\//i.test(supabaseUrl)) {
+        return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+    }
+    if (/^https?:\/\//i.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the secret/service role key, not a URL.';
+    }
+    return '';
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -50,10 +61,13 @@ export default async function handler(req, res) {
         const ip = getIp(req);
         const supabaseUrl = process.env.SUPABASE_URL;
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        if (!supabaseUrl || !serviceKey) {
-            res.status(500).json({ error: 'Supabase is not configured' });
+        const envErr = validateSupabaseEnv(supabaseUrl, serviceKey);
+        if (envErr) {
+            res.status(500).json({ error: envErr });
             return;
         }
+        const base = supabaseUrl.replace(/\/$/, '');
+        const adminKey = serviceKey;
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const sourceRaw = asString(body.source).trim() || 'public';
         const source = (sourceRaw === 'agency' || sourceRaw === 'public') ? sourceRaw : 'public';
@@ -68,18 +82,18 @@ export default async function handler(req, res) {
                 res.status(401).json({ error: 'Missing token' });
                 return;
             }
-            const who = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
+            const who = await fetchJson(`${base}/auth/v1/user`, {
                 method: 'GET',
-                headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+                headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
             });
             if (!who.ok || !who.json || typeof who.json.id !== 'string') {
                 res.status(401).json({ error: 'Invalid token' });
                 return;
             }
             const callerId = who.json.id;
-            const callerProfile = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+            const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
                 method: 'GET',
-                headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+                headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
             });
             const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
                 ? callerProfile.json[0].role
@@ -125,9 +139,9 @@ export default async function handler(req, res) {
             arrived: Boolean(body.arrived),
             intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,
         };
-        const getState = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/app_state?org_id=eq.default&select=state`, {
+        const getState = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state`, {
             method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
         });
         const currentState = Array.isArray(getState.json) && getState.json[0] && typeof getState.json[0].state === 'object'
             ? getState.json[0].state
@@ -156,11 +170,11 @@ export default async function handler(req, res) {
         const applications = Array.isArray(currentState.applications) ? [...currentState.applications, app] : [app];
         const notifications = Array.isArray(currentState.notifications) ? currentState.notifications : [];
         const nextState = { ...currentState, applications, notifications };
-        const upserted = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/app_state`, {
+        const upserted = await fetchJson(`${base}/rest/v1/app_state`, {
             method: 'POST',
             headers: {
-                apikey: serviceKey,
-                Authorization: `Bearer ${serviceKey}`,
+                apikey: adminKey,
+                Authorization: `Bearer ${adminKey}`,
                 'Content-Type': 'application/json',
                 Prefer: 'resolution=merge-duplicates',
             },

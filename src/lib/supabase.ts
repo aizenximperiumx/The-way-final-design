@@ -18,6 +18,12 @@ export function getSupabase(): SupabaseClient {
   if (!url || !anonKey) {
     throw new Error('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
   }
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error('VITE_SUPABASE_URL must be your Supabase Project URL (it looks like you pasted a key). It should look like: https://xxxxx.supabase.co');
+  }
+  if (/^https?:\/\//i.test(anonKey)) {
+    throw new Error('VITE_SUPABASE_ANON_KEY must be the anon/publishable key (it looks like you pasted a URL).');
+  }
   cached = createClient(url, anonKey, {
     auth: {
       persistSession: true,

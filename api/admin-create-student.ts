@@ -47,6 +47,17 @@ const sendResend = async (apiKey: string, to: string, subject: string, html: str
   }
 };
 
+const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
+  if (!supabaseUrl || !serviceKey) return 'Supabase admin is not configured';
+  if (!/^https?:\/\//i.test(supabaseUrl)) {
+    return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+  }
+  if (/^https?:\/\//i.test(serviceKey)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+  }
+  return '';
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'POST') {
@@ -57,14 +68,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const resendKey = process.env.RESEND_API_KEY;
-    if (!supabaseUrl || !serviceKey) {
-      res.status(500).json({ error: 'Supabase admin is not configured' });
+    const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
+    if (envError) {
+      res.status(500).json({ error: envError });
       return;
     }
-    if (!resendKey) {
-      res.status(500).json({ error: 'Email is not configured' });
-      return;
-    }
+    const base = (supabaseUrl as string).replace(/\/$/, '');
+    const adminKey = serviceKey as string;
 
     const token = getBearer(req);
     if (!token) {
@@ -72,9 +82,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const who = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
+    const who = await fetchJson(`${base}/auth/v1/user`, {
       method: 'GET',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+      headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
     });
     if (!who.ok || !who.json || typeof who.json.id !== 'string') {
       res.status(401).json({ error: 'Invalid token' });
@@ -82,9 +92,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const callerId = who.json.id as string;
-    const callerProfile = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+    const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
       method: 'GET',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
     });
     const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
       ? (callerProfile.json[0].role as string)
@@ -106,9 +116,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const created = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/admin/users`, {
+    const created = await fetchJson(`${base}/auth/v1/admin/users`, {
       method: 'POST',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, email_confirm: true }),
     });
     if (!created.ok || !created.json || typeof created.json.id !== 'string') {
@@ -117,11 +127,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const id = created.json.id as string;
-    const inserted = await fetchJson(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles`, {
+    const inserted = await fetchJson(`${base}/rest/v1/profiles`, {
       method: 'POST',
       headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
+        apikey: adminKey,
+        Authorization: `Bearer ${adminKey}`,
         'Content-Type': 'application/json',
         Prefer: 'return=representation',
       },
@@ -147,9 +157,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
       </div>`;
     const text = `Username: ${username}\nPassword: ${password}`;
-    await sendResend(resendKey, email, 'Your The Way student account', html, text);
+    if (resendKey) {
+      await sendResend(resendKey, email, 'Your The Way student account', html, text);
+    }
 
-    res.status(200).json({ id, email, username, name, emailSent: true });
+    res.status(200).json({ id, email, username, name, emailSent: Boolean(resendKey) });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     res.status(500).json({ error: message });

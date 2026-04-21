@@ -31,6 +31,17 @@ const allow = (key: string, limit: number, windowMs: number) => {
   return true;
 };
 
+const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
+  if (!supabaseUrl || !serviceKey) return 'Supabase is not configured';
+  if (!/^https?:\/\//i.test(supabaseUrl)) {
+    return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+  }
+  if (/^https?:\/\//i.test(serviceKey)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+  }
+  return '';
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'POST') {
@@ -44,18 +55,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey) {
-      res.status(500).json({ error: 'Supabase is not configured' });
+    const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
+    if (envError) {
+      res.status(500).json({ error: envError });
       return;
     }
+    const base = (supabaseUrl as string).replace(/\/$/, '');
+    const adminKey = serviceKey as string;
     const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, unknown>) : {};
     const username = asString(body.username).trim();
     if (!username) {
       res.status(400).json({ error: 'Missing username' });
       return;
     }
-    const q = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=email`;
-    const r = await fetchJson(q, { method: 'GET', headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } });
+    const q = `${base}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=email`;
+    const r = await fetchJson(q, { method: 'GET', headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` } });
     const email = (r.ok && Array.isArray(r.json) && r.json[0] && typeof r.json[0].email === 'string') ? (r.json[0].email as string) : '';
     res.status(200).json({ email });
   } catch (e: unknown) {

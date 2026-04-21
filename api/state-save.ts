@@ -16,6 +16,17 @@ const fetchJson = async (url: string, init: RequestInit) => {
   return { ok: resp.ok, status: resp.status, text, json };
 };
 
+const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
+  if (!supabaseUrl || !serviceKey) return 'Supabase is not configured';
+  if (!/^https?:\/\//i.test(supabaseUrl)) {
+    return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+  }
+  if (/^https?:\/\//i.test(serviceKey)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the secret/service role key, not a URL.';
+  }
+  return '';
+};
+
 type AppState = {
   applications: unknown[];
   documents: unknown[];
@@ -63,10 +74,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey) {
-      res.status(500).json({ error: 'Supabase is not configured' });
+    const envErr = validateSupabaseEnv(supabaseUrl, serviceKey);
+    if (envErr) {
+      res.status(500).json({ error: envErr });
       return;
     }
+    const base = (supabaseUrl as string).replace(/\/$/, '');
+    const adminKey = serviceKey as string;
 
     const token = getBearer(req);
     if (!token) {
@@ -74,10 +88,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const base = supabaseUrl.replace(/\/$/, '');
     const who = await fetchJson(`${base}/auth/v1/user`, {
       method: 'GET',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+      headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
     });
     if (!who.ok || !who.json || typeof who.json.id !== 'string') {
       res.status(401).json({ error: 'Invalid token' });
@@ -87,7 +100,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const userId = who.json.id as string;
     const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role`, {
       method: 'GET',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
     });
     const role = Array.isArray(profile.json) && profile.json[0] && typeof profile.json[0].role === 'string'
       ? (profile.json[0].role as string)
@@ -98,7 +111,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
       method: 'GET',
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
     });
     const currentRaw = Array.isArray(stateResp.json) && stateResp.json[0] ? (stateResp.json[0].state as unknown) : {};
     const current = asState(currentRaw);
@@ -224,8 +237,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const upserted = await fetchJson(`${base}/rest/v1/app_state`, {
       method: 'POST',
       headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
+        apikey: adminKey,
+        Authorization: `Bearer ${adminKey}`,
         'Content-Type': 'application/json',
         Prefer: 'resolution=merge-duplicates',
       },

@@ -17,6 +17,17 @@ const fetchJson = async (url, init) => {
     } })() : null;
     return { ok: resp.ok, status: resp.status, text, json };
 };
+const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
+    if (!supabaseUrl || !serviceKey)
+        return 'Supabase is not configured';
+    if (!/^https?:\/\//i.test(supabaseUrl)) {
+        return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+    }
+    if (/^https?:\/\//i.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the secret/service role key, not a URL.';
+    }
+    return '';
+};
 const asRecord = (value) => (value && typeof value === 'object') ? value : null;
 const getString = (r, key) => (r && typeof r[key] === 'string' ? r[key] : '');
 const asState = (value) => {
@@ -39,19 +50,21 @@ export default async function handler(req, res) {
         }
         const supabaseUrl = process.env.SUPABASE_URL;
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        if (!supabaseUrl || !serviceKey) {
-            res.status(500).json({ error: 'Supabase is not configured' });
+        const envErr = validateSupabaseEnv(supabaseUrl, serviceKey);
+        if (envErr) {
+            res.status(500).json({ error: envErr });
             return;
         }
+        const base = supabaseUrl.replace(/\/$/, '');
+        const adminKey = serviceKey;
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
             return;
         }
-        const base = supabaseUrl.replace(/\/$/, '');
         const who = await fetchJson(`${base}/auth/v1/user`, {
             method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
         });
         if (!who.ok || !who.json || typeof who.json.id !== 'string') {
             res.status(401).json({ error: 'Invalid token' });
@@ -60,14 +73,14 @@ export default async function handler(req, res) {
         const userId = who.json.id;
         const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role`, {
             method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
         });
         const role = Array.isArray(profile.json) && profile.json[0] && typeof profile.json[0].role === 'string'
             ? profile.json[0].role
             : '';
         const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
             method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+            headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
         });
         const rawState = Array.isArray(stateResp.json) && stateResp.json[0] ? stateResp.json[0].state : {};
         const state = asState(rawState);
