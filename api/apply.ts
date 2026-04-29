@@ -95,7 +95,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,
     };
 
-    await appendJsonLine('applications.jsonl', { ...app, receivedAt: now });
+    try {
+      await appendJsonLine('applications.jsonl', { ...app, receivedAt: now });
+    } catch {
+      const g = globalThis as unknown as { __fallbackApps?: unknown[] };
+      if (!g.__fallbackApps) g.__fallbackApps = [];
+      g.__fallbackApps.push({ ...app, receivedAt: now });
+    }
 
     res.status(200).json({ id: appId });
   } catch (e: unknown) {

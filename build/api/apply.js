@@ -86,7 +86,15 @@ export default async function handler(req, res) {
             arrived: Boolean(body.arrived),
             intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,
         };
-        await appendJsonLine('applications.jsonl', { ...app, receivedAt: now });
+        try {
+            await appendJsonLine('applications.jsonl', { ...app, receivedAt: now });
+        }
+        catch {
+            const g = globalThis;
+            if (!g.__fallbackApps)
+                g.__fallbackApps = [];
+            g.__fallbackApps.push({ ...app, receivedAt: now });
+        }
         res.status(200).json({ id: appId });
     }
     catch (e) {
