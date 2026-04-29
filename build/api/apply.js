@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 const asString = (v) => (typeof v === 'string' ? v : '');
 const clamp = (v, max) => (v.length > max ? v.slice(0, max) : v);
@@ -27,7 +28,7 @@ const allow = (key, limit, windowMs) => {
 const getDataDir = () => {
     const raw = process.env.DATA_DIR;
     const value = typeof raw === 'string' ? raw.trim() : '';
-    return value || path.join(process.cwd(), 'data');
+    return value || path.join(os.tmpdir(), 'theway');
 };
 const appendJsonLine = async (fileName, row) => {
     const dir = getDataDir();

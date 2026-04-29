@@ -2,6 +2,7 @@ type ApiRequest = { method?: string; body?: unknown; headers?: Record<string, st
 type ApiResponse = { status: (code: number) => ApiResponse; json: (body: unknown) => void };
 
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const asString = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -31,7 +32,7 @@ const allow = (key: string, limit: number, windowMs: number) => {
 const getDataDir = () => {
   const raw = process.env.DATA_DIR;
   const value = typeof raw === 'string' ? raw.trim() : '';
-  return value || path.join(process.cwd(), 'data');
+  return value || path.join(os.tmpdir(), 'theway');
 };
 
 const appendJsonLine = async (fileName: string, row: unknown) => {
