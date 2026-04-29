@@ -57,13 +57,26 @@ const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
   return '';
 };
 
-const adminAuthHeaders = (adminKey: string) => {
+const adminHeaderCandidates = (adminKey: string) => {
   const key = adminKey.trim();
   const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
   const isSbSecret = key.startsWith('sb_secret_');
-  return (isJwtLike || isSbSecret)
-    ? { apikey: key, Authorization: `Bearer ${key}` }
-    : { apikey: key };
+  const apiOnly: Record<string, string> = { apikey: key };
+  const apiAndAuth: Record<string, string> = { apikey: key, Authorization: `Bearer ${key}` };
+  if (isJwtLike) return [apiAndAuth];
+  if (isSbSecret) return [apiOnly, apiAndAuth];
+  return [apiOnly];
+};
+
+const fetchJsonWithAdminHeaders = async (url: string, init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> }, adminKey: string) => {
+  const candidates = adminHeaderCandidates(adminKey);
+  let last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...candidates[0] } });
+  for (let i = 1; i < candidates.length; i += 1) {
+    if (last.ok) return last;
+    if (last.status !== 401 && last.status !== 403) return last;
+    last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...candidates[i] } });
+  }
+  return last;
 };
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -75,7 +88,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const ip = getIp(req);
 
     const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
     const envErr = validateSupabaseEnv(supabaseUrl, serviceKey);
     if (envErr) {
       res.status(500).json({ error: envErr });
@@ -83,7 +96,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const base = (supabaseUrl as string).replace(/\/$/, '');
     const adminKey = serviceKey as string;
-    const adminHeaders = adminAuthHeaders(adminKey);
+    const adminHeaders = adminHeaderCandidates(adminKey)[0];
 
     const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, unknown>) : {};
     const sourceRaw = asString(body.source).trim() || 'public';
@@ -159,10 +172,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,
     };
 
-    const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
+    const stateResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
       method: 'GET',
       headers: adminHeaders,
-    });
+    }, adminKey);
     if (!stateResp.ok) {
       const details = (stateResp.text || '').trim();
       res.status(500).json({
@@ -199,13 +212,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const notifications = Array.isArray(currentState.notifications) ? (currentState.notifications as unknown[]) : [];
     const nextState = { ...currentState, applications, notifications };
 
-    const upserted = await fetchJson(`${base}/rest/v1/app_state`, {
+    const upserted = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state`, {
       method: 'POST',
       headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({ org_id: 'default', state: nextState, updated_at: now, updated_by: agencyId ?? null }),
-    });
+    }, adminKey);
     if (!upserted.ok) {
       const details = (upserted.text || '').trim();
+      console.error('apply: app_state upsert failed', { status: upserted.status, details: details || undefined });
       res.status(500).json({
         error: details ? `Failed to save application (${upserted.status}): ${details}` : `Failed to save application (${upserted.status})`,
         details: details || undefined,

@@ -34,11 +34,29 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     }
     return '';
 };
-const adminAuthHeaders = (adminKey) => {
+const adminHeaderCandidates = (adminKey) => {
     const key = adminKey.trim();
     const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
     const isSbSecret = key.startsWith('sb_secret_');
-    return (isJwtLike || isSbSecret) ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+    const apiOnly = { apikey: key };
+    const apiAndAuth = { apikey: key, Authorization: `Bearer ${key}` };
+    if (isJwtLike)
+        return [apiAndAuth];
+    if (isSbSecret)
+        return [apiOnly, apiAndAuth];
+    return [apiOnly];
+};
+const fetchJsonWithAdminHeaders = async (url, init, adminKey) => {
+    const candidates = adminHeaderCandidates(adminKey);
+    let last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...candidates[0] } });
+    for (let i = 1; i < candidates.length; i += 1) {
+        if (last.ok)
+            return last;
+        if (last.status !== 401 && last.status !== 403)
+            return last;
+        last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...candidates[i] } });
+    }
+    return last;
 };
 const asState = (value) => {
     const v = (value && typeof value === 'object') ? value : {};
@@ -73,7 +91,7 @@ export default async function handler(req, res) {
             return;
         }
         const supabaseUrl = process.env.SUPABASE_URL;
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
         const envErr = validateSupabaseEnv(supabaseUrl, serviceKey);
         if (envErr) {
             res.status(500).json({ error: envErr });
@@ -81,7 +99,7 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = serviceKey;
-        const adminHeaders = adminAuthHeaders(adminKey);
+        const adminHeaders = adminHeaderCandidates(adminKey)[0];
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
@@ -105,10 +123,10 @@ export default async function handler(req, res) {
             : '';
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const incoming = asState(body.state);
-        const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
+        const stateResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
             method: 'GET',
             headers: adminHeaders,
-        });
+        }, adminKey);
         const currentRaw = Array.isArray(stateResp.json) && stateResp.json[0] ? stateResp.json[0].state : {};
         const current = asState(currentRaw);
         let next = current;
@@ -241,7 +259,7 @@ export default async function handler(req, res) {
             res.status(403).json({ error: 'Forbidden' });
             return;
         }
-        const upserted = await fetchJson(`${base}/rest/v1/app_state`, {
+        const upserted = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state`, {
             method: 'POST',
             headers: {
                 ...adminHeaders,
@@ -249,7 +267,7 @@ export default async function handler(req, res) {
                 Prefer: 'resolution=merge-duplicates',
             },
             body: JSON.stringify({ org_id: 'default', state: next, updated_at: now, updated_by: userId }),
-        });
+        }, adminKey);
         if (!upserted.ok) {
             res.status(500).json({ error: 'Failed to save state', details: upserted.text });
             return;
