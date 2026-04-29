@@ -72,7 +72,8 @@ const fetchJson = async (url, init) => {
 const adminAuthHeaders = (adminKey) => {
   const key = String(adminKey || '').trim();
   const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
-  return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+  const isSbSecret = key.startsWith('sb_secret_');
+  return (isJwtLike || isSbSecret) ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
 };
 
 const bootstrapDefaultCeo = async () => {
@@ -226,7 +227,6 @@ const server = http.createServer(async (req, res) => {
 
 const port = Number(process.env.PORT ?? 4173);
 server.listen(port, () => {
-  // eslint-disable-next-line no-console
   console.log(`Server running on http://localhost:${port}`);
   void bootstrapDefaultCeo();
 });

@@ -23,14 +23,22 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     if (!/^https?:\/\//i.test(supabaseUrl)) {
         return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
     }
+    if (serviceKey.startsWith('sb_publishable_')) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key that starts with sb_secret_.';
+    }
     if (/^https?:\/\//i.test(serviceKey)) {
         return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the secret/service role key, not a URL.';
+    }
+    if (/\s/.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It contains whitespace/new lines. Paste the key as a single line.';
     }
     return '';
 };
 const adminAuthHeaders = (adminKey) => {
-    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
-    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+    const key = adminKey.trim();
+    const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
+    const isSbSecret = key.startsWith('sb_secret_');
+    return (isJwtLike || isSbSecret) ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
 };
 const asRecord = (value) => (value && typeof value === 'object') ? value : null;
 const getString = (r, key) => (r && typeof r[key] === 'string' ? r[key] : '');

@@ -59,8 +59,12 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     return '';
 };
 const adminAuthHeaders = (adminKey) => {
-    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
-    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+    const key = adminKey.trim();
+    const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
+    const isSbSecret = key.startsWith('sb_secret_');
+    return (isJwtLike || isSbSecret)
+        ? { apikey: key, Authorization: `Bearer ${key}` }
+        : { apikey: key };
 };
 export default async function handler(req, res) {
     try {
@@ -102,7 +106,7 @@ export default async function handler(req, res) {
                 return;
             }
             const callerId = who.json.id;
-            const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+            const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role&limit=1`, {
                 method: 'GET',
                 headers: adminHeaders,
             });
@@ -150,12 +154,20 @@ export default async function handler(req, res) {
             arrived: Boolean(body.arrived),
             intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,
         };
-        const getState = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state`, {
+        const stateResp = await fetchJson(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
             method: 'GET',
             headers: adminHeaders,
         });
-        const currentState = Array.isArray(getState.json) && getState.json[0] && typeof getState.json[0].state === 'object'
-            ? getState.json[0].state
+        if (!stateResp.ok) {
+            const details = (stateResp.text || '').trim();
+            res.status(500).json({
+                error: details ? `Failed to load state (${stateResp.status}): ${details}` : `Failed to load state (${stateResp.status})`,
+                details: details || undefined,
+            });
+            return;
+        }
+        const currentState = Array.isArray(stateResp.json) && stateResp.json[0] && typeof stateResp.json[0].state === 'object'
+            ? stateResp.json[0].state
             : {};
         const existingApps = Array.isArray(currentState.applications) ? currentState.applications : [];
         const emailKey = source === 'agency'
@@ -183,11 +195,7 @@ export default async function handler(req, res) {
         const nextState = { ...currentState, applications, notifications };
         const upserted = await fetchJson(`${base}/rest/v1/app_state`, {
             method: 'POST',
-            headers: {
-                ...adminHeaders,
-                'Content-Type': 'application/json',
-                Prefer: 'resolution=merge-duplicates',
-            },
+            headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
             body: JSON.stringify({ org_id: 'default', state: nextState, updated_at: now, updated_by: agencyId ?? null }),
         });
         if (!upserted.ok) {
