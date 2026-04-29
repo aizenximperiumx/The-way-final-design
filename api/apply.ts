@@ -88,7 +88,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const ip = getIp(req);
 
     const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const serviceKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ??
+      process.env.SUPABASE_SERVICE_KEY;
     const envErr = validateSupabaseEnv(supabaseUrl, serviceKey);
     if (envErr) {
       res.status(500).json({ error: envErr });
