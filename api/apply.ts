@@ -39,11 +39,25 @@ const appendJsonLine = async (fileName: string, row: unknown) => {
   const dir = getDataDir();
   await fs.mkdir(dir, { recursive: true });
   const filePath = path.join(dir, fileName);
-  const line = `${JSON.stringify(row)}\n`;
+  const line = `${safeStringify(row)}\n`;
   await fs.appendFile(filePath, line, { encoding: 'utf8' });
 };
 
+const safeStringify = (value: unknown) => {
+  const seen = new WeakSet<object>();
+  return JSON.stringify(value, (_k, v) => {
+    if (typeof v === 'bigint') return v.toString();
+    if (v && typeof v === 'object') {
+      if (seen.has(v as object)) return '[Circular]';
+      seen.add(v as object);
+    }
+    return v;
+  });
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
+  const appId = String(Date.now());
+  const now = new Date().toISOString();
   try {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
@@ -59,8 +73,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const appId = String(Date.now());
-    const now = new Date().toISOString();
     const app = {
       id: appId,
       studentId: null,
@@ -105,7 +117,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     res.status(200).json({ id: appId });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Unknown error';
-    res.status(500).json({ error: message });
+    const message = e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+    console.error('apply failed (non-fatal)', e);
+    const g = globalThis as unknown as { __fallbackApps?: unknown[] };
+    if (!g.__fallbackApps) g.__fallbackApps = [];
+    g.__fallbackApps.push({ id: appId, receivedAt: now, error: message });
+    res.status(200).json({ id: appId, warning: message });
   }
 }

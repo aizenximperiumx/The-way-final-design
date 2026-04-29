@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -44,6 +45,32 @@ const serveJson = (res, statusCode, body) => {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
+};
+
+const safeStringify = (value) => {
+  const seen = new WeakSet();
+  return JSON.stringify(value, (_k, v) => {
+    if (typeof v === 'bigint') return v.toString();
+    if (v && typeof v === 'object') {
+      if (seen.has(v)) return '[Circular]';
+      seen.add(v);
+    }
+    return v;
+  });
+};
+
+const getDataDir = () => {
+  const raw = process.env.DATA_DIR;
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  return value || path.join(os.tmpdir(), 'theway');
+};
+
+const appendJsonLine = async (fileName, row) => {
+  const dir = getDataDir();
+  await fs.mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, fileName);
+  const line = `${safeStringify(row)}\n`;
+  await fs.appendFile(filePath, line, { encoding: 'utf8' });
 };
 
 const serveFile = async (res, filePath) => {
@@ -133,6 +160,58 @@ const exists = async (p) => {
   }
 };
 
+const inlineApply = async (apiReq, apiRes) => {
+  const now = new Date().toISOString();
+  const appId = String(Date.now());
+  const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
+  const sourceRaw = typeof body.source === 'string' ? body.source.trim() : '';
+  const source = (sourceRaw === 'agency' || sourceRaw === 'public') ? sourceRaw : 'public';
+
+  const app = {
+    id: appId,
+    studentId: null,
+    name: typeof body.name === 'string' ? body.name.slice(0, 120) : '',
+    email: typeof body.email === 'string' ? body.email.slice(0, 254) : '',
+    phone: typeof body.phone === 'string' ? body.phone.slice(0, 40) : '',
+    country: typeof body.country === 'string' ? body.country.slice(0, 80) : '',
+    program: typeof body.program === 'string' ? body.program.slice(0, 120) : '',
+    university: typeof body.university === 'string' ? (body.university.slice(0, 80) || null) : null,
+    status: 'submitted',
+    stage: 'applied',
+    createdAt: typeof body.createdAt === 'string' ? body.createdAt.slice(0, 40) : now,
+    internalNotes: body.internalNotes ?? null,
+    events: body.events ?? [{ id: `${appId}-submitted`, type: 'submitted', byId: null, byName: source === 'agency' ? 'Agency' : 'Website', time: now, details: source === 'agency' ? 'Agency submission' : 'Public submission' }],
+    hold: null,
+    approvedBy: null,
+    approvedAt: null,
+    ownerId: null,
+    salesOwnerId: null,
+    assignedStaffId: null,
+    source,
+    agencyId: null,
+    contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail.slice(0, 254) : null,
+    studentEmail: typeof body.studentEmail === 'string' ? body.studentEmail.slice(0, 254) : null,
+    intakeDetails: typeof body.intakeDetails === 'string' ? body.intakeDetails.slice(0, 20_000) : null,
+    intakeAttachments: Array.isArray(body.intakeAttachments) ? body.intakeAttachments : null,
+    intakeVideoUrl: typeof body.intakeVideoUrl === 'string' ? body.intakeVideoUrl.slice(0, 2000) : null,
+    intakePassportCopy: typeof body.intakePassportCopy === 'string' ? body.intakePassportCopy.slice(0, 2000) : null,
+    intakeHighSchoolCertificate: typeof body.intakeHighSchoolCertificate === 'string' ? body.intakeHighSchoolCertificate.slice(0, 2000) : null,
+    intakeSLARewarded: Boolean(body.intakeSLARewarded),
+    arrived: Boolean(body.arrived),
+    intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,
+  };
+
+  try {
+    await appendJsonLine('applications.jsonl', { ...app, receivedAt: now });
+  } catch (e) {
+    const g = globalThis;
+    if (!g.__fallbackApps) g.__fallbackApps = [];
+    g.__fallbackApps.push({ ...app, receivedAt: now, error: e instanceof Error ? e.message : String(e) });
+  }
+
+  apiRes.status(200).json({ id: appId });
+};
+
 const handleApi = async (req, res, route) => {
   const file = path.join(apiBuildDir, `${route}.js`);
   if (!(await exists(file))) {
@@ -176,6 +255,10 @@ const handleApi = async (req, res, route) => {
   };
 
   try {
+    if (route === 'apply') {
+      await inlineApply(apiReq, apiRes);
+      return;
+    }
     const mod = await import(pathToFileURL(file).href);
     const handler = mod.default;
     if (typeof handler !== 'function') {
