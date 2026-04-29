@@ -284,7 +284,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/healthz') {
-      serveJson(res, 200, { ok: true });
+      serveJson(res, 200, {
+        ok: true,
+        inlineApply: true,
+        dataDir: getDataDir(),
+        gitCommit: process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? null,
+        node: process.version,
+      });
       return;
     }
 
