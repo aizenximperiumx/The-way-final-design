@@ -142,7 +142,7 @@ export interface Appointment {
   createdAt: string;
 }
 
-export type AuthStatus = 'signed_out' | 'pending_2fa' | 'signed_in';
+export type AuthStatus = 'signed_out' | 'signed_in';
 
 export interface ChatMessage {
   id: string;
@@ -166,7 +166,6 @@ export interface AppStoreState {
   backendHydrated: boolean;
 
   login: (username: string, password: string) => Promise<User | null>;
-  verifyTwoFactor: (code: string) => Promise<boolean>;
   logout: () => void;
   restoreSession: () => Promise<void>;
   refreshUsersFromBackend: () => Promise<void>;
@@ -288,33 +287,12 @@ const useAppStore = create<AppStoreState>()(
           visaExpiry: typeof (profile as Record<string, unknown>).visa_expiry === 'string' ? String((profile as Record<string, unknown>).visa_expiry) : undefined,
           residenceExpiry: typeof (profile as Record<string, unknown>).residence_expiry === 'string' ? String((profile as Record<string, unknown>).residence_expiry) : undefined,
         };
-        const authStatus: AuthStatus = (user.role === 'student' || user.role === 'ceo') ? 'signed_in' : 'pending_2fa';
+        const authStatus: AuthStatus = 'signed_in';
         set({ currentUser: user, authStatus });
         await get().refreshUsersFromBackend();
-        if (authStatus === 'signed_in') {
-          await get().loadBackendState();
-          get().checkExpiries();
-        }
-        return user;
-      },
-
-      verifyTwoFactor: async (code: string) => {
-        const { currentUser, authStatus } = get();
-        if (!currentUser || authStatus !== 'pending_2fa') return false;
-        const supabase = getSupabase();
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) return false;
-        const resp = await fetch('/api/verify-2fa', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ code }),
-        });
-        const json = (await resp.json()) as { ok?: unknown };
-        if (!resp.ok || !json || json.ok !== true) return false;
-        set({ authStatus: 'signed_in' });
         await get().loadBackendState();
-        return true;
+        get().checkExpiries();
+        return user;
       },
 
       logout: () => {
@@ -354,13 +332,11 @@ const useAppStore = create<AppStoreState>()(
         const existing = get().currentUser;
         const existingStatus = get().authStatus;
         if (existing?.id === user.id && existingStatus !== 'signed_out') return;
-        const authStatus: AuthStatus = (user.role === 'student' || user.role === 'ceo') ? 'signed_in' : 'pending_2fa';
+        const authStatus: AuthStatus = 'signed_in';
         set({ currentUser: user, authStatus });
         await get().refreshUsersFromBackend();
-        if (authStatus === 'signed_in') {
-          await get().loadBackendState();
-          get().checkExpiries();
-        }
+        await get().loadBackendState();
+        get().checkExpiries();
       },
 
       refreshUsersFromBackend: async () => {

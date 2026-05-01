@@ -12,6 +12,13 @@ process.on('uncaughtException', (err) => {
   console.error('uncaughtException', err);
 });
 
+const getHealthBootstrapInfo = () => {
+  const g = globalThis;
+  const v = g.__ceoBootstrapLast;
+  if (!v || typeof v !== 'object') return null;
+  return v;
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -119,12 +126,21 @@ const adminAuthHeaders = (adminKey) => {
 const bootstrapDefaultCeo = async () => {
   try {
     const enabled = String(process.env.AUTO_BOOTSTRAP_CEO || '').toLowerCase() === 'true';
-    if (!enabled) return;
+    if (!enabled) {
+      globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: false };
+      return;
+    }
 
     const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
     const adminKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-    if (!supabaseUrl || !adminKey) return;
-    if (!/^https?:\/\//i.test(supabaseUrl)) return;
+    if (!supabaseUrl || !adminKey) {
+      globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'env', error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' };
+      return;
+    }
+    if (!/^https?:\/\//i.test(supabaseUrl)) {
+      globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'env', error: 'SUPABASE_URL is invalid' };
+      return;
+    }
 
     const base = supabaseUrl.replace(/\/$/, '');
     const adminHeaders = adminAuthHeaders(adminKey);
@@ -133,6 +149,7 @@ const bootstrapDefaultCeo = async () => {
       method: 'GET',
       headers: adminHeaders,
     });
+    globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, step: 'check', existingStatus: existing.status, existingOk: existing.ok };
 
     const email = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || 'ceo@theway.ge').trim();
     const password = String(process.env.AUTO_BOOTSTRAP_CEO_PASSWORD || 'ceo123').trim();
@@ -152,6 +169,7 @@ const bootstrapDefaultCeo = async () => {
       });
       if (!created.ok || !created.json || typeof created.json.id !== 'string') {
         console.error('CEO bootstrap failed (create user)', created.status, created.text);
+        globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'create_user', status: created.status, error: created.text?.slice(0, 300) };
         return;
       }
       id = created.json.id;
@@ -163,6 +181,7 @@ const bootstrapDefaultCeo = async () => {
       });
       if (!updatedUser.ok) {
         console.error('CEO bootstrap failed (update user)', updatedUser.status, updatedUser.text);
+        globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'update_user', status: updatedUser.status, error: updatedUser.text?.slice(0, 300) };
       }
     }
 
@@ -181,9 +200,14 @@ const bootstrapDefaultCeo = async () => {
     });
     if (!prof.ok) {
       console.error('CEO bootstrap failed (profile)', prof.status, prof.text);
+      globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'upsert_profile', status: prof.status, error: prof.text?.slice(0, 300) };
+      return;
     }
+    globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: true, step: 'done', id, username, email };
   } catch (e) {
     console.error('CEO bootstrap threw', e);
+    const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'exception', error: message.slice(0, 300) };
   }
 };
 
@@ -326,6 +350,7 @@ const server = http.createServer(async (req, res) => {
         dataDir: getDataDir(),
         gitCommit: process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? null,
         node: process.version,
+        ceoBootstrap: getHealthBootstrapInfo(),
       });
       return;
     }

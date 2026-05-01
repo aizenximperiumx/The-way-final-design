@@ -5,18 +5,16 @@ import toast from 'react-hot-toast';
 
 interface AuthContextType {
   user: User | null;
-  pendingUser: User | null;
   authStatus: AuthStatus;
   loading: boolean;
   login: (username: string, password: string) => Promise<User | null>;
-  verifyTwoFactor: (code: string) => Promise<boolean>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const { currentUser, authStatus, login: storeLogin, verifyTwoFactor: storeVerifyTwoFactor, logout: storeLogout, restoreSession, saveBackendState, backendHydrated } = useAppStore();
+  const { currentUser, authStatus, login: storeLogin, logout: storeLogout, restoreSession, saveBackendState, backendHydrated } = useAppStore();
   const [isHydrated, setIsHydrated] = useState(useAppStore.persist.hasHydrated());
   const saveTimer = useRef<number | null>(null);
   const lastSnapshot = useRef<string>('');
@@ -81,21 +79,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     toast.success('Logged out successfully');
   };
 
-  const verifyTwoFactor = async (code: string) => {
-    const ok = await storeVerifyTwoFactor(code);
-    if (!ok) toast.error('Invalid 2FA code.');
-    return ok;
-  };
-
   return (
     <AuthContext.Provider
       value={{
         user: authStatus === 'signed_in' ? currentUser : null,
-        pendingUser: authStatus === 'pending_2fa' ? currentUser : null,
         authStatus,
         loading: !isHydrated,
         login,
-        verifyTwoFactor,
         logout,
       }}
     >
