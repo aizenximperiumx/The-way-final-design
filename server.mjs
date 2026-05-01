@@ -4,6 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException', err);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -83,17 +91,22 @@ const serveFile = async (res, filePath) => {
 };
 
 const fetchJson = async (url, init) => {
-  const resp = await fetch(url, init);
-  const text = await resp.text();
-  let json = null;
-  if (text) {
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
+  try {
+    const resp = await fetch(url, init);
+    const text = await resp.text();
+    let json = null;
+    if (text) {
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = null;
+      }
     }
+    return { ok: resp.ok, status: resp.status, text, json };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 0, text: message, json: null };
   }
-  return { ok: resp.ok, status: resp.status, text, json };
 };
 
 const adminAuthHeaders = (adminKey) => {
@@ -104,51 +117,61 @@ const adminAuthHeaders = (adminKey) => {
 };
 
 const bootstrapDefaultCeo = async () => {
-  const enabled = String(process.env.AUTO_BOOTSTRAP_CEO || '').toLowerCase() === 'true';
-  if (!enabled) return;
+  try {
+    const enabled = String(process.env.AUTO_BOOTSTRAP_CEO || '').toLowerCase() === 'true';
+    if (!enabled) return;
 
-  const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
-  const adminKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  if (!supabaseUrl || !adminKey) return;
-  if (!/^https?:\/\//i.test(supabaseUrl)) return;
+    const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
+    const adminKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    if (!supabaseUrl || !adminKey) return;
+    if (!/^https?:\/\//i.test(supabaseUrl)) return;
 
-  const base = supabaseUrl.replace(/\/$/, '');
-  const adminHeaders = adminAuthHeaders(adminKey);
+    const base = supabaseUrl.replace(/\/$/, '');
+    const adminHeaders = adminAuthHeaders(adminKey);
 
-  const existing = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, {
-    method: 'GET',
-    headers: adminHeaders,
-  });
-  if (existing.ok && Array.isArray(existing.json) && existing.json.length > 0) return;
+    const existing = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, {
+      method: 'GET',
+      headers: adminHeaders,
+    });
+    if (existing.ok && Array.isArray(existing.json) && existing.json.length > 0) return;
 
-  const email = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || 'ceo@theway.ge').trim();
-  const password = String(process.env.AUTO_BOOTSTRAP_CEO_PASSWORD || 'ceo123').trim();
-  const username = String(process.env.AUTO_BOOTSTRAP_CEO_USERNAME || 'ceo').trim();
-  const name = String(process.env.AUTO_BOOTSTRAP_CEO_NAME || 'CEO').trim();
+    const email = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || 'ceo@theway.ge').trim();
+    const password = String(process.env.AUTO_BOOTSTRAP_CEO_PASSWORD || 'ceo123').trim();
+    const username = String(process.env.AUTO_BOOTSTRAP_CEO_USERNAME || 'ceo').trim();
+    const name = String(process.env.AUTO_BOOTSTRAP_CEO_NAME || 'CEO').trim();
+    const twoFactorCodeRaw = String(process.env.AUTO_BOOTSTRAP_CEO_2FA_CODE || '').trim();
+    const twoFactorCode = twoFactorCodeRaw ? twoFactorCodeRaw : null;
 
-  const created = await fetchJson(`${base}/auth/v1/admin/users`, {
-    method: 'POST',
-    headers: { ...adminHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, email_confirm: true }),
-  });
-  if (!created.ok || !created.json || typeof created.json.id !== 'string') {
-    return;
+    const created = await fetchJson(`${base}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, email_confirm: true }),
+    });
+    if (!created.ok || !created.json || typeof created.json.id !== 'string') {
+      console.error('CEO bootstrap failed (create user)', created.status, created.text);
+      return;
+    }
+
+    const id = created.json.id;
+    const prof = await fetchJson(`${base}/rest/v1/profiles`, {
+      method: 'POST',
+      headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+        id,
+        email,
+        username,
+        role: 'ceo',
+        name,
+        two_factor_code: twoFactorCode,
+        points: 0,
+      }),
+    });
+    if (!prof.ok) {
+      console.error('CEO bootstrap failed (profile)', prof.status, prof.text);
+    }
+  } catch (e) {
+    console.error('CEO bootstrap threw', e);
   }
-
-  const id = created.json.id;
-  await fetchJson(`${base}/rest/v1/profiles`, {
-    method: 'POST',
-    headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify({
-      id,
-      email,
-      username,
-      role: 'ceo',
-      name,
-      two_factor_code: null,
-      points: 0,
-    }),
-  });
 };
 
 const exists = async (p) => {
