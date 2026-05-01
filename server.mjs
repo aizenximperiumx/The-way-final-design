@@ -129,11 +129,10 @@ const bootstrapDefaultCeo = async () => {
     const base = supabaseUrl.replace(/\/$/, '');
     const adminHeaders = adminAuthHeaders(adminKey);
 
-    const existing = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, {
+    const existing = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id,email,username&limit=1`, {
       method: 'GET',
       headers: adminHeaders,
     });
-    if (existing.ok && Array.isArray(existing.json) && existing.json.length > 0) return;
 
     const email = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || 'ceo@theway.ge').trim();
     const password = String(process.env.AUTO_BOOTSTRAP_CEO_PASSWORD || 'ceo123').trim();
@@ -142,17 +141,31 @@ const bootstrapDefaultCeo = async () => {
     const twoFactorCodeRaw = String(process.env.AUTO_BOOTSTRAP_CEO_2FA_CODE || '').trim();
     const twoFactorCode = twoFactorCodeRaw ? twoFactorCodeRaw : null;
 
-    const created = await fetchJson(`${base}/auth/v1/admin/users`, {
-      method: 'POST',
-      headers: { ...adminHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, email_confirm: true }),
-    });
-    if (!created.ok || !created.json || typeof created.json.id !== 'string') {
-      console.error('CEO bootstrap failed (create user)', created.status, created.text);
-      return;
+    const foundExisting = existing.ok && Array.isArray(existing.json) && existing.json.length > 0 && existing.json[0] && typeof existing.json[0].id === 'string';
+    let id = foundExisting ? String(existing.json[0].id) : '';
+
+    if (!id) {
+      const created = await fetchJson(`${base}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, email_confirm: true }),
+      });
+      if (!created.ok || !created.json || typeof created.json.id !== 'string') {
+        console.error('CEO bootstrap failed (create user)', created.status, created.text);
+        return;
+      }
+      id = created.json.id;
+    } else {
+      const updatedUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, email_confirm: true }),
+      });
+      if (!updatedUser.ok) {
+        console.error('CEO bootstrap failed (update user)', updatedUser.status, updatedUser.text);
+      }
     }
 
-    const id = created.json.id;
     const prof = await fetchJson(`${base}/rest/v1/profiles`, {
       method: 'POST',
       headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
