@@ -269,7 +269,7 @@ const useAppStore = create<AppStoreState>()(
         if (!data.user) throw new Error('Login failed');
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
-          .select('id,username,role,name,email,phone,points,created_at,staff_universities,passport_expiry,visa_expiry,residence_expiry')
+          .select('id,username,role,name')
           .eq('id', data.user.id)
           .single();
         if (profileErr) throw new Error(profileErr.message || 'Profile lookup failed');
@@ -279,14 +279,10 @@ const useAppStore = create<AppStoreState>()(
           username: String((profile as Record<string, unknown>).username ?? input),
           role: String((profile as Record<string, unknown>).role) as UserRole,
           name: String((profile as Record<string, unknown>).name ?? ''),
-          email: String((profile as Record<string, unknown>).email ?? email),
-          phone: typeof (profile as Record<string, unknown>).phone === 'string' ? String((profile as Record<string, unknown>).phone) : undefined,
-          createdAt: typeof (profile as Record<string, unknown>).created_at === 'string' ? String((profile as Record<string, unknown>).created_at) : new Date().toISOString(),
-          points: typeof (profile as Record<string, unknown>).points === 'number' ? Number((profile as Record<string, unknown>).points) : 0,
-          staffUniversities: Array.isArray((profile as Record<string, unknown>).staff_universities) ? ((profile as Record<string, unknown>).staff_universities as string[]) : undefined,
-          passportExpiry: typeof (profile as Record<string, unknown>).passport_expiry === 'string' ? String((profile as Record<string, unknown>).passport_expiry) : undefined,
-          visaExpiry: typeof (profile as Record<string, unknown>).visa_expiry === 'string' ? String((profile as Record<string, unknown>).visa_expiry) : undefined,
-          residenceExpiry: typeof (profile as Record<string, unknown>).residence_expiry === 'string' ? String((profile as Record<string, unknown>).residence_expiry) : undefined,
+          email,
+          phone: undefined,
+          createdAt: new Date().toISOString(),
+          points: 0,
         };
         const authStatus: AuthStatus = 'signed_in';
         set({ currentUser: user, authStatus });
@@ -310,7 +306,7 @@ const useAppStore = create<AppStoreState>()(
         if (!session?.user?.id) return;
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
-          .select('id,username,role,name,email,phone,points,created_at,staff_universities,passport_expiry,visa_expiry,residence_expiry')
+          .select('id,username,role,name')
           .eq('id', session.user.id)
           .single();
         if (profileErr || !profile) return;
@@ -320,14 +316,10 @@ const useAppStore = create<AppStoreState>()(
           username: typeof p.username === 'string' ? p.username : '',
           role: (typeof p.role === 'string' ? p.role : 'student') as UserRole,
           name: typeof p.name === 'string' ? p.name : '',
-          email: typeof p.email === 'string' ? p.email : (session.user.email ?? ''),
-          phone: typeof p.phone === 'string' ? p.phone : undefined,
-          createdAt: typeof p.created_at === 'string' ? p.created_at : new Date().toISOString(),
-          points: typeof p.points === 'number' ? p.points : 0,
-          staffUniversities: Array.isArray(p.staff_universities) ? (p.staff_universities as string[]) : undefined,
-          passportExpiry: typeof p.passport_expiry === 'string' ? p.passport_expiry : undefined,
-          visaExpiry: typeof p.visa_expiry === 'string' ? p.visa_expiry : undefined,
-          residenceExpiry: typeof p.residence_expiry === 'string' ? p.residence_expiry : undefined,
+          email: session.user.email ?? '',
+          phone: undefined,
+          createdAt: new Date().toISOString(),
+          points: 0,
         };
         const existing = get().currentUser;
         const existingStatus = get().authStatus;
@@ -344,7 +336,7 @@ const useAppStore = create<AppStoreState>()(
         if (!supabase) return;
         const { data, error } = await supabase
           .from('profiles')
-          .select('id,username,role,name,email,phone,points,created_at,staff_universities,passport_expiry,visa_expiry,residence_expiry');
+          .select('id,username,role,name');
         if (error || !data) return;
         const users: User[] = (data as unknown[]).map((row) => {
           const p = (row && typeof row === 'object') ? (row as Record<string, unknown>) : {};
@@ -353,14 +345,10 @@ const useAppStore = create<AppStoreState>()(
             username: typeof p.username === 'string' ? p.username : '',
             role: (typeof p.role === 'string' ? p.role : 'student') as UserRole,
             name: typeof p.name === 'string' ? p.name : '',
-            email: typeof p.email === 'string' ? p.email : '',
-            phone: typeof p.phone === 'string' ? p.phone : undefined,
-            createdAt: typeof p.created_at === 'string' ? p.created_at : new Date().toISOString(),
-            points: typeof p.points === 'number' ? p.points : 0,
-            staffUniversities: Array.isArray(p.staff_universities) ? (p.staff_universities as string[]) : undefined,
-            passportExpiry: typeof p.passport_expiry === 'string' ? p.passport_expiry : undefined,
-            visaExpiry: typeof p.visa_expiry === 'string' ? p.visa_expiry : undefined,
-            residenceExpiry: typeof p.residence_expiry === 'string' ? p.residence_expiry : undefined,
+            email: '',
+            phone: undefined,
+            createdAt: new Date().toISOString(),
+            points: 0,
           };
         });
         set({ users });
@@ -918,11 +906,6 @@ const useAppStore = create<AppStoreState>()(
         if (typeof updates.name === 'string') patch.name = updates.name;
         if (typeof updates.email === 'string') patch.email = updates.email;
         if (typeof updates.phone === 'string') patch.phone = updates.phone;
-        if (typeof updates.points === 'number') patch.points = updates.points;
-        if (Array.isArray(updates.staffUniversities)) patch.staff_universities = updates.staffUniversities;
-        if (typeof updates.passportExpiry === 'string') patch.passport_expiry = updates.passportExpiry;
-        if (typeof updates.visaExpiry === 'string') patch.visa_expiry = updates.visaExpiry;
-        if (typeof updates.residenceExpiry === 'string') patch.residence_expiry = updates.residenceExpiry;
         void supabase.from('profiles').update(patch).eq('id', userId).then(() => get().refreshUsersFromBackend());
       },
 

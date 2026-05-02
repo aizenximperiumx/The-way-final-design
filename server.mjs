@@ -164,7 +164,7 @@ const bootstrapDefaultCeo = async () => {
     const base = supabaseUrl.replace(/\/$/, '');
     const adminHeaders = adminAuthHeaders(adminKey);
 
-    const existing = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id,email,username&limit=1`, {
+    const existing = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id,username&limit=1`, {
       method: 'GET',
       headers: adminHeaders,
     });
@@ -174,8 +174,7 @@ const bootstrapDefaultCeo = async () => {
     const password = String(process.env.AUTO_BOOTSTRAP_CEO_PASSWORD || 'ceo123').trim();
     const username = String(process.env.AUTO_BOOTSTRAP_CEO_USERNAME || 'ceo').trim();
     const name = String(process.env.AUTO_BOOTSTRAP_CEO_NAME || 'CEO').trim();
-    const twoFactorCodeRaw = String(process.env.AUTO_BOOTSTRAP_CEO_2FA_CODE || '').trim();
-    const twoFactorCode = twoFactorCodeRaw ? twoFactorCodeRaw : null;
+    void String(process.env.AUTO_BOOTSTRAP_CEO_2FA_CODE || '').trim();
 
     const foundExisting = existing.ok && Array.isArray(existing.json) && existing.json.length > 0 && existing.json[0] && typeof existing.json[0].id === 'string';
     let id = foundExisting ? String(existing.json[0].id) : '';
@@ -209,12 +208,9 @@ const bootstrapDefaultCeo = async () => {
       headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({
         id,
-        email,
         username,
         role: 'ceo',
         name,
-        two_factor_code: twoFactorCode,
-        points: 0,
       }),
     });
     if (!prof.ok) {
@@ -317,22 +313,17 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
   }
 
   const readProfileByUsername = async (operator) => {
-    const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id,email&limit=1`;
+    const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id&limit=1`;
     const r = await fetchJson(q, { method: 'GET', headers: adminHeaders });
     if (!r.ok || !Array.isArray(r.json) || !r.json[0] || typeof r.json[0] !== 'object') return null;
     const row = r.json[0];
     const id = typeof row.id === 'string' ? row.id : '';
-    const email = typeof row.email === 'string' ? row.email : '';
-    return { id, email };
+    return { id };
   };
 
   const profile = (await readProfileByUsername('eq')) ?? (await readProfileByUsername('ilike'));
   if (!profile || !profile.id) {
     apiRes.status(200).json({ email: '' });
-    return;
-  }
-  if (profile.email) {
-    apiRes.status(200).json({ email: profile.email });
     return;
   }
 
@@ -346,7 +337,7 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
       : '';
   if (!authEmail) {
     apiRes.status(500).json({
-      error: 'User exists but email is missing in profiles, and could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct, or set profiles.email for this user.',
+      error: 'User exists but could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct.',
     });
     return;
   }

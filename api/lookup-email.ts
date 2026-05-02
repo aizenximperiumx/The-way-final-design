@@ -83,22 +83,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
     const readProfileByUsername = async (operator: 'eq' | 'ilike') => {
-      const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id,email&limit=1`;
+      const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id&limit=1`;
       const r = await fetchJson(q, { method: 'GET', headers: adminHeaders });
       if (!r.ok || !Array.isArray(r.json) || !r.json[0] || typeof r.json[0] !== 'object') return null;
       const row = r.json[0] as Record<string, unknown>;
       const id = typeof row.id === 'string' ? row.id : '';
-      const email = typeof row.email === 'string' ? row.email : '';
-      return { id, email };
+      return { id };
     };
 
     const profile = (await readProfileByUsername('eq')) ?? (await readProfileByUsername('ilike'));
     if (!profile || !profile.id) {
       res.status(200).json({ email: '' });
-      return;
-    }
-    if (profile.email) {
-      res.status(200).json({ email: profile.email });
       return;
     }
 
@@ -111,7 +106,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       : '';
     if (!authEmail) {
       res.status(500).json({
-        error: 'User exists but email is missing in profiles, and could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct, or set profiles.email for this user.',
+        error: 'User exists but could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct.',
       });
       return;
     }

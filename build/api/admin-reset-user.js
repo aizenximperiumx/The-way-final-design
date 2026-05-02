@@ -103,8 +103,7 @@ export default async function handler(req, res) {
         const userId = asString(body.userId).trim();
         const username = asString(body.username).trim() || undefined;
         const password = asString(body.password) || undefined;
-        const forced2fa = getForcedInternal2faCode();
-        const twoFactorCode = forced2fa || asString(body.twoFactorCode).trim() || undefined;
+        void getForcedInternal2faCode();
         if (!userId) {
             res.status(400).json({ error: 'Missing userId' });
             return;
@@ -120,12 +119,10 @@ export default async function handler(req, res) {
                 return;
             }
         }
-        if (username || twoFactorCode) {
+        if (username) {
             const patch = {};
             if (username)
                 patch.username = username;
-            if (twoFactorCode)
-                patch.two_factor_code = twoFactorCode;
             const updatedProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
                 method: 'PATCH',
                 headers: { ...adminHeaders, 'Content-Type': 'application/json' },
@@ -136,14 +133,13 @@ export default async function handler(req, res) {
                 return;
             }
         }
-        const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email,username,two_factor_code,role,name`, {
+        const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email,username,role,name`, {
             method: 'GET',
             headers: adminHeaders,
         });
         const row = Array.isArray(profile.json) ? profile.json[0] : null;
         const email = row && typeof row.email === 'string' ? row.email : '';
         const finalUsername = username ?? (row && typeof row.username === 'string' ? row.username : '');
-        const final2fa = twoFactorCode ?? (row && typeof row.two_factor_code === 'string' ? row.two_factor_code : '');
         const name = row && typeof row.name === 'string' ? row.name : '';
         const role = row && typeof row.role === 'string' ? row.role : '';
         if (email && resendKey) {
@@ -152,9 +148,9 @@ export default async function handler(req, res) {
         <div style="font-family:Arial,sans-serif">
           <h2 style="margin:0 0 12px">Credentials updated</h2>
           <p><b>Name:</b> ${name}</p>
-          <p><b>Username:</b> ${finalUsername}${password ? `<br/><b>Password:</b> ${password}` : ''}${final2fa ? `<br/><b>2FA:</b> ${final2fa}` : ''}</p>
+          <p><b>Username:</b> ${finalUsername}${password ? `<br/><b>Password:</b> ${password}` : ''}</p>
         </div>`;
-            const text = `Name: ${name}\nUsername: ${finalUsername}${password ? `\nPassword: ${password}` : ''}${final2fa ? `\n2FA: ${final2fa}` : ''}`;
+            const text = `Name: ${name}\nUsername: ${finalUsername}${password ? `\nPassword: ${password}` : ''}`;
             await sendResend(resendKey, email, subject, html, text);
         }
         res.status(200).json({ ok: true, emailSent: Boolean(email && resendKey) });

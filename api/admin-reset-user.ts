@@ -5,7 +5,6 @@ type ResetBody = {
   userId?: unknown;
   username?: unknown;
   password?: unknown;
-  twoFactorCode?: unknown;
 };
 
 const asString = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -118,8 +117,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const userId = asString(body.userId).trim();
     const username = asString(body.username).trim() || undefined;
     const password = asString(body.password) || undefined;
-    const forced2fa = getForcedInternal2faCode();
-    const twoFactorCode = forced2fa || asString(body.twoFactorCode).trim() || undefined;
+    void getForcedInternal2faCode();
 
     if (!userId) {
       res.status(400).json({ error: 'Missing userId' });
@@ -138,10 +136,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    if (username || twoFactorCode) {
+    if (username) {
       const patch: Record<string, unknown> = {};
       if (username) patch.username = username;
-      if (twoFactorCode) patch.two_factor_code = twoFactorCode;
       const updatedProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
         method: 'PATCH',
         headers: { ...adminHeaders, 'Content-Type': 'application/json' },
@@ -153,14 +150,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email,username,two_factor_code,role,name`, {
+    const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email,username,role,name`, {
       method: 'GET',
       headers: adminHeaders,
     });
     const row = Array.isArray(profile.json) ? profile.json[0] : null;
     const email = row && typeof row.email === 'string' ? (row.email as string) : '';
     const finalUsername = username ?? (row && typeof row.username === 'string' ? (row.username as string) : '');
-    const final2fa = twoFactorCode ?? (row && typeof row.two_factor_code === 'string' ? (row.two_factor_code as string) : '');
     const name = row && typeof row.name === 'string' ? (row.name as string) : '';
     const role = row && typeof row.role === 'string' ? (row.role as string) : '';
 
@@ -170,9 +166,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         <div style="font-family:Arial,sans-serif">
           <h2 style="margin:0 0 12px">Credentials updated</h2>
           <p><b>Name:</b> ${name}</p>
-          <p><b>Username:</b> ${finalUsername}${password ? `<br/><b>Password:</b> ${password}` : ''}${final2fa ? `<br/><b>2FA:</b> ${final2fa}` : ''}</p>
+          <p><b>Username:</b> ${finalUsername}${password ? `<br/><b>Password:</b> ${password}` : ''}</p>
         </div>`;
-      const text = `Name: ${name}\nUsername: ${finalUsername}${password ? `\nPassword: ${password}` : ''}${final2fa ? `\n2FA: ${final2fa}` : ''}`;
+      const text = `Name: ${name}\nUsername: ${finalUsername}${password ? `\nPassword: ${password}` : ''}`;
       await sendResend(resendKey, email, subject, html, text);
     }
 

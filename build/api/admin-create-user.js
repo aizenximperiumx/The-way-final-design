@@ -1,6 +1,5 @@
 import { randomBytes } from 'crypto';
 const asString = (v) => (typeof v === 'string' ? v : '');
-const asStringArray = (v) => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
 const getHeader = (req, name) => {
     const target = name.toLowerCase();
     const headers = req.headers || {};
@@ -52,7 +51,6 @@ const randomPassword = () => {
     const buf = randomBytes(16).toString('base64url');
     return `Tw-${buf}`;
 };
-const random2fa = () => String(Math.floor(100000 + Math.random() * 900000));
 const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     if (!supabaseUrl || !serviceKey)
         return 'Supabase admin is not configured';
@@ -136,8 +134,6 @@ export default async function handler(req, res) {
         const role = asString(body.role).trim();
         const name = asString(body.name).trim();
         const phone = asString(body.phone).trim() || undefined;
-        const twoFactorIn = asString(body.twoFactorCode).trim();
-        const staffUniversities = asStringArray(body.staffUniversities);
         const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency']);
         if (!email || !role || !name) {
             res.status(400).json({ error: 'Missing fields' });
@@ -159,8 +155,7 @@ export default async function handler(req, res) {
                 break;
             username = `${usernameBase}${Math.floor(100 + Math.random() * 900)}${i}`;
         }
-        const forced2fa = getForcedInternal2faCode();
-        const twoFactorCode = role === 'ceo' ? '' : (forced2fa || twoFactorIn || random2fa());
+        void getForcedInternal2faCode();
         const created = await fetchJson(`${base}/auth/v1/admin/users`, {
             method: 'POST',
             headers: { ...adminHeaders, 'Content-Type': 'application/json' },
@@ -180,14 +175,9 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
                 id,
-                email,
                 username,
                 role,
                 name,
-                phone,
-                two_factor_code: twoFactorCode || null,
-                points: 0,
-                staff_universities: staffUniversities.length ? staffUniversities : null,
             }),
         });
         if (!inserted.ok) {
@@ -198,9 +188,9 @@ export default async function handler(req, res) {
             const html = `
         <div style="font-family:Arial,sans-serif">
           <h2 style="margin:0 0 12px">Your account is ready</h2>
-          <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}<br/><b>2FA:</b> ${twoFactorCode ?? ''}</p>
+          <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
         </div>`;
-            const text = `Username: ${username}\nPassword: ${password}\n2FA: ${twoFactorCode ?? ''}`;
+            const text = `Username: ${username}\nPassword: ${password}`;
             await sendResend(resendKey, email, 'Your account credentials', html, text);
         }
         res.status(200).json({ id, email, username, role, name, emailSent: Boolean(resendKey) });

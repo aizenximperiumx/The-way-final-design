@@ -70,6 +70,9 @@ const adminAuthHeaders = (adminKey: string) => {
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
+    res.status(410).json({ error: '2FA is disabled' });
+    return;
+
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;

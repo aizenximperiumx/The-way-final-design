@@ -124,12 +124,9 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
                 id,
-                email,
                 username,
                 role: 'student',
                 name,
-                phone,
-                points: 0,
             }),
         });
         if (!inserted.ok) {

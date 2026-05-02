@@ -115,7 +115,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const password = asString(body.password);
     const username = asString(body.username).trim();
     const name = asString(body.name).trim();
-    const phone = asString(body.phone).trim() || undefined;
+    void asString(body.phone).trim();
 
     if (!email || !password || !username || !name) {
       res.status(400).json({ error: 'Missing fields' });
@@ -142,12 +142,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       },
       body: JSON.stringify({
         id,
-        email,
         username,
         role: 'student',
         name,
-        phone,
-        points: 0,
       }),
     });
     if (!inserted.ok) {

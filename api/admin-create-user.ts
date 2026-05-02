@@ -8,14 +8,11 @@ type CreateUserBody = {
   role?: unknown;
   name?: unknown;
   phone?: unknown;
-  twoFactorCode?: unknown;
-  staffUniversities?: unknown;
 };
 
 import { randomBytes } from 'crypto';
 
 const asString = (v: unknown) => (typeof v === 'string' ? v : '');
-const asStringArray = (v: unknown) => (Array.isArray(v) ? v.filter(x => typeof x === 'string') as string[] : []);
 
 const getHeader = (req: ApiRequest, name: string) => {
   const target = name.toLowerCase();
@@ -66,8 +63,6 @@ const randomPassword = () => {
   const buf = randomBytes(16).toString('base64url');
   return `Tw-${buf}`;
 };
-
-const random2fa = () => String(Math.floor(100000 + Math.random() * 900000));
 
 const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
   if (!supabaseUrl || !serviceKey) return 'Supabase admin is not configured';
@@ -157,9 +152,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const usernameIn = asString(body.username).trim();
     const role = asString(body.role).trim();
     const name = asString(body.name).trim();
-    const phone = asString(body.phone).trim() || undefined;
-    const twoFactorIn = asString(body.twoFactorCode).trim();
-    const staffUniversities = asStringArray(body.staffUniversities);
+    void asString(body.phone).trim();
 
     const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency']);
     if (!email || !role || !name) {
@@ -184,8 +177,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       username = `${usernameBase}${Math.floor(100 + Math.random() * 900)}${i}`;
     }
 
-    const forced2fa = getForcedInternal2faCode();
-    const twoFactorCode = role === 'ceo' ? '' : (forced2fa || twoFactorIn || random2fa());
+    void getForcedInternal2faCode();
 
     const created = await fetchJson(`${base}/auth/v1/admin/users`, {
       method: 'POST',
@@ -207,14 +199,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       },
       body: JSON.stringify({
         id,
-        email,
         username,
         role,
         name,
-        phone,
-        two_factor_code: twoFactorCode || null,
-        points: 0,
-        staff_universities: staffUniversities.length ? staffUniversities : null,
       }),
     });
     if (!inserted.ok) {
@@ -226,9 +213,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const html = `
         <div style="font-family:Arial,sans-serif">
           <h2 style="margin:0 0 12px">Your account is ready</h2>
-          <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}<br/><b>2FA:</b> ${twoFactorCode ?? ''}</p>
+          <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
         </div>`;
-      const text = `Username: ${username}\nPassword: ${password}\n2FA: ${twoFactorCode ?? ''}`;
+      const text = `Username: ${username}\nPassword: ${password}`;
       await sendResend(resendKey, email, 'Your account credentials', html, text);
     }
 
