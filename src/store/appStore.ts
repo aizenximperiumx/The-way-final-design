@@ -269,7 +269,7 @@ const useAppStore = create<AppStoreState>()(
         if (!data.user) throw new Error('Login failed');
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
-          .select('id,username,role,name,email,phone,points,created_at,staff_universities,assigned_university_id,passport_expiry,visa_expiry,residence_expiry')
+          .select('id,username,role,name,email,phone,points,created_at,staff_universities,passport_expiry,visa_expiry,residence_expiry')
           .eq('id', data.user.id)
           .single();
         if (profileErr) throw new Error(profileErr.message || 'Profile lookup failed');
@@ -284,7 +284,6 @@ const useAppStore = create<AppStoreState>()(
           createdAt: typeof (profile as Record<string, unknown>).created_at === 'string' ? String((profile as Record<string, unknown>).created_at) : new Date().toISOString(),
           points: typeof (profile as Record<string, unknown>).points === 'number' ? Number((profile as Record<string, unknown>).points) : 0,
           staffUniversities: Array.isArray((profile as Record<string, unknown>).staff_universities) ? ((profile as Record<string, unknown>).staff_universities as string[]) : undefined,
-          assignedUniversityId: typeof (profile as Record<string, unknown>).assigned_university_id === 'string' ? String((profile as Record<string, unknown>).assigned_university_id) : undefined,
           passportExpiry: typeof (profile as Record<string, unknown>).passport_expiry === 'string' ? String((profile as Record<string, unknown>).passport_expiry) : undefined,
           visaExpiry: typeof (profile as Record<string, unknown>).visa_expiry === 'string' ? String((profile as Record<string, unknown>).visa_expiry) : undefined,
           residenceExpiry: typeof (profile as Record<string, unknown>).residence_expiry === 'string' ? String((profile as Record<string, unknown>).residence_expiry) : undefined,
@@ -311,7 +310,7 @@ const useAppStore = create<AppStoreState>()(
         if (!session?.user?.id) return;
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
-          .select('id,username,role,name,email,phone,points,created_at,staff_universities,assigned_university_id,passport_expiry,visa_expiry,residence_expiry')
+          .select('id,username,role,name,email,phone,points,created_at,staff_universities,passport_expiry,visa_expiry,residence_expiry')
           .eq('id', session.user.id)
           .single();
         if (profileErr || !profile) return;
@@ -326,7 +325,6 @@ const useAppStore = create<AppStoreState>()(
           createdAt: typeof p.created_at === 'string' ? p.created_at : new Date().toISOString(),
           points: typeof p.points === 'number' ? p.points : 0,
           staffUniversities: Array.isArray(p.staff_universities) ? (p.staff_universities as string[]) : undefined,
-          assignedUniversityId: typeof p.assigned_university_id === 'string' ? p.assigned_university_id : undefined,
           passportExpiry: typeof p.passport_expiry === 'string' ? p.passport_expiry : undefined,
           visaExpiry: typeof p.visa_expiry === 'string' ? p.visa_expiry : undefined,
           residenceExpiry: typeof p.residence_expiry === 'string' ? p.residence_expiry : undefined,
@@ -346,7 +344,7 @@ const useAppStore = create<AppStoreState>()(
         if (!supabase) return;
         const { data, error } = await supabase
           .from('profiles')
-          .select('id,username,role,name,email,phone,points,created_at,staff_universities,assigned_university_id,passport_expiry,visa_expiry,residence_expiry');
+          .select('id,username,role,name,email,phone,points,created_at,staff_universities,passport_expiry,visa_expiry,residence_expiry');
         if (error || !data) return;
         const users: User[] = (data as unknown[]).map((row) => {
           const p = (row && typeof row === 'object') ? (row as Record<string, unknown>) : {};
@@ -360,7 +358,6 @@ const useAppStore = create<AppStoreState>()(
             createdAt: typeof p.created_at === 'string' ? p.created_at : new Date().toISOString(),
             points: typeof p.points === 'number' ? p.points : 0,
             staffUniversities: Array.isArray(p.staff_universities) ? (p.staff_universities as string[]) : undefined,
-            assignedUniversityId: typeof p.assigned_university_id === 'string' ? p.assigned_university_id : undefined,
             passportExpiry: typeof p.passport_expiry === 'string' ? p.passport_expiry : undefined,
             visaExpiry: typeof p.visa_expiry === 'string' ? p.visa_expiry : undefined,
             residenceExpiry: typeof p.residence_expiry === 'string' ? p.residence_expiry : undefined,
@@ -923,7 +920,6 @@ const useAppStore = create<AppStoreState>()(
         if (typeof updates.phone === 'string') patch.phone = updates.phone;
         if (typeof updates.points === 'number') patch.points = updates.points;
         if (Array.isArray(updates.staffUniversities)) patch.staff_universities = updates.staffUniversities;
-        if (typeof updates.assignedUniversityId === 'string') patch.assigned_university_id = updates.assignedUniversityId;
         if (typeof updates.passportExpiry === 'string') patch.passport_expiry = updates.passportExpiry;
         if (typeof updates.visaExpiry === 'string') patch.visa_expiry = updates.visaExpiry;
         if (typeof updates.residenceExpiry === 'string') patch.residence_expiry = updates.residenceExpiry;
