@@ -142,6 +142,46 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
   return '';
 };
 
+const getBearer = (headers) => {
+  const raw = headers?.authorization || headers?.Authorization;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return '';
+  const m = String(value).match(/^Bearer\s+(.+)$/i);
+  return m?.[1] ?? '';
+};
+
+const getAdminEnv = () => {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+  const err = validateSupabaseEnv(supabaseUrl, serviceKey);
+  if (err) return { ok: false, error: err };
+  const base = String(supabaseUrl || '').replace(/\/$/, '');
+  const adminKey = String(serviceKey || '').trim();
+  const adminHeaders = adminAuthHeaders(adminKey);
+  return { ok: true, base, adminKey, adminHeaders };
+};
+
+const getCallerId = async (base, adminKey, token) => {
+  const who = await fetchJson(`${base}/auth/v1/user`, {
+    method: 'GET',
+    headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
+  });
+  const id = (who.ok && who.json && typeof who.json === 'object' && typeof who.json.id === 'string') ? who.json.id : '';
+  return { ok: Boolean(id), id };
+};
+
+const getCallerRole = async (base, adminHeaders, userId) => {
+  const r = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, {
+    method: 'GET',
+    headers: adminHeaders,
+  });
+  const role =
+    (r.ok && Array.isArray(r.json) && r.json[0] && typeof r.json[0] === 'object' && typeof r.json[0].role === 'string')
+      ? r.json[0].role
+      : '';
+  return { ok: Boolean(role), role };
+};
+
 const bootstrapDefaultCeo = async () => {
   try {
     const enabled = String(process.env.AUTO_BOOTSTRAP_CEO || '').toLowerCase() === 'true';
@@ -293,18 +333,13 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
     return;
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
-  if (envError) {
-    apiRes.status(500).json({ error: envError });
+  const env = getAdminEnv();
+  if (!env.ok) {
+    apiRes.status(500).json({ error: env.error });
     return;
   }
 
-  const base = String(supabaseUrl || '').replace(/\/$/, '');
-  const adminKey = String(serviceKey || '').trim();
-  const adminHeaders = adminAuthHeaders(adminKey);
-
+  const { base, adminKey, adminHeaders } = env;
   const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
   const username = typeof body.username === 'string' ? body.username.trim() : '';
   if (!username) {
@@ -342,13 +377,148 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
     return;
   }
 
-  void fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}`, {
+  apiRes.status(200).json({ email: authEmail });
+};
+
+const inlineMeProfile = async (apiReq, apiRes) => {
+  if (apiReq.method !== 'GET') {
+    apiRes.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+  const token = getBearer(apiReq.headers);
+  if (!token) {
+    apiRes.status(401).json({ error: 'Missing token' });
+    return;
+  }
+  const env = getAdminEnv();
+  if (!env.ok) {
+    apiRes.status(500).json({ error: env.error });
+    return;
+  }
+  const { base, adminKey, adminHeaders } = env;
+  const caller = await getCallerId(base, adminKey, token);
+  if (!caller.ok) {
+    apiRes.status(401).json({ error: 'Invalid token' });
+    return;
+  }
+  const p = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, {
+    method: 'GET',
+    headers: adminHeaders,
+  });
+  if (!p.ok || !Array.isArray(p.json) || !p.json[0] || typeof p.json[0] !== 'object') {
+    apiRes.status(404).json({ error: 'Profile not found' });
+    return;
+  }
+  const row = p.json[0];
+  apiRes.status(200).json({
+    user: {
+      id: typeof row.id === 'string' ? row.id : String(row.id ?? ''),
+      username: typeof row.username === 'string' ? row.username : '',
+      role: typeof row.role === 'string' ? row.role : '',
+      name: typeof row.name === 'string' ? row.name : '',
+    },
+  });
+};
+
+const inlineUsersList = async (apiReq, apiRes) => {
+  if (apiReq.method !== 'GET') {
+    apiRes.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+  const token = getBearer(apiReq.headers);
+  if (!token) {
+    apiRes.status(401).json({ error: 'Missing token' });
+    return;
+  }
+  const env = getAdminEnv();
+  if (!env.ok) {
+    apiRes.status(500).json({ error: env.error });
+    return;
+  }
+  const { base, adminKey, adminHeaders } = env;
+  const caller = await getCallerId(base, adminKey, token);
+  if (!caller.ok) {
+    apiRes.status(401).json({ error: 'Invalid token' });
+    return;
+  }
+  const roleResp = await getCallerRole(base, adminHeaders, caller.id);
+  const isInternal = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(roleResp.role);
+  if (!isInternal) {
+    apiRes.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  const r = await fetchJson(`${base}/rest/v1/profiles?select=id,username,role,name&limit=5000`, {
+    method: 'GET',
+    headers: adminHeaders,
+  });
+  if (!r.ok || !Array.isArray(r.json)) {
+    apiRes.status(500).json({ error: 'Failed to load users', details: r.text?.slice(0, 300) });
+    return;
+  }
+  const users = r.json
+    .filter((x) => x && typeof x === 'object')
+    .map((row) => ({
+      id: typeof row.id === 'string' ? row.id : String(row.id ?? ''),
+      username: typeof row.username === 'string' ? row.username : '',
+      role: typeof row.role === 'string' ? row.role : '',
+      name: typeof row.name === 'string' ? row.name : '',
+    }));
+  apiRes.status(200).json({ users });
+};
+
+const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
+  if (apiReq.method !== 'POST') {
+    apiRes.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+  const token = getBearer(apiReq.headers);
+  if (!token) {
+    apiRes.status(401).json({ error: 'Missing token' });
+    return;
+  }
+  const env = getAdminEnv();
+  if (!env.ok) {
+    apiRes.status(500).json({ error: env.error });
+    return;
+  }
+  const { base, adminKey, adminHeaders } = env;
+  const caller = await getCallerId(base, adminKey, token);
+  if (!caller.ok) {
+    apiRes.status(401).json({ error: 'Invalid token' });
+    return;
+  }
+  const roleResp = await getCallerRole(base, adminHeaders, caller.id);
+  if (roleResp.role !== 'ceo') {
+    apiRes.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
+  const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  const role = typeof body.role === 'string' ? body.role.trim() : '';
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  if (!userId) {
+    apiRes.status(400).json({ error: 'Missing userId' });
+    return;
+  }
+  const patch = {};
+  if (name) patch.name = name;
+  if (username) patch.username = username;
+  if (role) patch.role = role;
+  if (Object.keys(patch).length === 0) {
+    apiRes.status(400).json({ error: 'No updates' });
+    return;
+  }
+  const updated = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
     method: 'PATCH',
     headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify({ email: authEmail }),
+    body: JSON.stringify(patch),
   });
-
-  apiRes.status(200).json({ email: authEmail });
+  if (!updated.ok) {
+    apiRes.status(500).json({ error: 'Failed to update profile', details: updated.text?.slice(0, 300) });
+    return;
+  }
+  apiRes.status(200).json({ ok: true });
 };
 
 const handleApi = async (req, res, route) => {
@@ -400,6 +570,18 @@ const handleApi = async (req, res, route) => {
     }
     if (route === 'lookup-email') {
       await inlineLookupEmail(apiReq, apiRes);
+      return;
+    }
+    if (route === 'me-profile') {
+      await inlineMeProfile(apiReq, apiRes);
+      return;
+    }
+    if (route === 'users-list') {
+      await inlineUsersList(apiReq, apiRes);
+      return;
+    }
+    if (route === 'admin-update-profile') {
+      await inlineAdminUpdateProfile(apiReq, apiRes);
       return;
     }
     const mod = await import(pathToFileURL(file).href);

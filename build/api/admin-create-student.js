@@ -44,14 +44,22 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     if (!/^https?:\/\//i.test(supabaseUrl)) {
         return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
     }
+    if (serviceKey.startsWith('sb_publishable_')) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key.';
+    }
     if (/^https?:\/\//i.test(serviceKey)) {
         return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+    }
+    if (/\s/.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It contains whitespace/new lines. Paste the key as a single line.';
     }
     return '';
 };
 const adminAuthHeaders = (adminKey) => {
-    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
-    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+    const key = adminKey.trim();
+    const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
+    const isSbSecret = key.startsWith('sb_secret_');
+    return (isJwtLike || isSbSecret) ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
 };
 export default async function handler(req, res) {
     try {
@@ -60,7 +68,7 @@ export default async function handler(req, res) {
             return;
         }
         const supabaseUrl = process.env.SUPABASE_URL;
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
         const resendKey = process.env.RESEND_API_KEY;
         const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
         if (envError) {
@@ -68,7 +76,7 @@ export default async function handler(req, res) {
             return;
         }
         const base = supabaseUrl.replace(/\/$/, '');
-        const adminKey = serviceKey;
+        const adminKey = String(serviceKey || '').trim();
         const adminHeaders = adminAuthHeaders(adminKey);
         const token = getBearer(req);
         if (!token) {
@@ -100,7 +108,7 @@ export default async function handler(req, res) {
         const password = asString(body.password);
         const username = asString(body.username).trim();
         const name = asString(body.name).trim();
-        const phone = asString(body.phone).trim() || undefined;
+        void asString(body.phone).trim();
         if (!email || !password || !username || !name) {
             res.status(400).json({ error: 'Missing fields' });
             return;

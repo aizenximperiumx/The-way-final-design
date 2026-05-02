@@ -267,18 +267,20 @@ const useAppStore = create<AppStoreState>()(
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw new Error(error.message || 'Invalid email or password');
         if (!data.user) throw new Error('Login failed');
-        const { data: profile, error: profileErr } = await supabase
-          .from('profiles')
-          .select('id,username,role,name')
-          .eq('id', data.user.id)
-          .single();
-        if (profileErr) throw new Error(profileErr.message || 'Profile lookup failed');
-        if (!profile) throw new Error('Profile not found for this account');
+        const token = (await supabase.auth.getSession()).data.session?.access_token;
+        if (!token) throw new Error('Login failed');
+        const meResp = await fetch('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } });
+        const meJson = (await meResp.json().catch(() => null)) as { user?: unknown; error?: unknown } | null;
+        if (!meResp.ok || !meJson || !meJson.user || typeof meJson.user !== 'object') {
+          const err = meJson && typeof meJson.error === 'string' ? meJson.error : 'Failed to load profile';
+          throw new Error(err);
+        }
+        const u = meJson.user as Record<string, unknown>;
         const user: User = {
-          id: String((profile as Record<string, unknown>).id),
-          username: String((profile as Record<string, unknown>).username ?? input),
-          role: String((profile as Record<string, unknown>).role) as UserRole,
-          name: String((profile as Record<string, unknown>).name ?? ''),
+          id: typeof u.id === 'string' ? u.id : String(u.id ?? ''),
+          username: typeof u.username === 'string' ? u.username : input,
+          role: (typeof u.role === 'string' ? u.role : 'student') as UserRole,
+          name: typeof u.name === 'string' ? u.name : '',
           email,
           phone: undefined,
           createdAt: new Date().toISOString(),
@@ -304,13 +306,12 @@ const useAppStore = create<AppStoreState>()(
         const { data } = await supabase.auth.getSession();
         const session = data.session;
         if (!session?.user?.id) return;
-        const { data: profile, error: profileErr } = await supabase
-          .from('profiles')
-          .select('id,username,role,name')
-          .eq('id', session.user.id)
-          .single();
-        if (profileErr || !profile) return;
-        const p = profile as Record<string, unknown>;
+        const token = session.access_token;
+        const meResp = await fetch('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+        if (!meResp || !meResp.ok) return;
+        const meJson = (await meResp.json().catch(() => null)) as { user?: unknown } | null;
+        if (!meJson || !meJson.user || typeof meJson.user !== 'object') return;
+        const p = meJson.user as Record<string, unknown>;
         const user: User = {
           id: typeof p.id === 'string' ? p.id : String(p.id ?? ''),
           username: typeof p.username === 'string' ? p.username : '',
@@ -334,11 +335,14 @@ const useAppStore = create<AppStoreState>()(
       refreshUsersFromBackend: async () => {
         const supabase = tryGetSupabase();
         if (!supabase) return;
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id,username,role,name');
-        if (error || !data) return;
-        const users: User[] = (data as unknown[]).map((row) => {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) return;
+        const r = await fetch('/api/users-list', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+        if (!r || !r.ok) return;
+        const j = (await r.json().catch(() => null)) as { users?: unknown } | null;
+        if (!j || !Array.isArray(j.users)) return;
+        const users: User[] = (j.users as unknown[]).map((row) => {
           const p = (row && typeof row === 'object') ? (row as Record<string, unknown>) : {};
           return {
             id: typeof p.id === 'string' ? p.id : String(p.id ?? ''),
@@ -901,12 +905,22 @@ const useAppStore = create<AppStoreState>()(
       ceoUpdateUser: (userId: string, updates: Partial<User>) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         requireRole(actor, ['ceo']);
-        const supabase = getSupabase();
         const patch: Record<string, unknown> = {};
         if (typeof updates.name === 'string') patch.name = updates.name;
-        if (typeof updates.email === 'string') patch.email = updates.email;
-        if (typeof updates.phone === 'string') patch.phone = updates.phone;
-        void supabase.from('profiles').update(patch).eq('id', userId).then(() => get().refreshUsersFromBackend());
+        if (typeof updates.username === 'string') patch.username = updates.username;
+        if (typeof updates.role === 'string') patch.role = updates.role;
+        void (async () => {
+          const supabase = tryGetSupabase();
+          if (!supabase) return;
+          const token = (await supabase.auth.getSession()).data.session?.access_token;
+          if (!token) return;
+          await fetch('/api/admin-update-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ userId, ...patch }),
+          });
+          await get().refreshUsersFromBackend();
+        })();
       },
 
       ceoResetCredentials: async (userId: string, updates: Partial<Pick<User, 'username' | 'password' | 'twoFactorCode'>>) => {

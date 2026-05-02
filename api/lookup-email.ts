@@ -111,12 +111,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    void fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}`, {
-      method: 'PATCH',
-      headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ email: authEmail }),
-    });
-
     res.status(200).json({ email: authEmail });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
