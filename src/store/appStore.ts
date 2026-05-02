@@ -261,17 +261,19 @@ const useAppStore = create<AppStoreState>()(
             throw new Error(err);
           }
           if (!j || typeof j.email !== 'string') throw new Error('Login backend returned an invalid response');
-          if (!j.email) return null;
+          if (!j.email) throw new Error('Username not found (or profile email is missing).');
           email = j.email;
         }
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error || !data.user) return null;
+        if (error) throw new Error(error.message || 'Invalid email or password');
+        if (!data.user) throw new Error('Login failed');
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
           .select('id,username,role,name,email,phone,points,created_at,staff_universities,assigned_university_id,passport_expiry,visa_expiry,residence_expiry')
           .eq('id', data.user.id)
           .single();
-        if (profileErr || !profile) return null;
+        if (profileErr) throw new Error(profileErr.message || 'Profile lookup failed');
+        if (!profile) throw new Error('Profile not found for this account');
         const user: User = {
           id: String((profile as Record<string, unknown>).id),
           username: String((profile as Record<string, unknown>).username ?? input),

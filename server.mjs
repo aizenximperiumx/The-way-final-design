@@ -123,6 +123,25 @@ const adminAuthHeaders = (adminKey) => {
   return (isJwtLike || isSbSecret) ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
 };
 
+const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
+  const url = typeof supabaseUrl === 'string' ? supabaseUrl.trim() : '';
+  const key = typeof serviceKey === 'string' ? serviceKey.trim() : '';
+  if (!url || !key) return 'Supabase is not configured';
+  if (!/^https?:\/\//i.test(url)) {
+    return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+  }
+  if (key.startsWith('sb_publishable_')) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key.';
+  }
+  if (/^https?:\/\//i.test(key)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+  }
+  if (/\s/.test(key)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It contains whitespace/new lines. Paste the key as a single line.';
+  }
+  return '';
+};
+
 const bootstrapDefaultCeo = async () => {
   try {
     const enabled = String(process.env.AUTO_BOOTSTRAP_CEO || '').toLowerCase() === 'true';
@@ -272,6 +291,75 @@ const inlineApply = async (apiReq, apiRes) => {
   apiRes.status(200).json({ id: appId });
 };
 
+const inlineLookupEmail = async (apiReq, apiRes) => {
+  if (apiReq.method !== 'POST') {
+    apiRes.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+  const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
+  if (envError) {
+    apiRes.status(500).json({ error: envError });
+    return;
+  }
+
+  const base = String(supabaseUrl || '').replace(/\/$/, '');
+  const adminKey = String(serviceKey || '').trim();
+  const adminHeaders = adminAuthHeaders(adminKey);
+
+  const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  if (!username) {
+    apiRes.status(400).json({ error: 'Missing username' });
+    return;
+  }
+
+  const readProfileByUsername = async (operator) => {
+    const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id,email&limit=1`;
+    const r = await fetchJson(q, { method: 'GET', headers: adminHeaders });
+    if (!r.ok || !Array.isArray(r.json) || !r.json[0] || typeof r.json[0] !== 'object') return null;
+    const row = r.json[0];
+    const id = typeof row.id === 'string' ? row.id : '';
+    const email = typeof row.email === 'string' ? row.email : '';
+    return { id, email };
+  };
+
+  const profile = (await readProfileByUsername('eq')) ?? (await readProfileByUsername('ilike'));
+  if (!profile || !profile.id) {
+    apiRes.status(200).json({ email: '' });
+    return;
+  }
+  if (profile.email) {
+    apiRes.status(200).json({ email: profile.email });
+    return;
+  }
+
+  const authUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(profile.id)}`, {
+    method: 'GET',
+    headers: adminHeaders,
+  });
+  const authEmail =
+    (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string')
+      ? String(authUser.json.email)
+      : '';
+  if (!authEmail) {
+    apiRes.status(500).json({
+      error: 'User exists but email is missing in profiles, and could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct, or set profiles.email for this user.',
+    });
+    return;
+  }
+
+  void fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}`, {
+    method: 'PATCH',
+    headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ email: authEmail }),
+  });
+
+  apiRes.status(200).json({ email: authEmail });
+};
+
 const handleApi = async (req, res, route) => {
   const file = path.join(apiBuildDir, `${route}.js`);
   if (!(await exists(file))) {
@@ -317,6 +405,10 @@ const handleApi = async (req, res, route) => {
   try {
     if (route === 'apply') {
       await inlineApply(apiReq, apiRes);
+      return;
+    }
+    if (route === 'lookup-email') {
+      await inlineLookupEmail(apiReq, apiRes);
       return;
     }
     const mod = await import(pathToFileURL(file).href);

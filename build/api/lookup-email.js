@@ -82,10 +82,44 @@ export default async function handler(req, res) {
             res.status(400).json({ error: 'Missing username' });
             return;
         }
-        const q = `${base}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=email`;
-        const r = await fetchJson(q, { method: 'GET', headers: adminHeaders });
-        const email = (r.ok && Array.isArray(r.json) && r.json[0] && typeof r.json[0].email === 'string') ? r.json[0].email : '';
-        res.status(200).json({ email });
+        const readProfileByUsername = async (operator) => {
+            const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id,email&limit=1`;
+            const r = await fetchJson(q, { method: 'GET', headers: adminHeaders });
+            if (!r.ok || !Array.isArray(r.json) || !r.json[0] || typeof r.json[0] !== 'object')
+                return null;
+            const row = r.json[0];
+            const id = typeof row.id === 'string' ? row.id : '';
+            const email = typeof row.email === 'string' ? row.email : '';
+            return { id, email };
+        };
+        const profile = (await readProfileByUsername('eq')) ?? (await readProfileByUsername('ilike'));
+        if (!profile || !profile.id) {
+            res.status(200).json({ email: '' });
+            return;
+        }
+        if (profile.email) {
+            res.status(200).json({ email: profile.email });
+            return;
+        }
+        const authUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(profile.id)}`, {
+            method: 'GET',
+            headers: adminHeaders,
+        });
+        const authEmail = (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string')
+            ? String(authUser.json.email)
+            : '';
+        if (!authEmail) {
+            res.status(500).json({
+                error: 'User exists but email is missing in profiles, and could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct, or set profiles.email for this user.',
+            });
+            return;
+        }
+        void fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}`, {
+            method: 'PATCH',
+            headers: { ...adminHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({ email: authEmail }),
+        });
+        res.status(200).json({ email: authEmail });
     }
     catch (e) {
         const message = e instanceof Error ? e.message : 'Unknown error';
