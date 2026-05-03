@@ -288,11 +288,18 @@ const useAppStore = create<AppStoreState>()(
         if (!data.user) throw new Error('Login failed');
         const token = (await supabase.auth.getSession()).data.session?.access_token;
         if (!token) throw new Error('Login failed');
-        const meResp = await fetch('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } });
-        const meJson = (await meResp.json().catch(() => null)) as { user?: unknown; error?: unknown } | null;
+        const meResp = await fetch('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+        if (!meResp) throw new Error('Backend is not reachable. Please try again.');
+        const meText = await meResp.text().catch(() => '');
+        const meJson = (meText ? (() => { try { return JSON.parse(meText); } catch { return null; } })() : null) as { user?: unknown; error?: unknown; details?: unknown } | null;
         if (!meResp.ok || !meJson || !meJson.user || typeof meJson.user !== 'object') {
-          const err = meJson && typeof meJson.error === 'string' ? meJson.error : 'Failed to load profile';
-          throw new Error(err);
+          const errBase = meJson && typeof meJson.error === 'string' ? meJson.error : `Failed to load profile (HTTP ${meResp.status})`;
+          const details =
+            meJson && typeof meJson.details === 'string'
+              ? meJson.details
+              : (meJson && meJson.details != null ? JSON.stringify(meJson.details) : '');
+          const extra = details ? `: ${details.slice(0, 200)}` : ((!meJson && meText) ? `: ${meText.slice(0, 200)}` : '');
+          throw new Error(`${errBase}${extra}`);
         }
         const u = meJson.user as Record<string, unknown>;
         const user: User = {
