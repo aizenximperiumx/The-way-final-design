@@ -751,6 +751,89 @@ const inlineBootstrapUpsertProfile = async (apiReq, apiRes) => {
   apiRes.status(200).json({ ok: true });
 };
 
+const inlineBootstrapFixAuth = async (apiReq, apiRes) => {
+  if (apiReq.method !== 'POST') {
+    apiRes.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+  const bootstrapSecret = String(process.env.BOOTSTRAP_SECRET || '').trim();
+  const provided = String(apiReq.headers?.['x-bootstrap-secret'] || '').trim();
+  if (!bootstrapSecret || !provided || provided !== bootstrapSecret) {
+    apiRes.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  const env = getAdminEnv();
+  if (!env.ok) {
+    apiRes.status(500).json({ error: env.error });
+    return;
+  }
+  const { base, authAdminHeaders: authHeaders, postgrestHeaderCandidates: pgHeaderCandidates } = env;
+  const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  const password = typeof body.password === 'string' ? body.password.trim() : '';
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  const role = typeof body.role === 'string' ? body.role.trim() : 'ceo';
+  if (!email || !password || !username) {
+    apiRes.status(400).json({ error: 'Missing fields (email, password, username are required)' });
+    return;
+  }
+  const allowed = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
+  if (!allowed.has(role)) {
+    apiRes.status(400).json({ error: 'Invalid role' });
+    return;
+  }
+
+  const findAuthUserByEmail = async () => {
+    const perPage = 200;
+    const target = email.toLowerCase();
+    for (let page = 1; page <= 10; page += 1) {
+      const r = await fetchJson(`${base}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
+        method: 'GET',
+        headers: authHeaders,
+      });
+      if (!r.ok) return null;
+      const users = Array.isArray(r.json)
+        ? r.json
+        : (r.json && typeof r.json === 'object' && Array.isArray(r.json.users) ? r.json.users : []);
+      if (!Array.isArray(users) || users.length === 0) return null;
+      for (const u of users) {
+        const obj = (u && typeof u === 'object') ? u : null;
+        if (!obj) continue;
+        const uEmail = typeof obj.email === 'string' ? obj.email : '';
+        const id = typeof obj.id === 'string' ? obj.id : '';
+        if (id && uEmail && uEmail.toLowerCase() === target) return { id, email: uEmail };
+      }
+      if (users.length < perPage) return null;
+    }
+    return null;
+  };
+
+  const authUser = await findAuthUserByEmail();
+  if (!authUser) {
+    apiRes.status(404).json({ error: 'Auth user not found for this email' });
+    return;
+  }
+
+  const updated = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(authUser.id)}`, {
+    method: 'PUT',
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password, email_confirm: true, user_metadata: { role, username, ...(name ? { name } : {}) } }),
+  });
+  if (!updated.ok) {
+    apiRes.status(500).json({ error: 'Failed to update auth user', details: updated.text?.slice(0, 300) });
+    return;
+  }
+
+  const prof = await ensureSingleProfileRow(base, pgHeaderCandidates, authUser.id, { role, username, ...(name ? { name } : {}) });
+  if (!prof.ok) {
+    apiRes.status(500).json({ error: 'Failed to upsert profile', details: prof.text?.slice(0, 300) });
+    return;
+  }
+
+  apiRes.status(200).json({ ok: true, userId: authUser.id, email: authUser.email, role, username });
+};
+
 const handleApi = async (req, res, route) => {
   const file = path.join(apiBuildDir, `${route}.js`);
 
@@ -812,6 +895,10 @@ const handleApi = async (req, res, route) => {
     }
     if (route === 'bootstrap-upsert-profile') {
       await inlineBootstrapUpsertProfile(apiReq, apiRes);
+      return;
+    }
+    if (route === 'bootstrap-fix-auth') {
+      await inlineBootstrapFixAuth(apiReq, apiRes);
       return;
     }
     if (!(await exists(file))) {
