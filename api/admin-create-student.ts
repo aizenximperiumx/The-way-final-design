@@ -90,6 +90,15 @@ const fetchPostgrest = async (candidates: Array<Record<string, string>>, url: st
   return last;
 };
 
+const getRoleFromProfiles = async (base: string, pgCandidates: Array<Record<string, string>>, userId: string) => {
+  const r = await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, { method: 'GET' });
+  const role =
+    (r.ok && Array.isArray(r.json) && r.json[0] && typeof r.json[0] === 'object' && typeof r.json[0].role === 'string')
+      ? String(r.json[0].role).trim().toLowerCase()
+      : '';
+  return role;
+};
+
 const ensureSingleProfileRow = async (
   base: string,
   pgCandidates: Array<Record<string, string>>,
@@ -147,7 +156,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const appMeta = who.json.app_metadata && typeof who.json.app_metadata === 'object' ? (who.json.app_metadata as Record<string, unknown>) : null;
-    const callerRole = appMeta && typeof appMeta.role === 'string' ? appMeta.role : '';
+    const callerId = who.json.id as string;
+    const callerRole = appMeta && typeof appMeta.role === 'string'
+      ? String(appMeta.role).trim().toLowerCase()
+      : await getRoleFromProfiles(base, pgCandidates, callerId);
     if (!['sales', 'ops', 'ceo'].includes(callerRole)) {
       res.status(403).json({ error: 'Forbidden' });
       return;
