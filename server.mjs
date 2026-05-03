@@ -122,11 +122,14 @@ const authAdminHeaders = (adminKey) => {
   return { apikey: key, Authorization: `Bearer ${key}` };
 };
 
-const postgrestHeaders = (adminKey) => {
+const postgrestHeaderCandidates = (adminKey) => {
   const key = String(adminKey || '').trim();
-  if (!key) return {};
+  if (!key) return [{}];
   const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
-  return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+  const isSbSecret = key.startsWith('sb_secret_');
+  if (isJwtLike) return [{ apikey: key, Authorization: `Bearer ${key}` }];
+  if (isSbSecret) return [{ apikey: key }, { apikey: key, Authorization: `Bearer ${key}` }];
+  return [{ apikey: key }];
 };
 
 const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
@@ -163,7 +166,7 @@ const getAdminEnv = () => {
   if (err) return { ok: false, error: err };
   const base = String(supabaseUrl || '').replace(/\/$/, '');
   const adminKey = String(serviceKey || '').trim();
-  return { ok: true, base, adminKey, postgrestHeaders: postgrestHeaders(adminKey), authAdminHeaders: authAdminHeaders(adminKey) };
+  return { ok: true, base, adminKey, postgrestHeaderCandidates: postgrestHeaderCandidates(adminKey), authAdminHeaders: authAdminHeaders(adminKey) };
 };
 
 const getCallerId = async (base, adminKey, token) => {
@@ -175,16 +178,43 @@ const getCallerId = async (base, adminKey, token) => {
   return { ok: Boolean(id), id };
 };
 
-const getCallerRole = async (base, postgrestHeadersIn, userId) => {
-  const r = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, {
+const fetchPostgrest = async (candidates, url, init) => {
+  let last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[0] ?? {}) } });
+  for (let i = 1; i < candidates.length; i += 1) {
+    if (last.ok) return last;
+    if (last.status !== 401 && last.status !== 403) return last;
+    last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[i] ?? {}) } });
+  }
+  return last;
+};
+
+const getCallerRole = async (base, pgHeaderCandidates, userId) => {
+  const r = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, {
     method: 'GET',
-    headers: postgrestHeadersIn,
   });
   const role =
     (r.ok && Array.isArray(r.json) && r.json[0] && typeof r.json[0] === 'object' && typeof r.json[0].role === 'string')
       ? r.json[0].role
       : '';
-  return { ok: Boolean(role), role };
+  return { ok: Boolean(role), role, details: r.ok ? null : (r.text?.slice(0, 250) ?? null) };
+};
+
+const ensureSingleProfileRow = async (base, pgHeaderCandidates, userId, patch) => {
+  const read = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id&limit=1`, {
+    method: 'GET',
+  });
+  if (read.ok && Array.isArray(read.json) && read.json.length > 0) {
+    return fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(patch),
+    });
+  }
+  return fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ id: userId, ...patch }),
+  });
 };
 
 const bootstrapDefaultCeo = async () => {
@@ -207,13 +237,10 @@ const bootstrapDefaultCeo = async () => {
     }
 
     const base = supabaseUrl.replace(/\/$/, '');
-    const pgHeaders = postgrestHeaders(adminKey);
     const authHeaders = authAdminHeaders(adminKey);
+    const pgHeaderCandidates = postgrestHeaderCandidates(adminKey);
 
-    const existing = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id,username&limit=1`, {
-      method: 'GET',
-      headers: pgHeaders,
-    });
+    const existing = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?role=eq.ceo&select=id,username&limit=1`, { method: 'GET' });
     globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, step: 'check', existingStatus: existing.status, existingOk: existing.ok };
 
     const email = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || 'ceo@theway.ge').trim();
@@ -249,20 +276,7 @@ const bootstrapDefaultCeo = async () => {
       }
     }
 
-    const profExists = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id&limit=1`, {
-      method: 'GET',
-      headers: pgHeaders,
-    });
-    const prof = await fetchJson(`${base}/rest/v1/profiles${(profExists.ok && Array.isArray(profExists.json) && profExists.json.length > 0) ? `?id=eq.${encodeURIComponent(id)}` : ''}`, {
-      method: (profExists.ok && Array.isArray(profExists.json) && profExists.json.length > 0) ? 'PATCH' : 'POST',
-      headers: { ...pgHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        ...(profExists.ok && Array.isArray(profExists.json) && profExists.json.length > 0 ? {} : { id }),
-        username,
-        role: 'ceo',
-        name,
-      }),
-    });
+    const prof = await ensureSingleProfileRow(base, pgHeaderCandidates, id, { username, role: 'ceo', name });
     if (!prof.ok) {
       console.error('CEO bootstrap failed (profile)', prof.status, prof.text);
       globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'upsert_profile', status: prof.status, error: prof.text?.slice(0, 300) };
@@ -349,7 +363,7 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
     return;
   }
 
-  const { base, adminKey, postgrestHeaders: pgHeaders, authAdminHeaders: authHeaders } = env;
+  const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
   const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
   const username = typeof body.username === 'string' ? body.username.trim() : '';
   if (!username) {
@@ -359,7 +373,7 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
 
   const readProfileByUsername = async (operator) => {
     const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id&limit=1`;
-    const r = await fetchJson(q, { method: 'GET', headers: pgHeaders });
+    const r = await fetchPostgrest(pgHeaderCandidates, q, { method: 'GET' });
     if (!r.ok || !Array.isArray(r.json) || !r.json[0] || typeof r.json[0] !== 'object') return null;
     const row = r.json[0];
     const id = typeof row.id === 'string' ? row.id : '';
@@ -405,16 +419,43 @@ const inlineMeProfile = async (apiReq, apiRes) => {
     apiRes.status(500).json({ error: env.error });
     return;
   }
-  const { base, adminKey, postgrestHeaders: pgHeaders } = env;
+  const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
   const caller = await getCallerId(base, adminKey, token);
   if (!caller.ok) {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
   }
-  const p = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, {
+  let p = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, { method: 'GET' });
+  if (p.ok && Array.isArray(p.json) && p.json[0] && typeof p.json[0] === 'object') {
+    const row = p.json[0];
+    apiRes.status(200).json({
+      user: {
+        id: typeof row.id === 'string' ? row.id : String(row.id ?? ''),
+        username: typeof row.username === 'string' ? row.username : '',
+        role: typeof row.role === 'string' ? row.role : '',
+        name: typeof row.name === 'string' ? row.name : '',
+      },
+    });
+    return;
+  }
+  if (!p.ok && (p.status === 401 || p.status === 403)) {
+    apiRes.status(500).json({ error: 'Failed to read profiles (admin key not accepted)', details: p.text?.slice(0, 250) });
+    return;
+  }
+
+  const authUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(caller.id)}`, {
     method: 'GET',
-    headers: pgHeaders,
+    headers: authHeaders,
   });
+  const email = (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string') ? authUser.json.email : '';
+  const usernameGuess = (email && email.includes('@')) ? email.split('@')[0].slice(0, 20) : `u${caller.id.slice(0, 8)}`;
+  const created = await ensureSingleProfileRow(base, pgHeaderCandidates, caller.id, { username: usernameGuess, role: 'student', name: '' });
+  if (!created.ok) {
+    apiRes.status(500).json({ error: 'Failed to create profile', details: created.text?.slice(0, 250) });
+    return;
+  }
+
+  p = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, { method: 'GET' });
   if (!p.ok || !Array.isArray(p.json) || !p.json[0] || typeof p.json[0] !== 'object') {
     apiRes.status(404).json({ error: 'Profile not found' });
     return;
@@ -445,22 +486,19 @@ const inlineUsersList = async (apiReq, apiRes) => {
     apiRes.status(500).json({ error: env.error });
     return;
   }
-  const { base, adminKey, postgrestHeaders: pgHeaders } = env;
+  const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates } = env;
   const caller = await getCallerId(base, adminKey, token);
   if (!caller.ok) {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
   }
-  const roleResp = await getCallerRole(base, pgHeaders, caller.id);
+  const roleResp = await getCallerRole(base, pgHeaderCandidates, caller.id);
   const isInternal = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(roleResp.role);
   if (!isInternal) {
     apiRes.status(403).json({ error: 'Forbidden' });
     return;
   }
-  const r = await fetchJson(`${base}/rest/v1/profiles?select=id,username,role,name&limit=5000`, {
-    method: 'GET',
-    headers: pgHeaders,
-  });
+  const r = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?select=id,username,role,name&limit=5000`, { method: 'GET' });
   if (!r.ok || !Array.isArray(r.json)) {
     apiRes.status(500).json({ error: 'Failed to load users', details: r.text?.slice(0, 300) });
     return;
@@ -491,13 +529,13 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
     apiRes.status(500).json({ error: env.error });
     return;
   }
-  const { base, adminKey, postgrestHeaders: pgHeaders } = env;
+  const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates } = env;
   const caller = await getCallerId(base, adminKey, token);
   if (!caller.ok) {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
   }
-  const roleResp = await getCallerRole(base, pgHeaders, caller.id);
+  const roleResp = await getCallerRole(base, pgHeaderCandidates, caller.id);
   if (roleResp.role !== 'ceo') {
     apiRes.status(403).json({ error: 'Forbidden' });
     return;
@@ -519,9 +557,9 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
     apiRes.status(400).json({ error: 'No updates' });
     return;
   }
-  const updated = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+  const updated = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
     method: 'PATCH',
-    headers: { ...pgHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
     body: JSON.stringify(patch),
   });
   if (!updated.ok) {
