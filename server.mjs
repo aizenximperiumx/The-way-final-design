@@ -933,6 +933,15 @@ const server = http.createServer(async (req, res) => {
       serveJson(res, 200, {
         ok: true,
         inlineApply: true,
+        apiRoutes: [
+          'apply',
+          'lookup-email',
+          'me-profile',
+          'users-list',
+          'admin-update-profile',
+          'bootstrap-upsert-profile',
+          'bootstrap-fix-auth',
+        ],
         dataDir: getDataDir(),
         gitCommit: process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? null,
         node: process.version,
