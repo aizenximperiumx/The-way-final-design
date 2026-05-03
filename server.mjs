@@ -666,7 +666,12 @@ const inlineUsersList = async (apiReq, apiRes) => {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
   }
-  const isInternal = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(caller.appRole);
+  let effectiveRole = String(caller.appRole || '').trim().toLowerCase();
+  if (!effectiveRole) {
+    const profRole = await getCallerRole(base, pgHeaderCandidates, caller.id);
+    if (profRole.ok) effectiveRole = String(profRole.role || '').trim().toLowerCase();
+  }
+  const isInternal = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(effectiveRole);
   if (!isInternal) {
     apiRes.status(403).json({ error: 'Forbidden' });
     return;
@@ -685,7 +690,7 @@ const inlineUsersList = async (apiReq, apiRes) => {
       name: typeof row.name === 'string' ? row.name : '',
     }));
 
-  if (caller.appRole !== 'ceo') {
+  if (effectiveRole !== 'ceo') {
     apiRes.status(200).json({ users });
     return;
   }
@@ -739,9 +744,13 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
   }
-  const gate = requireCallerAppRole(caller, 'ceo');
-  if (!gate.ok) {
-    apiRes.status(403).json({ error: gate.error });
+  let effectiveRole = String(caller.appRole || '').trim().toLowerCase();
+  if (!effectiveRole) {
+    const profRole = await getCallerRole(base, pgHeaderCandidates, caller.id);
+    if (profRole.ok) effectiveRole = String(profRole.role || '').trim().toLowerCase();
+  }
+  if (effectiveRole !== 'ceo') {
+    apiRes.status(403).json({ error: 'Forbidden. Your account is not provisioned as CEO. Log out/in after provisioning.' });
     return;
   }
   const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};

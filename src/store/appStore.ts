@@ -263,12 +263,17 @@ const useAppStore = create<AppStoreState>()(
             body: JSON.stringify({ username: input }),
           }).catch(() => null);
           if (!r) throw new Error('Backend is not reachable. Please try again.');
-          const j = (await r.json().catch(() => null)) as { email?: unknown; error?: unknown } | null;
+          const text = await r.text().catch(() => '');
+          const j = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { email?: unknown; error?: unknown } | null;
           if (!r.ok) {
-            const err = j && typeof j.error === 'string' ? j.error : 'Login backend error';
-            throw new Error(err);
+            const errBase = j && typeof j.error === 'string' ? j.error : `Login backend error (HTTP ${r.status})`;
+            const extra = (!j && text) ? `: ${text.slice(0, 200)}` : '';
+            throw new Error(`${errBase}${extra}`);
           }
-          if (!j || typeof j.email !== 'string') throw new Error('Login backend returned an invalid response');
+          if (!j || typeof j.email !== 'string') {
+            const extra = text ? `: ${text.slice(0, 200)}` : '';
+            throw new Error(`Login backend returned an invalid response${extra}`);
+          }
           if (!j.email) throw new Error('Username not found (or profile email is missing).');
           email = j.email;
         }
