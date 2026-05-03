@@ -408,6 +408,27 @@ const inlineApply = async (apiReq, apiRes) => {
     g.__fallbackApps.push({ ...app, receivedAt: now, error: e instanceof Error ? e.message : String(e) });
   }
 
+  const tryUpsertIntoAppState = async () => {
+    const env = getAdminEnv();
+    if (!env.ok) return;
+    const { base, postgrestHeaderCandidates: pgHeaderCandidates } = env;
+    const stateResp = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, { method: 'GET' });
+    const rawState = (stateResp.ok && Array.isArray(stateResp.json) && stateResp.json[0] && typeof stateResp.json[0] === 'object')
+      ? stateResp.json[0].state
+      : {};
+    const s = (rawState && typeof rawState === 'object') ? rawState : {};
+    const currentApps = Array.isArray(s.applications) ? s.applications : [];
+    const alreadyExists = currentApps.some((row) => row && typeof row === 'object' && String(row.id ?? '') === appId);
+    if (alreadyExists) return;
+    const nextState = { ...s, applications: [app, ...currentApps].slice(0, 50_000) };
+    await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/app_state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: safeStringify({ org_id: 'default', state: nextState, updated_at: now, updated_by: null }),
+    });
+  };
+  void tryUpsertIntoAppState();
+
   apiRes.status(200).json({ id: appId });
 };
 

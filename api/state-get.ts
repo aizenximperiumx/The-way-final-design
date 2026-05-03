@@ -1,6 +1,10 @@
 type ApiRequest = { method?: string; headers?: Record<string, string | string[] | undefined> };
 type ApiResponse = { status: (code: number) => ApiResponse; json: (body: unknown) => void };
 
+import * as os from 'os';
+import * as path from 'path';
+import { promises as fs } from 'fs';
+
 const getBearer = (req: ApiRequest) => {
   const raw = req.headers?.authorization || req.headers?.Authorization;
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -81,6 +85,53 @@ const asState = (value: unknown): AppState => {
 
 const isInternal = (role: string) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(role);
 
+const safeParseJson = (line: string) => {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
+};
+
+const getDataDir = () => {
+  const raw = process.env.DATA_DIR;
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  return value || path.join(os.tmpdir(), 'theway');
+};
+
+const readJsonlApplications = async (maxLines: number) => {
+  const filePath = path.join(getDataDir(), 'applications.jsonl');
+  let content = '';
+  try {
+    content = await fs.readFile(filePath, { encoding: 'utf8' });
+  } catch {
+    return [];
+  }
+  const lines = content.split('\n').filter(Boolean);
+  const slice = lines.length > maxLines ? lines.slice(lines.length - maxLines) : lines;
+  const rows: Record<string, unknown>[] = [];
+  for (const line of slice) {
+    const obj = safeParseJson(line);
+    if (!obj || typeof obj !== 'object') continue;
+    rows.push(obj as Record<string, unknown>);
+  }
+  return rows;
+};
+
+const mergeApps = (primary: unknown[], secondary: Record<string, unknown>[]) => {
+  const byId = new Map<string, unknown>();
+  primary.forEach((a) => {
+    const r = asRecord(a);
+    const id = getString(r, 'id');
+    if (id) byId.set(id, a);
+  });
+  secondary.forEach((a) => {
+    const id = getString(a, 'id');
+    if (id && !byId.has(id)) byId.set(id, a);
+  });
+  return Array.from(byId.values());
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'GET') {
@@ -128,19 +179,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const stateResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, { method: 'GET' }, adminKey);
     const rawState = Array.isArray(stateResp.json) && stateResp.json[0] ? (stateResp.json[0].state as unknown) : {};
     const state = asState(rawState);
+    const fileApps = await readJsonlApplications(2000);
+    const mergedState: AppState = fileApps.length > 0 ? { ...state, applications: mergeApps(state.applications, fileApps) } : state;
 
     if (isInternal(role)) {
-      res.status(200).json({ ok: true, state });
+      res.status(200).json({ ok: true, state: mergedState });
       return;
     }
 
     if (role === 'student') {
-      const apps = state.applications.filter((row) => getString(asRecord(row), 'studentId') === userId);
+      const apps = mergedState.applications.filter((row) => getString(asRecord(row), 'studentId') === userId);
       const appIds = new Set(apps.map((a) => getString(asRecord(a), 'id')));
-      const documents = state.documents.filter((row) => getString(asRecord(row), 'studentId') === userId);
-      const notifications = state.notifications.filter((row) => getString(asRecord(row), 'userId') === userId);
-      const appointments = state.appointments.filter((row) => getString(asRecord(row), 'userId') === userId);
-      const chatMessages = state.chatMessages.filter((row) => {
+      const documents = mergedState.documents.filter((row) => getString(asRecord(row), 'studentId') === userId);
+      const notifications = mergedState.notifications.filter((row) => getString(asRecord(row), 'userId') === userId);
+      const appointments = mergedState.appointments.filter((row) => getString(asRecord(row), 'userId') === userId);
+      const chatMessages = mergedState.chatMessages.filter((row) => {
         const m = asRecord(row);
         if (!m) return false;
         if (getString(m, 'fromUserId') === userId || getString(m, 'toUserId') === userId) return true;
@@ -148,7 +201,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return appId === `complaint-${userId}`;
       });
       const chatThreadReadAt: Record<string, string> = {};
-      Object.entries(state.chatThreadReadAt).forEach(([k, v]) => {
+      Object.entries(mergedState.chatThreadReadAt).forEach(([k, v]) => {
         if (k === `complaint-${userId}` || appIds.has(k)) chatThreadReadAt[k] = v;
       });
       res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt } });
@@ -156,9 +209,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     if (role === 'agency') {
-      const apps = state.applications.filter((row) => getString(asRecord(row), 'agencyId') === userId);
+      const apps = mergedState.applications.filter((row) => getString(asRecord(row), 'agencyId') === userId);
       const appIds = new Set(apps.map((a) => getString(asRecord(a), 'id')));
-      const chatMessages = state.chatMessages.filter((row) => {
+      const chatMessages = mergedState.chatMessages.filter((row) => {
         const m = asRecord(row);
         if (!m) return false;
         if (getString(m, 'fromUserId') === userId || getString(m, 'toUserId') === userId) return true;
@@ -166,7 +219,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return appIds.has(appId);
       });
       const chatThreadReadAt: Record<string, string> = {};
-      Object.entries(state.chatThreadReadAt).forEach(([k, v]) => {
+      Object.entries(mergedState.chatThreadReadAt).forEach(([k, v]) => {
         if (appIds.has(k)) chatThreadReadAt[k] = v;
       });
       res.status(200).json({ ok: true, state: { applications: apps, documents: [], notifications: [], appointments: [], chatMessages, chatThreadReadAt } });
