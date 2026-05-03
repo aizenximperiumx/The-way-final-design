@@ -192,7 +192,7 @@ export interface AppStoreState {
 
   ceoCreateUser: (user: User) => Promise<User>;
   ceoUpdateUser: (userId: string, updates: Partial<User>) => void;
-  ceoResetCredentials: (userId: string, updates: Partial<Pick<User, 'username' | 'password' | 'twoFactorCode'>>) => Promise<void>;
+  ceoResetCredentials: (userId: string, updates: Partial<Pick<User, 'username' | 'password'>>) => Promise<void>;
   ceoCreateAgencyAccount: (name: string, email: string) => Promise<User>;
 
   addAppointment: (appt: Omit<Appointment, 'id'>) => void;
@@ -363,7 +363,7 @@ const useAppStore = create<AppStoreState>()(
             username: typeof p.username === 'string' ? p.username : '',
             role: (typeof p.role === 'string' ? p.role : 'student') as UserRole,
             name: typeof p.name === 'string' ? p.name : '',
-            email: '',
+            email: typeof p.email === 'string' ? p.email : '',
             phone: undefined,
             createdAt: new Date().toISOString(),
             points: 0,
@@ -903,15 +903,21 @@ const useAppStore = create<AppStoreState>()(
             role: user.role,
             name: user.name,
             ...(user.phone ? { phone: user.phone } : {}),
-            ...(user.twoFactorCode ? { twoFactorCode: user.twoFactorCode } : {}),
-            staffUniversities: user.staffUniversities ?? [],
           }),
         });
-        const json = (await resp.json()) as { id?: unknown; error?: unknown };
+        const json = (await resp.json()) as { id?: unknown; username?: unknown; email?: unknown; role?: unknown; name?: unknown; error?: unknown };
         if (!resp.ok || !json || typeof json.id !== 'string') {
           throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to create user');
         }
-        const created: User = { ...user, id: json.id, createdAt: new Date().toISOString() };
+        const created: User = {
+          ...user,
+          id: json.id,
+          username: typeof json.username === 'string' ? json.username : user.username,
+          email: typeof json.email === 'string' ? json.email : user.email,
+          role: (typeof json.role === 'string' ? json.role : user.role) as UserRole,
+          name: typeof json.name === 'string' ? json.name : user.name,
+          createdAt: new Date().toISOString(),
+        };
         await get().refreshUsersFromBackend();
         return created;
       },
@@ -937,7 +943,7 @@ const useAppStore = create<AppStoreState>()(
         })();
       },
 
-      ceoResetCredentials: async (userId: string, updates: Partial<Pick<User, 'username' | 'password' | 'twoFactorCode'>>) => {
+      ceoResetCredentials: async (userId: string, updates: Partial<Pick<User, 'username' | 'password'>>) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         requireRole(actor, ['ceo']);
         const supabase = getSupabase();
@@ -947,7 +953,7 @@ const useAppStore = create<AppStoreState>()(
         const resp = await fetch('/api/admin-reset-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ userId, username: updates.username, password: updates.password, twoFactorCode: updates.twoFactorCode }),
+          body: JSON.stringify({ userId, username: updates.username, password: updates.password }),
         });
         const json = (await resp.json()) as { ok?: unknown; error?: unknown };
         if (!resp.ok) {

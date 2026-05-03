@@ -37,7 +37,6 @@ const AdminDashboard: React.FC = () => {
   const [credUserId, setCredUserId] = useState<string | null>(null);
   const [credUsername, setCredUsername] = useState('');
   const [credPassword, setCredPassword] = useState('');
-  const [cred2fa, setCred2fa] = useState('');
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignStudentId, setAssignStudentId] = useState<string>('');
   const [assignStaffId, setAssignStaffId] = useState<string>('');
@@ -629,8 +628,7 @@ const AdminDashboard: React.FC = () => {
                               onClick={() => {
                                 setCredUserId(u.id);
                                 setCredUsername(u.username);
-                                setCredPassword(u.password ?? '');
-                                setCred2fa(u.twoFactorCode ?? '');
+                                setCredPassword('');
                                 setShowCredModal(true);
                               }}
                               className="p-2 text-gray-400 hover:text-amber-500 transition-colors"
@@ -678,7 +676,7 @@ const AdminDashboard: React.FC = () => {
                         try {
                           const created = await ceoCreateAgencyAccount(agencyName, agencyEmail);
                           setCreatedAgencyCreds({ username: created.username });
-                          toast.success('Agency account created (credentials emailed)');
+                          toast.success('Agency account created');
                           setAgencyName('');
                           setAgencyEmail('');
                         } catch (e) {
@@ -707,10 +705,6 @@ const AdminDashboard: React.FC = () => {
                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Password</label>
                       <input type="password" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={credPassword} onChange={(e) => setCredPassword(e.target.value)} />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Two-Factor Code</label>
-                      <input type="password" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={cred2fa} onChange={(e) => setCred2fa(e.target.value)} />
-                    </div>
                   </div>
                   <div className="mt-6 flex justify-end gap-3">
                     <button onClick={() => setShowCredModal(false)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 text-gray-600">Cancel</button>
@@ -718,7 +712,7 @@ const AdminDashboard: React.FC = () => {
                       onClick={async () => {
                         if (!credUserId) return;
                         try {
-                          await ceoResetCredentials(credUserId, { username: credUsername, password: credPassword, twoFactorCode: cred2fa });
+                          await ceoResetCredentials(credUserId, { username: credUsername, password: credPassword });
                           toast.success('Credentials updated');
                           setShowCredModal(false);
                         } catch (e) {
@@ -849,7 +843,7 @@ const AdminDashboard: React.FC = () => {
                         const user = { id: '', username: '', role: 'ops' as const, name: opsName, email: opsEmail, points: 0, createdAt: new Date().toISOString() };
                         try {
                           await ceoCreateUser(user);
-                          toast.success('Ops user created (credentials emailed)');
+                          toast.success('Ops user created');
                           setShowOpsModal(false);
                           setOpsName(''); setOpsEmail('');
                         } catch (e) {
@@ -887,7 +881,7 @@ const AdminDashboard: React.FC = () => {
                         const user = { id: '', username: '', role: 'sales' as const, name: salesName, email: salesEmail, points: 0, createdAt: new Date().toISOString() };
                         try {
                           await ceoCreateUser(user);
-                          toast.success('Sales user created (credentials emailed)');
+                          toast.success('Sales user created');
                           setShowSalesModal(false);
                           setSalesName(''); setSalesEmail('');
                         } catch (e) {

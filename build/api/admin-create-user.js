@@ -78,28 +78,41 @@ const authAdminHeaders = (adminKey) => {
         return {};
     return { apikey: key, Authorization: `Bearer ${key}` };
 };
-const postgrestHeaders = (adminKey) => {
+const postgrestHeaderCandidates = (adminKey) => {
     const key = adminKey.trim();
     if (!key)
-        return {};
+        return [{}];
     const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
-    return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+    const isSbSecret = key.startsWith('sb_secret_');
+    if (isJwtLike)
+        return [{ apikey: key, Authorization: `Bearer ${key}` }];
+    if (isSbSecret)
+        return [{ apikey: key }, { apikey: key, Authorization: `Bearer ${key}` }];
+    return [{ apikey: key }];
 };
-const ensureSingleProfileRow = async (base, pgHeaders, userId, patch) => {
-    const read = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id&limit=1`, {
-        method: 'GET',
-        headers: pgHeaders,
-    });
+const fetchPostgrest = async (candidates, url, init) => {
+    let last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[0] ?? {}) } });
+    for (let i = 1; i < candidates.length; i += 1) {
+        if (last.ok)
+            return last;
+        if (last.status !== 401 && last.status !== 403)
+            return last;
+        last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[i] ?? {}) } });
+    }
+    return last;
+};
+const ensureSingleProfileRow = async (base, pgCandidates, userId, patch) => {
+    const read = await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id&limit=1`, { method: 'GET' });
     if (read.ok && Array.isArray(read.json) && read.json.length > 0) {
-        return fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+        return fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
             method: 'PATCH',
-            headers: { ...pgHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
             body: JSON.stringify(patch),
         });
     }
-    return fetchJson(`${base}/rest/v1/profiles`, {
+    return fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles`, {
         method: 'POST',
-        headers: { ...pgHeaders, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
         body: JSON.stringify({ id: userId, ...patch }),
     });
 };
@@ -119,22 +132,11 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = String(serviceKey || '').trim();
-        const pgHeaders = postgrestHeaders(adminKey);
+        const pgCandidates = postgrestHeaderCandidates(adminKey);
         const authHeaders = authAdminHeaders(adminKey);
         const bootstrapSecret = process.env.BOOTSTRAP_SECRET || '';
         const bootstrapProvided = getHeader(req, 'x-bootstrap-secret').trim();
         const isBootstrap = Boolean(bootstrapSecret && bootstrapProvided && bootstrapProvided === bootstrapSecret);
-        const readRoleFromAuth = async (userId) => {
-            const u = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
-                method: 'GET',
-                headers: authHeaders,
-            });
-            const meta = (u.ok && u.json && typeof u.json === 'object' && u.json.user_metadata && typeof u.json.user_metadata === 'object')
-                ? u.json.user_metadata
-                : null;
-            const role = meta && typeof meta.role === 'string' ? meta.role : '';
-            return role;
-        };
         if (!isBootstrap) {
             const token = getBearer(req);
             if (!token) {
@@ -149,18 +151,15 @@ export default async function handler(req, res) {
                 res.status(401).json({ error: 'Invalid token' });
                 return;
             }
-            const callerId = who.json.id;
-            const callerRole = await readRoleFromAuth(callerId);
+            const appMeta = who.json.app_metadata && typeof who.json.app_metadata === 'object' ? who.json.app_metadata : null;
+            const callerRole = appMeta && typeof appMeta.role === 'string' ? appMeta.role : '';
             if (callerRole !== 'ceo') {
-                res.status(403).json({ error: 'Forbidden' });
+                res.status(403).json({ error: 'Forbidden. Your account is not provisioned as CEO.' });
                 return;
             }
         }
         else {
-            const existingCeo = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, {
-                method: 'GET',
-                headers: pgHeaders,
-            });
+            const existingCeo = await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, { method: 'GET' });
             if (existingCeo.ok && Array.isArray(existingCeo.json) && existingCeo.json.length > 0) {
                 res.status(403).json({ error: 'Bootstrap is disabled after CEO exists' });
                 return;
@@ -182,14 +181,15 @@ export default async function handler(req, res) {
             res.status(400).json({ error: 'Invalid role' });
             return;
         }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            res.status(400).json({ error: 'Invalid email' });
+            return;
+        }
         const password = passwordIn || randomPassword();
         const usernameBase = (usernameIn || role).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 10) || 'user';
         let username = usernameIn || `${usernameBase}${Math.floor(100 + Math.random() * 900)}`;
         for (let i = 0; i < 6; i++) {
-            const check = await fetchJson(`${base}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id&limit=1`, {
-                method: 'GET',
-                headers: pgHeaders,
-            });
+            const check = await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id&limit=1`, { method: 'GET' });
             if (check.ok && Array.isArray(check.json) && check.json.length === 0)
                 break;
             username = `${usernameBase}${Math.floor(100 + Math.random() * 900)}${i}`;
@@ -198,14 +198,19 @@ export default async function handler(req, res) {
         const created = await fetchJson(`${base}/auth/v1/admin/users`, {
             method: 'POST',
             headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role, username, name } }),
+            body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role, username }, user_metadata: { username, name } }),
         });
         if (!created.ok || !created.json || typeof created.json.id !== 'string') {
-            res.status(500).json({ error: 'Failed to create auth user', details: created.text });
+            const t = created.text || '';
+            if (t.includes('users_email_partial_key') || t.includes('"code":"23505"') || t.toLowerCase().includes('duplicate')) {
+                res.status(409).json({ error: 'Email already exists' });
+                return;
+            }
+            res.status(500).json({ error: 'Failed to create auth user', details: t });
             return;
         }
         const id = created.json.id;
-        const inserted = await ensureSingleProfileRow(base, pgHeaders, id, { username, role, name });
+        const inserted = await ensureSingleProfileRow(base, pgCandidates, id, { username, role, name });
         if (!inserted.ok) {
             res.status(500).json({ error: 'Failed to create profile', details: inserted.text });
             return;
@@ -213,7 +218,7 @@ export default async function handler(req, res) {
         void fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
             method: 'PUT',
             headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_metadata: { role, username, name } }),
+            body: JSON.stringify({ app_metadata: { role, username }, user_metadata: { username, name } }),
         });
         if (resendKey) {
             const html = `

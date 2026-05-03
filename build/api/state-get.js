@@ -87,7 +87,6 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = serviceKey;
-        const adminHeaders = adminHeaderCandidates(adminKey)[0];
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
@@ -102,17 +101,17 @@ export default async function handler(req, res) {
             return;
         }
         const userId = who.json.id;
-        const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, {
-            method: 'GET',
-            headers: adminHeaders,
-        });
-        const role = Array.isArray(profile.json) && profile.json[0] && typeof profile.json[0].role === 'string'
-            ? profile.json[0].role
-            : '';
-        const stateResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, {
-            method: 'GET',
-            headers: adminHeaders,
-        }, adminKey);
+        const appMeta = who.json.app_metadata && typeof who.json.app_metadata === 'object' ? who.json.app_metadata : null;
+        let role = appMeta && typeof appMeta.role === 'string' ? appMeta.role : '';
+        if (!role) {
+            const profile = await fetchJsonWithAdminHeaders(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, {
+                method: 'GET',
+            }, adminKey);
+            role = Array.isArray(profile.json) && profile.json[0] && typeof profile.json[0].role === 'string'
+                ? profile.json[0].role
+                : '';
+        }
+        const stateResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, { method: 'GET' }, adminKey);
         const rawState = Array.isArray(stateResp.json) && stateResp.json[0] ? stateResp.json[0].state : {};
         const state = asState(rawState);
         if (isInternal(role)) {

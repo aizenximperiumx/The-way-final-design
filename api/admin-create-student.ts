@@ -70,33 +70,43 @@ const authAdminHeaders = (adminKey: string): Record<string, string> => {
   return { apikey: key, Authorization: `Bearer ${key}` };
 };
 
-const postgrestHeaders = (adminKey: string): Record<string, string> => {
+const postgrestHeaderCandidates = (adminKey: string): Array<Record<string, string>> => {
   const key = adminKey.trim();
-  if (!key) return {};
+  if (!key) return [{}];
   const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
-  return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+  const isSbSecret = key.startsWith('sb_secret_');
+  if (isJwtLike) return [{ apikey: key, Authorization: `Bearer ${key}` }];
+  if (isSbSecret) return [{ apikey: key }, { apikey: key, Authorization: `Bearer ${key}` }];
+  return [{ apikey: key }];
+};
+
+const fetchPostgrest = async (candidates: Array<Record<string, string>>, url: string, init: RequestInit) => {
+  let last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[0] ?? {}) } });
+  for (let i = 1; i < candidates.length; i += 1) {
+    if (last.ok) return last;
+    if (last.status !== 401 && last.status !== 403) return last;
+    last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[i] ?? {}) } });
+  }
+  return last;
 };
 
 const ensureSingleProfileRow = async (
   base: string,
-  pgHeaders: Record<string, string>,
+  pgCandidates: Array<Record<string, string>>,
   userId: string,
   patch: Record<string, unknown>,
 ) => {
-  const read = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id&limit=1`, {
-    method: 'GET',
-    headers: pgHeaders,
-  });
+  const read = await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id&limit=1`, { method: 'GET' });
   if (read.ok && Array.isArray(read.json) && read.json.length > 0) {
-    return fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+    return fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
       method: 'PATCH',
-      headers: { ...pgHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
       body: JSON.stringify(patch),
     });
   }
-  return fetchJson(`${base}/rest/v1/profiles`, {
+  return fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles`, {
     method: 'POST',
-    headers: { ...pgHeaders, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ id: userId, ...patch }),
   });
 };
@@ -118,7 +128,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const base = (supabaseUrl as string).replace(/\/$/, '');
     const adminKey = String(serviceKey || '').trim();
-    const pgHeaders = postgrestHeaders(adminKey);
+    const pgCandidates = postgrestHeaderCandidates(adminKey);
     const authHeaders = authAdminHeaders(adminKey);
 
     const token = getBearer(req);
@@ -136,16 +146,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const callerId = who.json.id as string;
-    const callerAuth = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(callerId)}`, {
-      method: 'GET',
-      headers: authHeaders,
-    });
-    const callerMeta =
-      (callerAuth.ok && callerAuth.json && typeof callerAuth.json === 'object' && callerAuth.json.user_metadata && typeof callerAuth.json.user_metadata === 'object')
-        ? (callerAuth.json.user_metadata as Record<string, unknown>)
-        : null;
-    const callerRole = callerMeta && typeof callerMeta.role === 'string' ? callerMeta.role : '';
+    const appMeta = who.json.app_metadata && typeof who.json.app_metadata === 'object' ? (who.json.app_metadata as Record<string, unknown>) : null;
+    const callerRole = appMeta && typeof appMeta.role === 'string' ? appMeta.role : '';
     if (!['sales', 'ops', 'ceo'].includes(callerRole)) {
       res.status(403).json({ error: 'Forbidden' });
       return;
@@ -162,19 +164,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       res.status(400).json({ error: 'Missing fields' });
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ error: 'Invalid email' });
+      return;
+    }
 
     const created = await fetchJson(`${base}/auth/v1/admin/users`, {
       method: 'POST',
       headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'student', username, name } }),
+      body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role: 'student', username }, user_metadata: { username, name } }),
     });
     if (!created.ok || !created.json || typeof created.json.id !== 'string') {
-      res.status(500).json({ error: 'Failed to create auth user', details: created.text });
+      const t = created.text || '';
+      if (t.includes('users_email_partial_key') || t.includes('"code":"23505"') || t.toLowerCase().includes('duplicate')) {
+        res.status(409).json({ error: 'Email already exists' });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to create auth user', details: t });
       return;
     }
 
     const id = created.json.id as string;
-    const inserted = await ensureSingleProfileRow(base, pgHeaders, id, { username, role: 'student', name });
+    const inserted = await ensureSingleProfileRow(base, pgCandidates, id, { username, role: 'student', name });
     if (!inserted.ok) {
       res.status(500).json({ error: 'Failed to create profile', details: inserted.text });
       return;
@@ -182,7 +193,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     void fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_metadata: { role: 'student', username, name } }),
+      body: JSON.stringify({ app_metadata: { role: 'student', username }, user_metadata: { username, name } }),
     });
 
     const html = `

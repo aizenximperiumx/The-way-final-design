@@ -155,14 +155,18 @@ export default async function handler(req, res) {
                         continue;
                     const email = typeof obj.email === 'string' ? obj.email : '';
                     const id = typeof obj.id === 'string' ? obj.id : '';
-                    const meta = (obj.user_metadata && typeof obj.user_metadata === 'object') ? obj.user_metadata : null;
-                    const metaUsername = meta && typeof meta.username === 'string' ? meta.username : '';
+                    const appMeta = (obj.app_metadata && typeof obj.app_metadata === 'object') ? obj.app_metadata : null;
+                    const userMeta = (obj.user_metadata && typeof obj.user_metadata === 'object') ? obj.user_metadata : null;
+                    const meta = appMeta ?? userMeta;
+                    const metaUsername = (appMeta && typeof appMeta.username === 'string')
+                        ? appMeta.username
+                        : (userMeta && typeof userMeta.username === 'string' ? userMeta.username : '');
                     if (metaUsername && metaUsername.toLowerCase() === usernameLower && email && id)
-                        return { id, email, meta };
+                        return { id, email, meta, metaFromApp: Boolean(appMeta) };
                     if (email && email.includes('@')) {
                         const local = email.split('@')[0].toLowerCase();
                         if (local === usernameLower && id)
-                            return { id, email, meta };
+                            return { id, email, meta, metaFromApp: Boolean(appMeta) };
                     }
                 }
                 if (users.length < perPage)
@@ -178,7 +182,7 @@ export default async function handler(req, res) {
                 return;
             }
             const meta = found.meta && typeof found.meta === 'object' ? found.meta : null;
-            const metaRole = meta && typeof meta.role === 'string' ? meta.role : '';
+            const metaRole = (found.metaFromApp && meta && typeof meta.role === 'string') ? meta.role : '';
             const metaName = meta && typeof meta.name === 'string' ? meta.name : '';
             const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
             const role = (metaRole && allowedRoles.has(metaRole)) ? metaRole : 'student';

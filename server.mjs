@@ -169,13 +169,32 @@ const getAdminEnv = () => {
   return { ok: true, base, adminKey, postgrestHeaderCandidates: postgrestHeaderCandidates(adminKey), authAdminHeaders: authAdminHeaders(adminKey) };
 };
 
-const getCallerId = async (base, adminKey, token) => {
+const getCallerInfo = async (base, adminKey, token) => {
   const who = await fetchJson(`${base}/auth/v1/user`, {
     method: 'GET',
     headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
   });
-  const id = (who.ok && who.json && typeof who.json === 'object' && typeof who.json.id === 'string') ? who.json.id : '';
-  return { ok: Boolean(id), id };
+  const obj = (who.ok && who.json && typeof who.json === 'object') ? who.json : null;
+  const id = (obj && typeof obj.id === 'string') ? obj.id : '';
+  const email = (obj && typeof obj.email === 'string') ? obj.email : '';
+  const appMeta = (obj && obj.app_metadata && typeof obj.app_metadata === 'object') ? obj.app_metadata : null;
+  const userMeta = (obj && obj.user_metadata && typeof obj.user_metadata === 'object') ? obj.user_metadata : null;
+  const appRole = (appMeta && typeof appMeta.role === 'string') ? appMeta.role : '';
+  const appUsername = (appMeta && typeof appMeta.username === 'string') ? appMeta.username : '';
+  const userUsername = (userMeta && typeof userMeta.username === 'string') ? userMeta.username : '';
+  return { ok: Boolean(id), id, email, appRole, appUsername, userUsername };
+};
+
+const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
+
+const requireCallerAppRole = (caller, required) => {
+  if (!caller || !caller.appRole || !allowedRoles.has(caller.appRole) || caller.appRole !== required) {
+    const err = required === 'ceo'
+      ? 'Forbidden. Your account is not provisioned as CEO. Run bootstrap-fix-auth for your email to set role=ceo.'
+      : 'Forbidden';
+    return { ok: false, error: err };
+  }
+  return { ok: true };
 };
 
 const fetchPostgrest = async (candidates, url, init) => {
@@ -256,7 +275,13 @@ const bootstrapDefaultCeo = async () => {
       const created = await fetchJson(`${base}/auth/v1/admin/users`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'ceo', username, name } }),
+        body: JSON.stringify({
+          email,
+          password,
+          email_confirm: true,
+          app_metadata: { role: 'ceo', username },
+          user_metadata: { username, name },
+        }),
       });
       if (!created.ok || !created.json || typeof created.json.id !== 'string') {
         const text = created.text || '';
@@ -293,7 +318,12 @@ const bootstrapDefaultCeo = async () => {
       const updatedUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password, email_confirm: true, user_metadata: { role: 'ceo', username, name } }),
+        body: JSON.stringify({
+          password,
+          email_confirm: true,
+          app_metadata: { role: 'ceo', username },
+          user_metadata: { username, name },
+        }),
       });
       if (!updatedUser.ok) {
         const text = updatedUser.text || '';
@@ -387,6 +417,12 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
     return;
   }
 
+  const ip = String(apiReq.headers?.['x-forwarded-for'] || '').split(',')[0]?.trim() || 'unknown';
+  if (!allowRate(`lookup-email:${ip}`, 60, 60_000)) {
+    apiRes.status(200).json({ email: '' });
+    return;
+  }
+
   const env = getAdminEnv();
   if (!env.ok) {
     apiRes.status(500).json({ error: env.error });
@@ -434,12 +470,15 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
       (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string')
         ? String(authUser.json.email)
         : '';
-    const meta = (authUser.ok && authUser.json && typeof authUser.json === 'object' && authUser.json.user_metadata && typeof authUser.json.user_metadata === 'object')
+    const appMeta = (authUser.ok && authUser.json && typeof authUser.json === 'object' && authUser.json.app_metadata && typeof authUser.json.app_metadata === 'object')
+      ? authUser.json.app_metadata
+      : null;
+    const userMeta = (authUser.ok && authUser.json && typeof authUser.json === 'object' && authUser.json.user_metadata && typeof authUser.json.user_metadata === 'object')
       ? authUser.json.user_metadata
       : null;
-    const metaRole = (meta && typeof meta.role === 'string') ? meta.role : '';
-    const metaUsername = (meta && typeof meta.username === 'string') ? meta.username : '';
-    const metaName = (meta && typeof meta.name === 'string') ? meta.name : '';
+    const metaRole = (appMeta && typeof appMeta.role === 'string') ? appMeta.role : ((userMeta && typeof userMeta.role === 'string') ? userMeta.role : '');
+    const metaUsername = (appMeta && typeof appMeta.username === 'string') ? appMeta.username : ((userMeta && typeof userMeta.username === 'string') ? userMeta.username : '');
+    const metaName = (userMeta && typeof userMeta.name === 'string') ? userMeta.name : '';
     return { ok: authUser.ok, email: authEmail, role: metaRole, username: metaUsername, name: metaName, rawText: authUser.text };
   };
 
@@ -460,12 +499,16 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
         if (!obj) continue;
         const email = typeof obj.email === 'string' ? obj.email : '';
         const id = typeof obj.id === 'string' ? obj.id : '';
-        const meta = (obj.user_metadata && typeof obj.user_metadata === 'object') ? obj.user_metadata : null;
-        const metaUsername = meta && typeof meta.username === 'string' ? meta.username : '';
-        if (metaUsername && metaUsername.toLowerCase() === usernameLower && email && id) return { id, email, meta };
+        const appMeta = (obj.app_metadata && typeof obj.app_metadata === 'object') ? obj.app_metadata : null;
+        const userMeta = (obj.user_metadata && typeof obj.user_metadata === 'object') ? obj.user_metadata : null;
+        const meta = appMeta ?? userMeta;
+        const metaUsername = (appMeta && typeof appMeta.username === 'string')
+          ? appMeta.username
+          : (userMeta && typeof userMeta.username === 'string' ? userMeta.username : '');
+        if (metaUsername && metaUsername.toLowerCase() === usernameLower && email && id) return { id, email, meta, metaFromApp: Boolean(appMeta) };
         if (email && email.includes('@')) {
           const local = email.split('@')[0].toLowerCase();
-          if (local === usernameLower && id) return { id, email, meta };
+          if (local === usernameLower && id) return { id, email, meta, metaFromApp: Boolean(appMeta) };
         }
       }
       if (users.length < perPage) return null;
@@ -480,7 +523,7 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
       return;
     }
     const meta = (found.meta && typeof found.meta === 'object') ? found.meta : null;
-    const metaRole = meta && typeof meta.role === 'string' ? meta.role : '';
+    const metaRole = (found.metaFromApp && meta && typeof meta.role === 'string') ? meta.role : '';
     const metaName = meta && typeof meta.name === 'string' ? meta.name : '';
     const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
     const role = (metaRole && allowedRoles.has(metaRole)) ? metaRole : 'student';
@@ -523,7 +566,7 @@ const inlineMeProfile = async (apiReq, apiRes) => {
     return;
   }
   const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
-  const caller = await getCallerId(base, adminKey, token);
+  const caller = await getCallerInfo(base, adminKey, token);
   if (!caller.ok) {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
@@ -536,17 +579,15 @@ const inlineMeProfile = async (apiReq, apiRes) => {
   const meta = (authUser.ok && authUser.json && typeof authUser.json === 'object' && authUser.json.user_metadata && typeof authUser.json.user_metadata === 'object')
     ? authUser.json.user_metadata
     : null;
-  const metaRole = (meta && typeof meta.role === 'string') ? meta.role : '';
   const metaUsername = (meta && typeof meta.username === 'string') ? meta.username : '';
   const metaName = (meta && typeof meta.name === 'string') ? meta.name : '';
-  const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
   const autoCeoEmail = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').trim().toLowerCase();
   const autoCeoUsername = String(process.env.AUTO_BOOTSTRAP_CEO_USERNAME || '').trim().toLowerCase();
   const isAutoCeo =
     Boolean(email && autoCeoEmail && email.toLowerCase() === autoCeoEmail) ||
     Boolean(metaUsername && autoCeoUsername && metaUsername.toLowerCase() === autoCeoUsername);
-  const roleGuess = (allowedRoles.has(metaRole) && metaRole) ? metaRole : (isAutoCeo ? 'ceo' : 'student');
-  const usernameGuess = metaUsername || ((email && email.includes('@')) ? email.split('@')[0].slice(0, 20) : `u${caller.id.slice(0, 8)}`);
+  const roleGuess = (caller.appRole && allowedRoles.has(caller.appRole)) ? caller.appRole : (isAutoCeo ? 'ceo' : '');
+  const usernameGuess = metaUsername || caller.appUsername || caller.userUsername || ((email && email.includes('@')) ? email.split('@')[0].slice(0, 20) : `u${caller.id.slice(0, 8)}`);
   const nameGuess = metaName || (isAutoCeo ? 'CEO' : '');
 
   let p = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, { method: 'GET' });
@@ -570,17 +611,21 @@ const inlineMeProfile = async (apiReq, apiRes) => {
   if (!rowExisting || shouldUpgradeRole || shouldFillMissing) {
     const upserted = await ensureSingleProfileRow(base, pgHeaderCandidates, caller.id, {
       username: existingUsername || usernameGuess,
-      role: (shouldUpgradeRole || !existingRole) ? roleGuess : existingRole,
+      role: (shouldUpgradeRole || !existingRole) ? (roleGuess || existingRole || 'student') : existingRole,
       name: existingName || nameGuess,
     });
     if (!upserted.ok) {
       apiRes.status(500).json({ error: 'Failed to create profile', details: upserted.text?.slice(0, 250) });
       return;
     }
+    const nextRole = (shouldUpgradeRole || !existingRole) ? (roleGuess || existingRole || 'student') : existingRole;
     void fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(caller.id)}`, {
       method: 'PUT',
       headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_metadata: { role: roleGuess, username: existingUsername || usernameGuess, name: existingName || nameGuess } }),
+      body: JSON.stringify({
+        app_metadata: { role: nextRole, username: existingUsername || usernameGuess },
+        user_metadata: { username: existingUsername || usernameGuess, name: existingName || nameGuess },
+      }),
     });
     p = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, { method: 'GET' });
   }
@@ -615,14 +660,13 @@ const inlineUsersList = async (apiReq, apiRes) => {
     apiRes.status(500).json({ error: env.error });
     return;
   }
-  const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates } = env;
-  const caller = await getCallerId(base, adminKey, token);
+  const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
+  const caller = await getCallerInfo(base, adminKey, token);
   if (!caller.ok) {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
   }
-  const roleResp = await getCallerRole(base, pgHeaderCandidates, caller.id);
-  const isInternal = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(roleResp.role);
+  const isInternal = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(caller.appRole);
   if (!isInternal) {
     apiRes.status(403).json({ error: 'Forbidden' });
     return;
@@ -640,7 +684,38 @@ const inlineUsersList = async (apiReq, apiRes) => {
       role: typeof row.role === 'string' ? row.role : '',
       name: typeof row.name === 'string' ? row.name : '',
     }));
-  apiRes.status(200).json({ users });
+
+  if (caller.appRole !== 'ceo') {
+    apiRes.status(200).json({ users });
+    return;
+  }
+
+  const mapEmailById = async () => {
+    const perPage = 200;
+    const map = new Map();
+    for (let page = 1; page <= 10; page += 1) {
+      const resp = await fetchJson(`${base}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, { method: 'GET', headers: authHeaders });
+      if (!resp.ok) return map;
+      const list = Array.isArray(resp.json)
+        ? resp.json
+        : (resp.json && typeof resp.json === 'object' && Array.isArray(resp.json.users) ? resp.json.users : []);
+      if (!Array.isArray(list) || list.length === 0) return map;
+      for (const u of list) {
+        const obj = (u && typeof u === 'object') ? u : null;
+        if (!obj) continue;
+        const id = typeof obj.id === 'string' ? obj.id : '';
+        const email = typeof obj.email === 'string' ? obj.email : '';
+        if (id && email) map.set(id, email);
+      }
+      if (list.length < perPage) return map;
+    }
+    return map;
+  };
+
+  const emailMap = await mapEmailById();
+  apiRes.status(200).json({
+    users: users.map((u) => ({ ...u, email: emailMap.get(u.id) || '' })),
+  });
 };
 
 const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
@@ -659,14 +734,14 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
     return;
   }
   const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
-  const caller = await getCallerId(base, adminKey, token);
+  const caller = await getCallerInfo(base, adminKey, token);
   if (!caller.ok) {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
   }
-  const roleResp = await getCallerRole(base, pgHeaderCandidates, caller.id);
-  if (roleResp.role !== 'ceo') {
-    apiRes.status(403).json({ error: 'Forbidden' });
+  const gate = requireCallerAppRole(caller, 'ceo');
+  if (!gate.ok) {
+    apiRes.status(403).json({ error: gate.error });
     return;
   }
   const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
@@ -698,9 +773,26 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
   void fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
     method: 'PUT',
     headers: { ...authHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_metadata: { username: username || undefined, role: role || undefined, name: name || undefined } }),
+    body: JSON.stringify({
+      ...(role || username ? { app_metadata: { role: role || undefined, username: username || undefined } } : {}),
+      ...(username || name ? { user_metadata: { username: username || undefined, name: name || undefined } } : {}),
+    }),
   });
   apiRes.status(200).json({ ok: true });
+};
+
+const allowRate = (key, limit, windowMs) => {
+  const now = Date.now();
+  const g = globalThis;
+  if (!g.__rl) g.__rl = new Map();
+  const entry = g.__rl.get(key);
+  if (!entry || now > entry.resetAt) {
+    g.__rl.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= limit) return false;
+  entry.count += 1;
+  return true;
 };
 
 const inlineBootstrapUpsertProfile = async (apiReq, apiRes) => {
@@ -712,6 +804,11 @@ const inlineBootstrapUpsertProfile = async (apiReq, apiRes) => {
   const provided = String(apiReq.headers?.['x-bootstrap-secret'] || '').trim();
   if (!bootstrapSecret || !provided || provided !== bootstrapSecret) {
     apiRes.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  const ip = String(apiReq.headers?.['x-forwarded-for'] || '').split(',')[0]?.trim() || 'unknown';
+  if (!allowRate(`bootstrap:${ip}`, 10, 60_000)) {
+    apiRes.status(429).json({ error: 'Too many requests' });
     return;
   }
   const env = getAdminEnv();
@@ -742,7 +839,7 @@ const inlineBootstrapUpsertProfile = async (apiReq, apiRes) => {
   const meta = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
     method: 'PUT',
     headers: { ...authHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_metadata: { role, username, name } }),
+    body: JSON.stringify({ app_metadata: { role, username }, user_metadata: { username, name } }),
   });
   if (!meta.ok) {
     apiRes.status(200).json({ ok: true, warning: 'Profile updated but failed to update auth metadata', details: meta.text?.slice(0, 300) });
@@ -760,6 +857,11 @@ const inlineBootstrapFixAuth = async (apiReq, apiRes) => {
   const provided = String(apiReq.headers?.['x-bootstrap-secret'] || '').trim();
   if (!bootstrapSecret || !provided || provided !== bootstrapSecret) {
     apiRes.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  const ip = String(apiReq.headers?.['x-forwarded-for'] || '').split(',')[0]?.trim() || 'unknown';
+  if (!allowRate(`bootstrap:${ip}`, 10, 60_000)) {
+    apiRes.status(429).json({ error: 'Too many requests' });
     return;
   }
   const env = getAdminEnv();
@@ -818,7 +920,7 @@ const inlineBootstrapFixAuth = async (apiReq, apiRes) => {
   const updated = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(authUser.id)}`, {
     method: 'PUT',
     headers: { ...authHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password, email_confirm: true, user_metadata: { role, username, ...(name ? { name } : {}) } }),
+    body: JSON.stringify({ password, email_confirm: true, app_metadata: { role, username }, user_metadata: { username, ...(name ? { name } : {}) } }),
   });
   if (!updated.ok) {
     apiRes.status(500).json({ error: 'Failed to update auth user', details: updated.text?.slice(0, 300) });
