@@ -247,6 +247,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       body: JSON.stringify({ app_metadata: { role, username }, user_metadata: { username, name } }),
     });
 
+    let emailSent = false;
+    let emailWarning = '';
     if (resendKey) {
       const html = `
         <div style="font-family:Arial,sans-serif">
@@ -254,10 +256,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
         </div>`;
       const text = `Username: ${username}\nPassword: ${password}`;
-      await sendResend(resendKey, email, 'Your account credentials', html, text);
+      try {
+        await sendResend(resendKey, email, 'Your account credentials', html, text);
+        emailSent = true;
+      } catch (e: unknown) {
+        emailWarning = e instanceof Error ? e.message : 'Failed to send email';
+      }
     }
 
-    res.status(200).json({ id, email, username, role, name, emailSent: Boolean(resendKey) });
+    res.status(200).json({
+      id,
+      email,
+      username,
+      role,
+      name,
+      emailSent,
+      ...(emailWarning ? { warning: 'Email not sent', emailError: emailWarning.slice(0, 300) } : {}),
+      ...(!emailSent ? { password } : {}),
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     res.status(500).json({ error: message });

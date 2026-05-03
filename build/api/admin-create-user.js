@@ -220,6 +220,8 @@ export default async function handler(req, res) {
             headers: { ...authHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({ app_metadata: { role, username }, user_metadata: { username, name } }),
         });
+        let emailSent = false;
+        let emailWarning = '';
         if (resendKey) {
             const html = `
         <div style="font-family:Arial,sans-serif">
@@ -227,9 +229,24 @@ export default async function handler(req, res) {
           <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
         </div>`;
             const text = `Username: ${username}\nPassword: ${password}`;
-            await sendResend(resendKey, email, 'Your account credentials', html, text);
+            try {
+                await sendResend(resendKey, email, 'Your account credentials', html, text);
+                emailSent = true;
+            }
+            catch (e) {
+                emailWarning = e instanceof Error ? e.message : 'Failed to send email';
+            }
         }
-        res.status(200).json({ id, email, username, role, name, emailSent: Boolean(resendKey) });
+        res.status(200).json({
+            id,
+            email,
+            username,
+            role,
+            name,
+            emailSent,
+            ...(emailWarning ? { warning: 'Email not sent', emailError: emailWarning.slice(0, 300) } : {}),
+            ...(!emailSent ? { password } : {}),
+        });
     }
     catch (e) {
         const message = e instanceof Error ? e.message : 'Unknown error';

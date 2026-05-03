@@ -905,7 +905,7 @@ const useAppStore = create<AppStoreState>()(
             ...(user.phone ? { phone: user.phone } : {}),
           }),
         });
-        const json = (await resp.json()) as { id?: unknown; username?: unknown; email?: unknown; role?: unknown; name?: unknown; error?: unknown };
+        const json = (await resp.json()) as { id?: unknown; username?: unknown; email?: unknown; role?: unknown; name?: unknown; password?: unknown; error?: unknown };
         if (!resp.ok || !json || typeof json.id !== 'string') {
           throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to create user');
         }
@@ -916,6 +916,7 @@ const useAppStore = create<AppStoreState>()(
           email: typeof json.email === 'string' ? json.email : user.email,
           role: (typeof json.role === 'string' ? json.role : user.role) as UserRole,
           name: typeof json.name === 'string' ? json.name : user.name,
+          password: typeof json.password === 'string' ? json.password : user.password,
           createdAt: new Date().toISOString(),
         };
         await get().refreshUsersFromBackend();

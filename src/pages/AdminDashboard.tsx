@@ -32,7 +32,9 @@ const AdminDashboard: React.FC = () => {
   const [showAgencyModal, setShowAgencyModal] = useState(false);
   const [agencyName, setAgencyName] = useState('');
   const [agencyEmail, setAgencyEmail] = useState('');
-  const [createdAgencyCreds, setCreatedAgencyCreds] = useState<{ username: string } | null>(null);
+  const [createdAgencyCreds, setCreatedAgencyCreds] = useState<{ username: string; password?: string } | null>(null);
+  const [createdOpsCreds, setCreatedOpsCreds] = useState<{ username: string; password?: string } | null>(null);
+  const [createdSalesCreds, setCreatedSalesCreds] = useState<{ username: string; password?: string } | null>(null);
   const [showCredModal, setShowCredModal] = useState(false);
   const [credUserId, setCredUserId] = useState<string | null>(null);
   const [credUsername, setCredUsername] = useState('');
@@ -664,7 +666,11 @@ const AdminDashboard: React.FC = () => {
                       <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
                         <p className="text-sm font-bold text-amber-700">Account created</p>
                         <p className="text-sm font-medium text-amber-700">Username: {createdAgencyCreds.username}</p>
-                        <p className="text-sm font-medium text-amber-700">Credentials were sent to the agency email.</p>
+                        {createdAgencyCreds.password ? (
+                          <p className="text-sm font-medium text-amber-700">Password: {createdAgencyCreds.password}</p>
+                        ) : (
+                          <p className="text-sm font-medium text-amber-700">Credentials were sent to the agency email.</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -672,10 +678,19 @@ const AdminDashboard: React.FC = () => {
                     <button onClick={() => { setShowAgencyModal(false); setCreatedAgencyCreds(null); }} className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 text-gray-600">Cancel</button>
                     <button
                       onClick={async () => {
-                        if (!agencyName || !agencyEmail) return;
+                        const name = agencyName.trim();
+                        const email = agencyEmail.trim();
+                        if (!name || !email) {
+                          toast.error('Please enter name and email');
+                          return;
+                        }
+                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                          toast.error('Invalid email');
+                          return;
+                        }
                         try {
-                          const created = await ceoCreateAgencyAccount(agencyName, agencyEmail);
-                          setCreatedAgencyCreds({ username: created.username });
+                          const created = await ceoCreateAgencyAccount(name, email);
+                          setCreatedAgencyCreds({ username: created.username, ...(created.password ? { password: created.password } : {}) });
                           toast.success('Agency account created');
                           setAgencyName('');
                           setAgencyEmail('');
@@ -822,7 +837,7 @@ const AdminDashboard: React.FC = () => {
             )}
             {showOpsModal && (
               <div className="fixed inset-0 z-[100] p-4 flex items-start justify-center overflow-y-auto">
-                <div className="absolute inset-0 bg-black/60" onClick={() => setShowOpsModal(false)} />
+                <div className="absolute inset-0 bg-black/60" onClick={() => { setShowOpsModal(false); setCreatedOpsCreds(null); }} />
                 <div className="relative tw-card p-8 w-full max-w-lg my-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
                   <h3 className="text-2xl font-black text-black mb-6">Create Ops User</h3>
                   <div className="space-y-4">
@@ -834,18 +849,37 @@ const AdminDashboard: React.FC = () => {
                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Email</label>
                       <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={opsEmail} onChange={(e) => setOpsEmail(e.target.value)} />
                     </div>
+                    {createdOpsCreds && (
+                      <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                        <p className="text-sm font-bold text-amber-700">Account created</p>
+                        <p className="text-sm font-medium text-amber-700">Username: {createdOpsCreds.username}</p>
+                        {createdOpsCreds.password ? (
+                          <p className="text-sm font-medium text-amber-700">Password: {createdOpsCreds.password}</p>
+                        ) : (
+                          <p className="text-sm font-medium text-amber-700">Credentials were sent to the user email.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="mt-6 flex justify-end gap-3">
-                    <button onClick={() => setShowOpsModal(false)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 text-gray-600">Cancel</button>
+                    <button onClick={() => { setShowOpsModal(false); setCreatedOpsCreds(null); }} className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 text-gray-600">Cancel</button>
                     <button
                       onClick={async () => {
-                        if (!opsName || !opsEmail) return;
-                        const user = { id: '', username: '', role: 'ops' as const, name: opsName, email: opsEmail, points: 0, createdAt: new Date().toISOString() };
+                        const name = opsName.trim();
+                        const email = opsEmail.trim();
+                        if (!name || !email) {
+                          toast.error('Please enter name and email');
+                          return;
+                        }
+                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                          toast.error('Invalid email');
+                          return;
+                        }
+                        const user = { id: '', username: '', role: 'ops' as const, name, email, points: 0, createdAt: new Date().toISOString() };
                         try {
-                          await ceoCreateUser(user);
+                          const created = await ceoCreateUser(user);
+                          setCreatedOpsCreds({ username: created.username, ...(created.password ? { password: created.password } : {}) });
                           toast.success('Ops user created');
-                          setShowOpsModal(false);
-                          setOpsName(''); setOpsEmail('');
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : 'Failed to create user');
                         }
@@ -860,7 +894,7 @@ const AdminDashboard: React.FC = () => {
             )}
             {showSalesModal && (
               <div className="fixed inset-0 z-[100] p-4 flex items-start justify-center overflow-y-auto">
-                <div className="absolute inset-0 bg-black/60" onClick={() => setShowSalesModal(false)} />
+                <div className="absolute inset-0 bg-black/60" onClick={() => { setShowSalesModal(false); setCreatedSalesCreds(null); }} />
                 <div className="relative tw-card p-8 w-full max-w-lg my-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
                   <h3 className="text-2xl font-black text-black mb-6">Create Sales User</h3>
                   <div className="space-y-4">
@@ -872,18 +906,37 @@ const AdminDashboard: React.FC = () => {
                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Email</label>
                       <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={salesEmail} onChange={(e) => setSalesEmail(e.target.value)} />
                     </div>
+                    {createdSalesCreds && (
+                      <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                        <p className="text-sm font-bold text-amber-700">Account created</p>
+                        <p className="text-sm font-medium text-amber-700">Username: {createdSalesCreds.username}</p>
+                        {createdSalesCreds.password ? (
+                          <p className="text-sm font-medium text-amber-700">Password: {createdSalesCreds.password}</p>
+                        ) : (
+                          <p className="text-sm font-medium text-amber-700">Credentials were sent to the user email.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="mt-6 flex justify-end gap-3">
-                    <button onClick={() => setShowSalesModal(false)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 text-gray-600">Cancel</button>
+                    <button onClick={() => { setShowSalesModal(false); setCreatedSalesCreds(null); }} className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 text-gray-600">Cancel</button>
                     <button
                       onClick={async () => {
-                        if (!salesName || !salesEmail) return;
-                        const user = { id: '', username: '', role: 'sales' as const, name: salesName, email: salesEmail, points: 0, createdAt: new Date().toISOString() };
+                        const name = salesName.trim();
+                        const email = salesEmail.trim();
+                        if (!name || !email) {
+                          toast.error('Please enter name and email');
+                          return;
+                        }
+                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                          toast.error('Invalid email');
+                          return;
+                        }
+                        const user = { id: '', username: '', role: 'sales' as const, name, email, points: 0, createdAt: new Date().toISOString() };
                         try {
-                          await ceoCreateUser(user);
+                          const created = await ceoCreateUser(user);
+                          setCreatedSalesCreds({ username: created.username, ...(created.password ? { password: created.password } : {}) });
                           toast.success('Sales user created');
-                          setShowSalesModal(false);
-                          setSalesName(''); setSalesEmail('');
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : 'Failed to create user');
                         }

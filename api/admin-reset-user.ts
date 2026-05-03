@@ -190,6 +190,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const name = row && typeof row.name === 'string' ? (row.name as string) : '';
     const role = row && typeof row.role === 'string' ? (row.role as string) : '';
 
+    let emailSent = false;
+    let emailWarning = '';
     if (email && resendKey) {
       const subject = role === 'student' ? 'Your student account credentials updated' : 'Your account credentials updated';
       const html = `
@@ -199,10 +201,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           <p><b>Username:</b> ${finalUsername}${password ? `<br/><b>Password:</b> ${password}` : ''}</p>
         </div>`;
       const text = `Name: ${name}\nUsername: ${finalUsername}${password ? `\nPassword: ${password}` : ''}`;
-      await sendResend(resendKey, email, subject, html, text);
+      try {
+        await sendResend(resendKey, email, subject, html, text);
+        emailSent = true;
+      } catch (e: unknown) {
+        emailWarning = e instanceof Error ? e.message : 'Failed to send email';
+      }
     }
 
-    res.status(200).json({ ok: true, emailSent: Boolean(email && resendKey) });
+    res.status(200).json({
+      ok: true,
+      emailSent,
+      ...(emailWarning ? { warning: 'Email not sent', emailError: emailWarning.slice(0, 300) } : {}),
+      ...(password && !emailSent ? { password } : {}),
+      ...(finalUsername ? { username: finalUsername } : {}),
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     res.status(500).json({ error: message });

@@ -203,11 +203,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
       </div>`;
     const text = `Username: ${username}\nPassword: ${password}`;
+    let emailSent = false;
+    let emailWarning = '';
     if (resendKey) {
-      await sendResend(resendKey, email, 'Your The Way student account', html, text);
+      try {
+        await sendResend(resendKey, email, 'Your The Way student account', html, text);
+        emailSent = true;
+      } catch (e: unknown) {
+        emailWarning = e instanceof Error ? e.message : 'Failed to send email';
+      }
     }
 
-    res.status(200).json({ id, email, username, name, emailSent: Boolean(resendKey) });
+    res.status(200).json({
+      id,
+      email,
+      username,
+      name,
+      emailSent,
+      ...(emailWarning ? { warning: 'Email not sent', emailError: emailWarning.slice(0, 300) } : {}),
+      ...(!emailSent ? { password } : {}),
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     res.status(500).json({ error: message });
