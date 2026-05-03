@@ -72,11 +72,36 @@ const getForcedInternal2faCode = () => {
     const v = process.env.FORCE_INTERNAL_2FA_CODE;
     return typeof v === 'string' ? v.trim() : '';
 };
-const adminAuthHeaders = (adminKey) => {
+const authAdminHeaders = (adminKey) => {
     const key = adminKey.trim();
+    if (!key)
+        return {};
+    return { apikey: key, Authorization: `Bearer ${key}` };
+};
+const postgrestHeaders = (adminKey) => {
+    const key = adminKey.trim();
+    if (!key)
+        return {};
     const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
-    const isSbSecret = key.startsWith('sb_secret_');
-    return (isJwtLike || isSbSecret) ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+    return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+};
+const ensureSingleProfileRow = async (base, pgHeaders, userId, patch) => {
+    const read = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id&limit=1`, {
+        method: 'GET',
+        headers: pgHeaders,
+    });
+    if (read.ok && Array.isArray(read.json) && read.json.length > 0) {
+        return fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+            method: 'PATCH',
+            headers: { ...pgHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify(patch),
+        });
+    }
+    return fetchJson(`${base}/rest/v1/profiles`, {
+        method: 'POST',
+        headers: { ...pgHeaders, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        body: JSON.stringify({ id: userId, ...patch }),
+    });
 };
 export default async function handler(req, res) {
     try {
@@ -94,7 +119,8 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = String(serviceKey || '').trim();
-        const adminHeaders = adminAuthHeaders(adminKey);
+        const pgHeaders = postgrestHeaders(adminKey);
+        const authHeaders = authAdminHeaders(adminKey);
         const bootstrapSecret = process.env.BOOTSTRAP_SECRET || '';
         const bootstrapProvided = getHeader(req, 'x-bootstrap-secret').trim();
         const isBootstrap = Boolean(bootstrapSecret && bootstrapProvided && bootstrapProvided === bootstrapSecret);
@@ -113,9 +139,9 @@ export default async function handler(req, res) {
                 return;
             }
             const callerId = who.json.id;
-            const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+            const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role&limit=1`, {
                 method: 'GET',
-                headers: adminHeaders,
+                headers: pgHeaders,
             });
             const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
                 ? callerProfile.json[0].role
@@ -128,7 +154,7 @@ export default async function handler(req, res) {
         else {
             const existingCeo = await fetchJson(`${base}/rest/v1/profiles?role=eq.ceo&select=id&limit=1`, {
                 method: 'GET',
-                headers: adminHeaders,
+                headers: pgHeaders,
             });
             if (existingCeo.ok && Array.isArray(existingCeo.json) && existingCeo.json.length > 0) {
                 res.status(403).json({ error: 'Bootstrap is disabled after CEO exists' });
@@ -157,7 +183,7 @@ export default async function handler(req, res) {
         for (let i = 0; i < 6; i++) {
             const check = await fetchJson(`${base}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id&limit=1`, {
                 method: 'GET',
-                headers: adminHeaders,
+                headers: pgHeaders,
             });
             if (check.ok && Array.isArray(check.json) && check.json.length === 0)
                 break;
@@ -166,7 +192,7 @@ export default async function handler(req, res) {
         void getForcedInternal2faCode();
         const created = await fetchJson(`${base}/auth/v1/admin/users`, {
             method: 'POST',
-            headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, email_confirm: true }),
         });
         if (!created.ok || !created.json || typeof created.json.id !== 'string') {
@@ -174,20 +200,7 @@ export default async function handler(req, res) {
             return;
         }
         const id = created.json.id;
-        const inserted = await fetchJson(`${base}/rest/v1/profiles`, {
-            method: 'POST',
-            headers: {
-                ...adminHeaders,
-                'Content-Type': 'application/json',
-                Prefer: 'return=representation',
-            },
-            body: JSON.stringify({
-                id,
-                username,
-                role,
-                name,
-            }),
-        });
+        const inserted = await ensureSingleProfileRow(base, pgHeaders, id, { username, role, name });
         if (!inserted.ok) {
             res.status(500).json({ error: 'Failed to create profile', details: inserted.text });
             return;

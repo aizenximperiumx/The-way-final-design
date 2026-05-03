@@ -114,7 +114,7 @@ export default async function handler(req, res) {
             return;
         }
         const userId = who.json.id;
-        const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role`, {
+        const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, {
             method: 'GET',
             headers: adminHeaders,
         });

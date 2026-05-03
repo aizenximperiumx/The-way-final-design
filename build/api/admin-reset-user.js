@@ -59,11 +59,18 @@ const getForcedInternal2faCode = () => {
     const v = process.env.FORCE_INTERNAL_2FA_CODE;
     return typeof v === 'string' ? v.trim() : '';
 };
-const adminAuthHeaders = (adminKey) => {
+const authAdminHeaders = (adminKey) => {
     const key = adminKey.trim();
+    if (!key)
+        return {};
+    return { apikey: key, Authorization: `Bearer ${key}` };
+};
+const postgrestHeaders = (adminKey) => {
+    const key = adminKey.trim();
+    if (!key)
+        return {};
     const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
-    const isSbSecret = key.startsWith('sb_secret_');
-    return (isJwtLike || isSbSecret) ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+    return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
 };
 export default async function handler(req, res) {
     try {
@@ -81,7 +88,8 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = String(serviceKey || '').trim();
-        const adminHeaders = adminAuthHeaders(adminKey);
+        const pgHeaders = postgrestHeaders(adminKey);
+        const authHeaders = authAdminHeaders(adminKey);
         const token = getBearer(req);
         if (!token) {
             res.status(401).json({ error: 'Missing token' });
@@ -96,9 +104,9 @@ export default async function handler(req, res) {
             return;
         }
         const callerId = who.json.id;
-        const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+        const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role&limit=1`, {
             method: 'GET',
-            headers: adminHeaders,
+            headers: pgHeaders,
         });
         const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
             ? callerProfile.json[0].role
@@ -119,7 +127,7 @@ export default async function handler(req, res) {
         if (password) {
             const updated = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
                 method: 'PUT',
-                headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password }),
             });
             if (!updated.ok) {
@@ -133,7 +141,7 @@ export default async function handler(req, res) {
                 patch.username = username;
             const updatedProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
                 method: 'PATCH',
-                headers: { ...adminHeaders, 'Content-Type': 'application/json' },
+                headers: { ...pgHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify(patch),
             });
             if (!updatedProfile.ok) {
@@ -143,7 +151,7 @@ export default async function handler(req, res) {
         }
         const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email,username,role,name`, {
             method: 'GET',
-            headers: adminHeaders,
+            headers: pgHeaders,
         });
         const row = Array.isArray(profile.json) ? profile.json[0] : null;
         const email = row && typeof row.email === 'string' ? row.email : '';

@@ -49,11 +49,18 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     }
     return '';
 };
-const adminAuthHeaders = (adminKey) => {
+const authAdminHeaders = (adminKey) => {
     const key = adminKey.trim();
+    if (!key)
+        return {};
+    return { apikey: key, Authorization: `Bearer ${key}` };
+};
+const postgrestHeaders = (adminKey) => {
+    const key = adminKey.trim();
+    if (!key)
+        return {};
     const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
-    const isSbSecret = key.startsWith('sb_secret_');
-    return (isJwtLike || isSbSecret) ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+    return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
 };
 export default async function handler(req, res) {
     try {
@@ -75,7 +82,8 @@ export default async function handler(req, res) {
         }
         const base = supabaseUrl.replace(/\/$/, '');
         const adminKey = String(serviceKey || '').trim();
-        const adminHeaders = adminAuthHeaders(adminKey);
+        const pgHeaders = postgrestHeaders(adminKey);
+        const authHeaders = authAdminHeaders(adminKey);
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const username = asString(body.username).trim();
         if (!username) {
@@ -84,7 +92,7 @@ export default async function handler(req, res) {
         }
         const readProfileByUsername = async (operator) => {
             const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id&limit=1`;
-            const r = await fetchJson(q, { method: 'GET', headers: adminHeaders });
+            const r = await fetchJson(q, { method: 'GET', headers: pgHeaders });
             if (!r.ok || !Array.isArray(r.json) || !r.json[0] || typeof r.json[0] !== 'object')
                 return null;
             const row = r.json[0];
@@ -98,7 +106,7 @@ export default async function handler(req, res) {
         }
         const authUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(profile.id)}`, {
             method: 'GET',
-            headers: adminHeaders,
+            headers: authHeaders,
         });
         const authEmail = (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string')
             ? String(authUser.json.email)

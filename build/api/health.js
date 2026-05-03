@@ -28,14 +28,23 @@ const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     if (!/^https?:\/\//i.test(supabaseUrl)) {
         return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
     }
+    if (serviceKey.startsWith('sb_publishable_')) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key.';
+    }
     if (/^https?:\/\//i.test(serviceKey)) {
         return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
     }
+    if (/\s/.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It contains whitespace/new lines. Paste the key as a single line.';
+    }
     return '';
 };
-const adminAuthHeaders = (adminKey) => {
-    const isJwtLike = adminKey.startsWith('eyJ') && adminKey.split('.').length === 3;
-    return isJwtLike ? { apikey: adminKey, Authorization: `Bearer ${adminKey}` } : { apikey: adminKey };
+const postgrestHeaders = (adminKey) => {
+    const key = adminKey.trim();
+    if (!key)
+        return {};
+    const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
+    return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
 };
 export default async function handler(req, res) {
     try {
@@ -44,7 +53,7 @@ export default async function handler(req, res) {
             return;
         }
         const supabaseUrl = process.env.SUPABASE_URL || '';
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+        const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY ?? '').trim();
         const bucket = process.env.SUPABASE_STORAGE_BUCKET || '';
         const resend = process.env.RESEND_API_KEY || '';
         const token = getBearer(req);
@@ -63,7 +72,7 @@ export default async function handler(req, res) {
             return;
         }
         const base = supabaseUrl.replace(/\/$/, '');
-        const adminHeaders = adminAuthHeaders(serviceKey);
+        const adminHeaders = postgrestHeaders(serviceKey);
         const who = await fetchJson(`${base}/auth/v1/user`, {
             method: 'GET',
             headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
@@ -75,7 +84,7 @@ export default async function handler(req, res) {
         const callerId = who.json.id;
         const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
             method: 'GET',
-            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+            headers: adminHeaders,
         });
         const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
             ? callerProfile.json[0].role
