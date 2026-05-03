@@ -401,6 +401,18 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
     return;
   }
 
+  if (username.includes('@')) {
+    apiRes.status(200).json({ email: username });
+    return;
+  }
+
+  const autoCeoEmail = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').trim();
+  const autoCeoUsername = String(process.env.AUTO_BOOTSTRAP_CEO_USERNAME || '').trim();
+  if (autoCeoEmail && autoCeoUsername && autoCeoUsername.toLowerCase() === username.toLowerCase()) {
+    apiRes.status(200).json({ email: autoCeoEmail });
+    return;
+  }
+
   const readProfileByUsername = async (operator) => {
     const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id&limit=1`;
     const r = await fetchPostgrest(pgHeaderCandidates, q, { method: 'GET' });
@@ -411,23 +423,84 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
   };
 
   const profile = (await readProfileByUsername('eq')) ?? (await readProfileByUsername('ilike'));
+  const usernameLower = username.toLowerCase();
+
+  const readAuthUserById = async (userId) => {
+    const authUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers: authHeaders,
+    });
+    const authEmail =
+      (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string')
+        ? String(authUser.json.email)
+        : '';
+    const meta = (authUser.ok && authUser.json && typeof authUser.json === 'object' && authUser.json.user_metadata && typeof authUser.json.user_metadata === 'object')
+      ? authUser.json.user_metadata
+      : null;
+    const metaRole = (meta && typeof meta.role === 'string') ? meta.role : '';
+    const metaUsername = (meta && typeof meta.username === 'string') ? meta.username : '';
+    const metaName = (meta && typeof meta.name === 'string') ? meta.name : '';
+    return { ok: authUser.ok, email: authEmail, role: metaRole, username: metaUsername, name: metaName, rawText: authUser.text };
+  };
+
+  const findAuthUserByUsername = async () => {
+    const perPage = 200;
+    for (let page = 1; page <= 10; page += 1) {
+      const r = await fetchJson(`${base}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
+        method: 'GET',
+        headers: authHeaders,
+      });
+      if (!r.ok) return null;
+      const users = Array.isArray(r.json)
+        ? r.json
+        : (r.json && typeof r.json === 'object' && Array.isArray(r.json.users) ? r.json.users : []);
+      if (!Array.isArray(users) || users.length === 0) return null;
+      for (const u of users) {
+        const obj = (u && typeof u === 'object') ? u : null;
+        if (!obj) continue;
+        const email = typeof obj.email === 'string' ? obj.email : '';
+        const id = typeof obj.id === 'string' ? obj.id : '';
+        const meta = (obj.user_metadata && typeof obj.user_metadata === 'object') ? obj.user_metadata : null;
+        const metaUsername = meta && typeof meta.username === 'string' ? meta.username : '';
+        if (metaUsername && metaUsername.toLowerCase() === usernameLower && email && id) return { id, email, meta };
+        if (email && email.includes('@')) {
+          const local = email.split('@')[0].toLowerCase();
+          if (local === usernameLower && id) return { id, email, meta };
+        }
+      }
+      if (users.length < perPage) return null;
+    }
+    return null;
+  };
+
   if (!profile || !profile.id) {
-    apiRes.status(200).json({ email: '' });
+    const found = await findAuthUserByUsername();
+    if (!found) {
+      apiRes.status(200).json({ email: '' });
+      return;
+    }
+    const meta = (found.meta && typeof found.meta === 'object') ? found.meta : null;
+    const metaRole = meta && typeof meta.role === 'string' ? meta.role : '';
+    const metaName = meta && typeof meta.name === 'string' ? meta.name : '';
+    const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
+    const role = (metaRole && allowedRoles.has(metaRole)) ? metaRole : 'student';
+    const name = typeof metaName === 'string' ? metaName : '';
+    await ensureSingleProfileRow(base, pgHeaderCandidates, found.id, { username, role, ...(name ? { name } : {}) });
+    apiRes.status(200).json({ email: found.email });
     return;
   }
 
-  const authUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(profile.id)}`, {
-    method: 'GET',
-    headers: authHeaders,
-  });
-  const authEmail =
-    (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string')
-      ? String(authUser.json.email)
-      : '';
+  const auth = await readAuthUserById(profile.id);
+  const authEmail = auth.email;
   if (!authEmail) {
-    apiRes.status(500).json({
-      error: 'User exists but could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct.',
-    });
+    const found = await findAuthUserByUsername();
+    if (!found || !found.email) {
+      apiRes.status(500).json({
+        error: 'User exists but could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct.',
+      });
+      return;
+    }
+    apiRes.status(200).json({ email: found.email });
     return;
   }
 

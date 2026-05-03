@@ -244,6 +244,14 @@ const useAppStore = create<AppStoreState>()(
 
       // Your actions here
       login: async (username: string, password: string) => {
+        const maskEmail = (value: string) => {
+          const s = value.trim();
+          const at = s.indexOf('@');
+          if (at <= 1) return '***';
+          const local = s.slice(0, at);
+          const domain = s.slice(at + 1);
+          return `${local[0]}***@${domain}`;
+        };
         const supabase = getSupabase();
         const input = username.trim();
         const isEmail = input.includes('@');
@@ -265,7 +273,13 @@ const useAppStore = create<AppStoreState>()(
           email = j.email;
         }
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw new Error(error.message || 'Invalid email or password');
+        if (error) {
+          const msg = error.message || 'Invalid email or password';
+          if (!isEmail && msg.toLowerCase().includes('invalid login credentials')) {
+            throw new Error(`Invalid login credentials for ${maskEmail(email)}`);
+          }
+          throw new Error(msg);
+        }
         if (!data.user) throw new Error('Login failed');
         const token = (await supabase.auth.getSession()).data.session?.access_token;
         if (!token) throw new Error('Login failed');

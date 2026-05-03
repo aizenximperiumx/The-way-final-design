@@ -54,11 +54,45 @@ const authAdminHeaders = (adminKey: string): Record<string, string> => {
   return { apikey: key, Authorization: `Bearer ${key}` };
 };
 
-const postgrestHeaders = (adminKey: string): Record<string, string> => {
+const postgrestHeaderCandidates = (adminKey: string): Array<Record<string, string>> => {
   const key = adminKey.trim();
-  if (!key) return {};
+  if (!key) return [{}];
   const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
-  return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+  const isSbSecret = key.startsWith('sb_secret_');
+  if (isJwtLike) return [{ apikey: key, Authorization: `Bearer ${key}` }];
+  if (isSbSecret) return [{ apikey: key }, { apikey: key, Authorization: `Bearer ${key}` }];
+  return [{ apikey: key }];
+};
+
+const fetchPostgrest = async (candidates: Array<Record<string, string>>, url: string, init: RequestInit) => {
+  let last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[0] ?? {}) } });
+  for (let i = 1; i < candidates.length; i += 1) {
+    if (last.ok) return last;
+    if (last.status !== 401 && last.status !== 403) return last;
+    last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[i] ?? {}) } });
+  }
+  return last;
+};
+
+const ensureSingleProfileRow = async (
+  base: string,
+  candidates: Array<Record<string, string>>,
+  userId: string,
+  patch: Record<string, unknown>,
+) => {
+  const read = await fetchPostgrest(candidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id&limit=1`, { method: 'GET' });
+  if (read.ok && Array.isArray(read.json) && read.json.length > 0) {
+    return fetchPostgrest(candidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(patch),
+    });
+  }
+  return fetchPostgrest(candidates, `${base}/rest/v1/profiles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ id: userId, ...patch }),
+  });
 };
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -81,7 +115,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const base = (supabaseUrl as string).replace(/\/$/, '');
     const adminKey = String(serviceKey || '').trim();
-    const pgHeaders = postgrestHeaders(adminKey);
+    const pgCandidates = postgrestHeaderCandidates(adminKey);
     const authHeaders = authAdminHeaders(adminKey);
     const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, unknown>) : {};
     const username = asString(body.username).trim();
@@ -89,18 +123,66 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       res.status(400).json({ error: 'Missing username' });
       return;
     }
+    if (username.includes('@')) {
+      res.status(200).json({ email: username });
+      return;
+    }
     const readProfileByUsername = async (operator: 'eq' | 'ilike') => {
       const q = `${base}/rest/v1/profiles?username=${operator}.${encodeURIComponent(username)}&select=id&limit=1`;
-      const r = await fetchJson(q, { method: 'GET', headers: pgHeaders });
+      const r = await fetchPostgrest(pgCandidates, q, { method: 'GET' });
       if (!r.ok || !Array.isArray(r.json) || !r.json[0] || typeof r.json[0] !== 'object') return null;
       const row = r.json[0] as Record<string, unknown>;
       const id = typeof row.id === 'string' ? row.id : '';
       return { id };
     };
 
+    const usernameLower = username.toLowerCase();
+
+    const findAuthUserByUsername = async () => {
+      const perPage = 200;
+      for (let page = 1; page <= 10; page += 1) {
+        const r = await fetchJson(`${base}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
+          method: 'GET',
+          headers: authHeaders,
+        });
+        if (!r.ok) return null;
+        const users = Array.isArray(r.json)
+          ? r.json
+          : (r.json && typeof r.json === 'object' && Array.isArray((r.json as Record<string, unknown>).users) ? (r.json as Record<string, unknown>).users : []);
+        if (!Array.isArray(users) || users.length === 0) return null;
+        for (const u of users) {
+          const obj = (u && typeof u === 'object') ? (u as Record<string, unknown>) : null;
+          if (!obj) continue;
+          const email = typeof obj.email === 'string' ? obj.email : '';
+          const id = typeof obj.id === 'string' ? obj.id : '';
+          const meta = (obj.user_metadata && typeof obj.user_metadata === 'object') ? (obj.user_metadata as Record<string, unknown>) : null;
+          const metaUsername = meta && typeof meta.username === 'string' ? meta.username : '';
+          if (metaUsername && metaUsername.toLowerCase() === usernameLower && email && id) return { id, email, meta };
+          if (email && email.includes('@')) {
+            const local = email.split('@')[0].toLowerCase();
+            if (local === usernameLower && id) return { id, email, meta };
+          }
+        }
+        if (users.length < perPage) return null;
+      }
+      return null;
+    };
+
     const profile = (await readProfileByUsername('eq')) ?? (await readProfileByUsername('ilike'));
     if (!profile || !profile.id) {
-      res.status(200).json({ email: '' });
+      const found = await findAuthUserByUsername();
+      if (!found) {
+        res.status(200).json({ email: '' });
+        return;
+      }
+      const meta = found.meta && typeof found.meta === 'object' ? found.meta : null;
+      const metaRole = meta && typeof meta.role === 'string' ? meta.role : '';
+      const metaName = meta && typeof meta.name === 'string' ? meta.name : '';
+      const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
+      const role = (metaRole && allowedRoles.has(metaRole)) ? metaRole : 'student';
+      const name = typeof metaName === 'string' ? metaName : '';
+      await ensureSingleProfileRow(base, pgCandidates, found.id, { username, role, ...(name ? { name } : {}) });
+      res.status(200).json({ email: found.email });
       return;
     }
 
@@ -112,9 +194,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ? String((authUser.json as Record<string, unknown>).email)
       : '';
     if (!authEmail) {
-      res.status(500).json({
-        error: 'User exists but could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct.',
-      });
+      const found = await findAuthUserByUsername();
+      if (!found || !found.email) {
+        res.status(500).json({
+          error: 'User exists but could not read email from Supabase Auth. Make sure SUPABASE_SERVICE_ROLE_KEY is correct.',
+        });
+        return;
+      }
+      res.status(200).json({ email: found.email });
       return;
     }
 
