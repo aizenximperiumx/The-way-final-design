@@ -533,10 +533,6 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
 
 const handleApi = async (req, res, route) => {
   const file = path.join(apiBuildDir, `${route}.js`);
-  if (!(await exists(file))) {
-    serveJson(res, 404, { error: 'Not found' });
-    return;
-  }
 
   const rawBody = await readBody(req);
   const contentType = String(req.headers['content-type'] ?? '');
@@ -592,6 +588,10 @@ const handleApi = async (req, res, route) => {
     }
     if (route === 'admin-update-profile') {
       await inlineAdminUpdateProfile(apiReq, apiRes);
+      return;
+    }
+    if (!(await exists(file))) {
+      serveJson(res, 404, { error: 'Not found' });
       return;
     }
     const mod = await import(pathToFileURL(file).href);
