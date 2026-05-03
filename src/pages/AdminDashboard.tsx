@@ -44,6 +44,9 @@ const AdminDashboard: React.FC = () => {
   const [showOpsModal, setShowOpsModal] = useState(false);
   const [opsName, setOpsName] = useState('');
   const [opsEmail, setOpsEmail] = useState('');
+  const [showSalesModal, setShowSalesModal] = useState(false);
+  const [salesName, setSalesName] = useState('');
+  const [salesEmail, setSalesEmail] = useState('');
   const [showUniModal, setShowUniModal] = useState(false);
   const [uniUserId, setUniUserId] = useState<string | null>(null);
   const [uniSelection, setUniSelection] = useState<string[]>([]);
@@ -552,6 +555,12 @@ const AdminDashboard: React.FC = () => {
                   Create Ops User
                 </button>
                 <button
+                  onClick={() => setShowSalesModal(true)}
+                  className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-black hover:text-white transition-all"
+                >
+                  Create Sales User
+                </button>
+                <button
                   onClick={() => setShowAssignModal(true)}
                   className="flex items-center gap-2 bg-amber-500 text-black px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-black hover:text-white transition-all"
                 >
@@ -843,6 +852,44 @@ const AdminDashboard: React.FC = () => {
                           toast.success('Ops user created (credentials emailed)');
                           setShowOpsModal(false);
                           setOpsName(''); setOpsEmail('');
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Failed to create user');
+                        }
+                      }}
+                      className="px-6 py-3 rounded-2xl font-black text-sm bg-black text-white hover:bg-amber-500 hover:text-black transition-all"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {showSalesModal && (
+              <div className="fixed inset-0 z-[100] p-4 flex items-start justify-center overflow-y-auto">
+                <div className="absolute inset-0 bg-black/60" onClick={() => setShowSalesModal(false)} />
+                <div className="relative tw-card p-8 w-full max-w-lg my-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                  <h3 className="text-2xl font-black text-black mb-6">Create Sales User</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Name</label>
+                      <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={salesName} onChange={(e) => setSalesName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Email</label>
+                      <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={salesEmail} onChange={(e) => setSalesEmail(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button onClick={() => setShowSalesModal(false)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 text-gray-600">Cancel</button>
+                    <button
+                      onClick={async () => {
+                        if (!salesName || !salesEmail) return;
+                        const user = { id: '', username: '', role: 'sales' as const, name: salesName, email: salesEmail, points: 0, createdAt: new Date().toISOString() };
+                        try {
+                          await ceoCreateUser(user);
+                          toast.success('Sales user created (credentials emailed)');
+                          setShowSalesModal(false);
+                          setSalesName(''); setSalesEmail('');
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : 'Failed to create user');
                         }

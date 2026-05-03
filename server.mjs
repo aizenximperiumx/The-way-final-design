@@ -259,20 +259,50 @@ const bootstrapDefaultCeo = async () => {
         body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'ceo', username, name } }),
       });
       if (!created.ok || !created.json || typeof created.json.id !== 'string') {
+        const text = created.text || '';
+        if (text.includes('users_email_partial_key') || text.includes('duplicate key value') || text.includes('"code":"23505"')) {
+          globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: true, step: 'email_exists', note: 'Email already exists in Auth; role will be upgraded on login via AUTO_BOOTSTRAP_CEO_EMAIL/USERNAME' };
+          return;
+        }
         console.error('CEO bootstrap failed (create user)', created.status, created.text);
         globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'create_user', status: created.status, error: created.text?.slice(0, 300) };
         return;
       }
       id = created.json.id;
     } else {
+      const authUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+        method: 'GET',
+        headers: authHeaders,
+      });
+      const existingEmail =
+        (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string')
+          ? authUser.json.email
+          : '';
+      if (existingEmail && email && existingEmail.toLowerCase() !== email.toLowerCase()) {
+        globalThis.__ceoBootstrapLast = {
+          at: new Date().toISOString(),
+          enabled: true,
+          ok: true,
+          step: 'skip_update_mismatch',
+          note: 'Existing CEO profile belongs to a different Auth user; not changing that user. Use AUTO_BOOTSTRAP_CEO_EMAIL + login to promote your account.',
+          existingEmail,
+          desiredEmail: email,
+        };
+        return;
+      }
       const updatedUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'ceo', username, name } }),
+        body: JSON.stringify({ password, email_confirm: true, user_metadata: { role: 'ceo', username, name } }),
       });
       if (!updatedUser.ok) {
-        console.error('CEO bootstrap failed (update user)', updatedUser.status, updatedUser.text);
-        globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'update_user', status: updatedUser.status, error: updatedUser.text?.slice(0, 300) };
+        const text = updatedUser.text || '';
+        if (text.includes('users_email_partial_key') || text.includes('duplicate key value') || text.includes('"code":"23505"')) {
+          globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: true, step: 'update_user_skipped', note: 'Skipped changing email because it belongs to another Auth user' };
+        } else {
+          console.error('CEO bootstrap failed (update user)', updatedUser.status, updatedUser.text);
+          globalThis.__ceoBootstrapLast = { at: new Date().toISOString(), enabled: true, ok: false, step: 'update_user', status: updatedUser.status, error: updatedUser.text?.slice(0, 300) };
+        }
       }
     }
 
