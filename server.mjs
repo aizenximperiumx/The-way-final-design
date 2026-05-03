@@ -425,24 +425,6 @@ const inlineMeProfile = async (apiReq, apiRes) => {
     apiRes.status(401).json({ error: 'Invalid token' });
     return;
   }
-  let p = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, { method: 'GET' });
-  if (p.ok && Array.isArray(p.json) && p.json[0] && typeof p.json[0] === 'object') {
-    const row = p.json[0];
-    apiRes.status(200).json({
-      user: {
-        id: typeof row.id === 'string' ? row.id : String(row.id ?? ''),
-        username: typeof row.username === 'string' ? row.username : '',
-        role: typeof row.role === 'string' ? row.role : '',
-        name: typeof row.name === 'string' ? row.name : '',
-      },
-    });
-    return;
-  }
-  if (!p.ok && (p.status === 401 || p.status === 403)) {
-    apiRes.status(500).json({ error: 'Failed to read profiles (admin key not accepted)', details: p.text?.slice(0, 250) });
-    return;
-  }
-
   const authUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(caller.id)}`, {
     method: 'GET',
     headers: authHeaders,
@@ -455,19 +437,53 @@ const inlineMeProfile = async (apiReq, apiRes) => {
   const metaUsername = (meta && typeof meta.username === 'string') ? meta.username : '';
   const metaName = (meta && typeof meta.name === 'string') ? meta.name : '';
   const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
-  const isAutoCeo = email && String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').trim() && email.toLowerCase() === String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').trim().toLowerCase();
+  const autoCeoEmail = String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').trim().toLowerCase();
+  const autoCeoUsername = String(process.env.AUTO_BOOTSTRAP_CEO_USERNAME || '').trim().toLowerCase();
+  const isAutoCeo =
+    Boolean(email && autoCeoEmail && email.toLowerCase() === autoCeoEmail) ||
+    Boolean(metaUsername && autoCeoUsername && metaUsername.toLowerCase() === autoCeoUsername);
   const roleGuess = (allowedRoles.has(metaRole) && metaRole) ? metaRole : (isAutoCeo ? 'ceo' : 'student');
   const usernameGuess = metaUsername || ((email && email.includes('@')) ? email.split('@')[0].slice(0, 20) : `u${caller.id.slice(0, 8)}`);
   const nameGuess = metaName || (isAutoCeo ? 'CEO' : '');
-  const created = await ensureSingleProfileRow(base, pgHeaderCandidates, caller.id, { username: usernameGuess, role: roleGuess, name: nameGuess });
-  if (!created.ok) {
-    apiRes.status(500).json({ error: 'Failed to create profile', details: created.text?.slice(0, 250) });
+
+  let p = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, { method: 'GET' });
+  if (!p.ok && (p.status === 401 || p.status === 403)) {
+    apiRes.status(500).json({ error: 'Failed to read profiles (admin key not accepted)', details: p.text?.slice(0, 250) });
     return;
   }
 
-  p = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, { method: 'GET' });
+  const rowExisting = (p.ok && Array.isArray(p.json) && p.json[0] && typeof p.json[0] === 'object') ? p.json[0] : null;
+  const existingRole = rowExisting && typeof rowExisting.role === 'string' ? rowExisting.role : '';
+  const existingUsername = rowExisting && typeof rowExisting.username === 'string' ? rowExisting.username : '';
+  const existingName = rowExisting && typeof rowExisting.name === 'string' ? rowExisting.name : '';
+
+  const shouldUpgradeRole =
+    Boolean(roleGuess) &&
+    Boolean(existingRole) &&
+    existingRole !== roleGuess &&
+    (existingRole === 'student' || existingRole === '');
+  const shouldFillMissing = !existingUsername || !existingRole;
+
+  if (!rowExisting || shouldUpgradeRole || shouldFillMissing) {
+    const upserted = await ensureSingleProfileRow(base, pgHeaderCandidates, caller.id, {
+      username: existingUsername || usernameGuess,
+      role: (shouldUpgradeRole || !existingRole) ? roleGuess : existingRole,
+      name: existingName || nameGuess,
+    });
+    if (!upserted.ok) {
+      apiRes.status(500).json({ error: 'Failed to create profile', details: upserted.text?.slice(0, 250) });
+      return;
+    }
+    void fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(caller.id)}`, {
+      method: 'PUT',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_metadata: { role: roleGuess, username: existingUsername || usernameGuess, name: existingName || nameGuess } }),
+    });
+    p = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(caller.id)}&select=id,username,role,name&limit=1`, { method: 'GET' });
+  }
+
   if (!p.ok || !Array.isArray(p.json) || !p.json[0] || typeof p.json[0] !== 'object') {
-    apiRes.status(404).json({ error: 'Profile not found' });
+    apiRes.status(404).json({ error: 'Profile not found', details: p.text?.slice(0, 250) });
     return;
   }
   const row = p.json[0];
