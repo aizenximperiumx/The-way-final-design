@@ -104,13 +104,14 @@ export default async function handler(req, res) {
             return;
         }
         const callerId = who.json.id;
-        const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role&limit=1`, {
+        const callerAuth = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(callerId)}`, {
             method: 'GET',
-            headers: pgHeaders,
+            headers: authHeaders,
         });
-        const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
-            ? callerProfile.json[0].role
-            : '';
+        const callerMeta = (callerAuth.ok && callerAuth.json && typeof callerAuth.json === 'object' && callerAuth.json.user_metadata && typeof callerAuth.json.user_metadata === 'object')
+            ? callerAuth.json.user_metadata
+            : null;
+        const callerRole = callerMeta && typeof callerMeta.role === 'string' ? callerMeta.role : '';
         if (callerRole !== 'ceo') {
             res.status(403).json({ error: 'Forbidden' });
             return;

@@ -124,6 +124,17 @@ export default async function handler(req, res) {
         const bootstrapSecret = process.env.BOOTSTRAP_SECRET || '';
         const bootstrapProvided = getHeader(req, 'x-bootstrap-secret').trim();
         const isBootstrap = Boolean(bootstrapSecret && bootstrapProvided && bootstrapProvided === bootstrapSecret);
+        const readRoleFromAuth = async (userId) => {
+            const u = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+                method: 'GET',
+                headers: authHeaders,
+            });
+            const meta = (u.ok && u.json && typeof u.json === 'object' && u.json.user_metadata && typeof u.json.user_metadata === 'object')
+                ? u.json.user_metadata
+                : null;
+            const role = meta && typeof meta.role === 'string' ? meta.role : '';
+            return role;
+        };
         if (!isBootstrap) {
             const token = getBearer(req);
             if (!token) {
@@ -139,13 +150,7 @@ export default async function handler(req, res) {
                 return;
             }
             const callerId = who.json.id;
-            const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role&limit=1`, {
-                method: 'GET',
-                headers: pgHeaders,
-            });
-            const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
-                ? callerProfile.json[0].role
-                : '';
+            const callerRole = await readRoleFromAuth(callerId);
             if (callerRole !== 'ceo') {
                 res.status(403).json({ error: 'Forbidden' });
                 return;
@@ -193,7 +198,7 @@ export default async function handler(req, res) {
         const created = await fetchJson(`${base}/auth/v1/admin/users`, {
             method: 'POST',
             headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, email_confirm: true }),
+            body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role, username, name } }),
         });
         if (!created.ok || !created.json || typeof created.json.id !== 'string') {
             res.status(500).json({ error: 'Failed to create auth user', details: created.text });
@@ -205,6 +210,11 @@ export default async function handler(req, res) {
             res.status(500).json({ error: 'Failed to create profile', details: inserted.text });
             return;
         }
+        void fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_metadata: { role, username, name } }),
+        });
         if (resendKey) {
             const html = `
         <div style="font-family:Arial,sans-serif">

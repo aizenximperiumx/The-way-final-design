@@ -256,7 +256,7 @@ const bootstrapDefaultCeo = async () => {
       const created = await fetchJson(`${base}/auth/v1/admin/users`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, email_confirm: true }),
+        body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'ceo', username, name } }),
       });
       if (!created.ok || !created.json || typeof created.json.id !== 'string') {
         console.error('CEO bootstrap failed (create user)', created.status, created.text);
@@ -268,7 +268,7 @@ const bootstrapDefaultCeo = async () => {
       const updatedUser = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, email_confirm: true }),
+        body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'ceo', username, name } }),
       });
       if (!updatedUser.ok) {
         console.error('CEO bootstrap failed (update user)', updatedUser.status, updatedUser.text);
@@ -448,8 +448,18 @@ const inlineMeProfile = async (apiReq, apiRes) => {
     headers: authHeaders,
   });
   const email = (authUser.ok && authUser.json && typeof authUser.json === 'object' && typeof authUser.json.email === 'string') ? authUser.json.email : '';
-  const usernameGuess = (email && email.includes('@')) ? email.split('@')[0].slice(0, 20) : `u${caller.id.slice(0, 8)}`;
-  const created = await ensureSingleProfileRow(base, pgHeaderCandidates, caller.id, { username: usernameGuess, role: 'student', name: '' });
+  const meta = (authUser.ok && authUser.json && typeof authUser.json === 'object' && authUser.json.user_metadata && typeof authUser.json.user_metadata === 'object')
+    ? authUser.json.user_metadata
+    : null;
+  const metaRole = (meta && typeof meta.role === 'string') ? meta.role : '';
+  const metaUsername = (meta && typeof meta.username === 'string') ? meta.username : '';
+  const metaName = (meta && typeof meta.name === 'string') ? meta.name : '';
+  const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
+  const isAutoCeo = email && String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').trim() && email.toLowerCase() === String(process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').trim().toLowerCase();
+  const roleGuess = (allowedRoles.has(metaRole) && metaRole) ? metaRole : (isAutoCeo ? 'ceo' : 'student');
+  const usernameGuess = metaUsername || ((email && email.includes('@')) ? email.split('@')[0].slice(0, 20) : `u${caller.id.slice(0, 8)}`);
+  const nameGuess = metaName || (isAutoCeo ? 'CEO' : '');
+  const created = await ensureSingleProfileRow(base, pgHeaderCandidates, caller.id, { username: usernameGuess, role: roleGuess, name: nameGuess });
   if (!created.ok) {
     apiRes.status(500).json({ error: 'Failed to create profile', details: created.text?.slice(0, 250) });
     return;
@@ -529,7 +539,7 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
     apiRes.status(500).json({ error: env.error });
     return;
   }
-  const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates } = env;
+  const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
   const caller = await getCallerId(base, adminKey, token);
   if (!caller.ok) {
     apiRes.status(401).json({ error: 'Invalid token' });
@@ -564,6 +574,59 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
   });
   if (!updated.ok) {
     apiRes.status(500).json({ error: 'Failed to update profile', details: updated.text?.slice(0, 300) });
+    return;
+  }
+  void fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_metadata: { username: username || undefined, role: role || undefined, name: name || undefined } }),
+  });
+  apiRes.status(200).json({ ok: true });
+};
+
+const inlineBootstrapUpsertProfile = async (apiReq, apiRes) => {
+  if (apiReq.method !== 'POST') {
+    apiRes.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+  const bootstrapSecret = String(process.env.BOOTSTRAP_SECRET || '').trim();
+  const provided = String(apiReq.headers?.['x-bootstrap-secret'] || '').trim();
+  if (!bootstrapSecret || !provided || provided !== bootstrapSecret) {
+    apiRes.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  const env = getAdminEnv();
+  if (!env.ok) {
+    apiRes.status(500).json({ error: env.error });
+    return;
+  }
+  const { base, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
+  const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
+  const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  const role = typeof body.role === 'string' ? body.role.trim() : '';
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!userId || !role || !username) {
+    apiRes.status(400).json({ error: 'Missing fields' });
+    return;
+  }
+  const allowed = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
+  if (!allowed.has(role)) {
+    apiRes.status(400).json({ error: 'Invalid role' });
+    return;
+  }
+  const prof = await ensureSingleProfileRow(base, pgHeaderCandidates, userId, { role, username, ...(name ? { name } : {}) });
+  if (!prof.ok) {
+    apiRes.status(500).json({ error: 'Failed to upsert profile', details: prof.text?.slice(0, 300) });
+    return;
+  }
+  const meta = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_metadata: { role, username, name } }),
+  });
+  if (!meta.ok) {
+    apiRes.status(200).json({ ok: true, warning: 'Profile updated but failed to update auth metadata', details: meta.text?.slice(0, 300) });
     return;
   }
   apiRes.status(200).json({ ok: true });
@@ -626,6 +689,10 @@ const handleApi = async (req, res, route) => {
     }
     if (route === 'admin-update-profile') {
       await inlineAdminUpdateProfile(apiReq, apiRes);
+      return;
+    }
+    if (route === 'bootstrap-upsert-profile') {
+      await inlineBootstrapUpsertProfile(apiReq, apiRes);
       return;
     }
     if (!(await exists(file))) {
