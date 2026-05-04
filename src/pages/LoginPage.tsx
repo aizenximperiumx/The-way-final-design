@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowRight, Lock, User } from 'lucide-react';
-import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
+import logoUrl from '../../thewaynewlogo-removebg-preview.png';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import type { UserRole } from '../store/appStore';
@@ -48,7 +48,7 @@ const LoginPage: React.FC = () => {
         <div className="bg-white rounded-[40px] p-10 shadow-2xl shadow-black/20 overflow-hidden relative">
           {/* Header */}
           <div className="text-center mb-10">
-            <img src={logoUrl} alt="The Way" className="mx-auto h-24 w-auto object-contain mb-6" />
+            <img src={logoUrl} alt="The Way" className="mx-auto h-16 w-auto object-contain mb-6" />
             <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-2">Student Management Platform</p>
           </div>
 
@@ -138,6 +138,5 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-
 
 

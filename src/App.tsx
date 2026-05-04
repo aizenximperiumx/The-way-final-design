@@ -1,4 +1,4 @@
-﻿import React, { Component } from 'react';
+import React, { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -22,7 +22,7 @@ import { AppProvider } from './context/AppContext';
 import type { UserRole } from './store/appStore';
 
 import DashboardLayout from './components/DashboardLayout';
-import logoUrl from '../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
+import logoUrl from '../thewaynewlogo-removebg-preview.png';
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
