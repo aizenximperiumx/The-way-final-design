@@ -96,8 +96,12 @@ const SalesDashboard: React.FC = () => {
   
   const handleApprove = async (application: Application) => {
     try {
-      await salesApproveApplication(application.id);
-      toast.success('Account created. Credentials were emailed to the student.', { duration: 6000 });
+      const creds = await salesApproveApplication(application.id);
+      if (creds.emailSent === false) {
+        toast.success(`Account created. Email not sent. Username: ${creds.username}  Password: ${creds.password}`, { duration: 12_000 });
+      } else {
+        toast.success('Account created. Credentials were emailed to the student.', { duration: 6000 });
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to approve application');
     }
@@ -478,13 +482,15 @@ Video: ${intake.videoUrl}`;
                   className="p-8 hover:bg-gray-50/50 transition-colors group"
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-12 h-12 bg-amber-500 rounded-2xl flex items-center justify-center text-black font-black text-lg">
                           {application.name.charAt(0)}
                         </div>
-                        <div>
-                          <h3 className="text-xl font-black text-black group-hover:text-amber-600 transition-colors">{application.name}</h3>
+                        <div className="min-w-0">
+                          <h3 className="text-xl font-black text-black group-hover:text-amber-600 transition-colors truncate leading-tight">
+                            {application.name}
+                          </h3>
                           <p className="text-gray-400 text-sm font-medium">Applied on {new Date(application.createdAt).toLocaleDateString()}</p>
                         </div>
                       </div>
@@ -492,21 +498,21 @@ Video: ${intake.videoUrl}`;
                       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="flex items-center gap-3 text-sm font-bold text-gray-600 bg-white border border-gray-100 px-4 py-2 rounded-xl">
                           <Mail className="w-4 h-4 text-amber-500" />
-                          {application.email}
+                          <span className="min-w-0 truncate">{application.email}</span>
                         </div>
                         <div className="flex items-center gap-3 text-sm font-bold text-gray-600 bg-white border border-gray-100 px-4 py-2 rounded-xl">
                           <Globe className="w-4 h-4 text-amber-500" />
-                          {application.country}
+                          <span className="min-w-0 truncate">{application.country}</span>
                         </div>
                         <div className="flex items-center gap-3 text-sm font-bold text-gray-600 bg-white border border-gray-100 px-4 py-2 rounded-xl">
                           <GraduationCap className="w-4 h-4 text-amber-500" />
-                          {application.program}
+                          <span className="min-w-0 truncate">{application.program}</span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-100 px-3 py-2 rounded-xl">
+                      <div className="hidden md:flex flex-wrap items-center gap-2 bg-gray-50 border border-gray-100 px-3 py-2 rounded-xl">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Intake Verified</span>
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${application.intakeVideoUrl ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>Video</span>
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${application.intakePassportCopy ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>Passport</span>
@@ -514,7 +520,7 @@ Video: ${intake.videoUrl}`;
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${(application.intakeAttachments && application.intakeAttachments.length>0) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>PDFs</span>
                       </div>
                       {mode === 'ops' && opsChecklist(application).length > 0 && (
-                        <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-100">
+                        <div className="hidden md:flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-100">
                           <span className="text-[10px] font-black uppercase tracking-widest text-red-700">Missing</span>
                           <span className="text-[10px] font-black text-red-700">{opsChecklist(application).join(' • ')}</span>
                         </div>

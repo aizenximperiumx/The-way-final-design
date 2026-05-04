@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -14,6 +14,7 @@ import {
   BarChart3,
   GraduationCap,
   UserCircle,
+  Building2,
   X as CloseIcon
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -33,6 +34,7 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Universities', icon: GraduationCap, path: '/universities', roles: ['student', 'sales', 'ops', 'staff', 'agency_staff', 'ceo', 'agency'] },
   { label: 'Applications', icon: FileText, path: '/sales', roles: ['sales', 'ceo'] },
   { label: 'Agency Leads', icon: FileText, path: '/ops', roles: ['ops', 'ceo'] },
+  { label: 'Agencies', icon: Building2, path: '/agencies', roles: ['agency', 'ceo'] },
   { label: 'Students', icon: Users, path: '/staff', roles: ['staff', 'agency_staff', 'ceo'] },
   { label: 'Analytics', icon: BarChart3, path: '/admin', roles: ['ceo'] },
   { label: 'Appointments', icon: Calendar, path: '/appointments', roles: ['student', 'staff', 'agency_staff', 'ceo'] },

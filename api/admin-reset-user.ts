@@ -53,6 +53,9 @@ const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
   if (serviceKey.startsWith('sb_publishable_')) {
     return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key.';
   }
+  if (serviceKey.startsWith('sb_secret_')) {
+    return 'SUPABASE_SERVICE_ROLE_KEY must be the JWT service_role key (starts with eyJ...). The sb_secret_* key cannot be used for Supabase Auth admin user management.';
+  }
   if (/^https?:\/\//i.test(serviceKey)) {
     return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
   }

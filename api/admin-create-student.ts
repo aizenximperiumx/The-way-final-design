@@ -55,6 +55,9 @@ const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
   if (serviceKey.startsWith('sb_publishable_')) {
     return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key.';
   }
+  if (serviceKey.startsWith('sb_secret_')) {
+    return 'SUPABASE_SERVICE_ROLE_KEY must be the JWT service_role key (starts with eyJ...). The sb_secret_* key cannot be used for Supabase Auth admin user creation.';
+  }
   if (/^https?:\/\//i.test(serviceKey)) {
     return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
   }
@@ -118,6 +121,31 @@ const ensureSingleProfileRow = async (
     headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ id: userId, ...patch }),
   });
+};
+
+const findAuthUserByEmail = async (base: string, authHeaders: Record<string, string>, email: string) => {
+  const perPage = 200;
+  const target = email.toLowerCase();
+  for (let page = 1; page <= 10; page += 1) {
+    const r = await fetchJson(`${base}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
+      method: 'GET',
+      headers: authHeaders,
+    });
+    if (!r.ok) return null;
+    const users = Array.isArray(r.json)
+      ? r.json
+      : (r.json && typeof r.json === 'object' && Array.isArray((r.json as Record<string, unknown>).users) ? (r.json as { users: unknown[] }).users : []);
+    if (!Array.isArray(users) || users.length === 0) return null;
+    for (const u of users) {
+      const obj = (u && typeof u === 'object') ? (u as Record<string, unknown>) : null;
+      if (!obj) continue;
+      const uEmail = typeof obj.email === 'string' ? obj.email : '';
+      const id = typeof obj.id === 'string' ? obj.id : '';
+      if (id && uEmail && uEmail.toLowerCase() === target) return { id, email: uEmail };
+    }
+    if (users.length < perPage) return null;
+  }
+  return null;
 };
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -186,20 +214,55 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       headers: { ...authHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role: 'student', username }, user_metadata: { username, name } }),
     });
-    if (!created.ok || !created.json || typeof created.json.id !== 'string') {
-      const t = created.text || '';
-      if (t.includes('users_email_partial_key') || t.includes('"code":"23505"') || t.toLowerCase().includes('duplicate')) {
-        res.status(409).json({ error: 'Email already exists' });
+    const createText = created.text || '';
+    const duplicate =
+      createText.includes('users_email_partial_key') ||
+      createText.includes('"code":"23505"') ||
+      createText.toLowerCase().includes('duplicate');
+
+    const id = (created.ok && created.json && typeof created.json.id === 'string')
+      ? (created.json.id as string)
+      : '';
+
+    if (!id) {
+      if (duplicate) {
+        const existing = await findAuthUserByEmail(base, authHeaders, email);
+        if (!existing) {
+          res.status(409).json({ error: 'Email already exists' });
+          return;
+        }
+        const updatedAuth = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(existing.id)}`, {
+          method: 'PUT',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password,
+            app_metadata: { role: 'student', username },
+            user_metadata: { username, name },
+          }),
+        });
+        if (!updatedAuth.ok) {
+          res.status(500).json({ error: 'Student account exists but failed to update credentials', details: updatedAuth.text });
+          return;
+        }
+        const inserted = await ensureSingleProfileRow(base, pgCandidates, existing.id, { username, role: 'student', name });
+        if (!inserted.ok) {
+          res.status(500).json({ error: 'Student account exists but failed to create profile', details: inserted.text });
+          return;
+        }
+        res.status(200).json({ id: existing.id, email, username, name, emailSent: false, warning: 'Account already existed; password reset', password });
         return;
       }
-      res.status(500).json({ error: 'Failed to create auth user', details: t });
+      if ((created.status === 401 || created.status === 403) && adminKey.startsWith('sb_secret_')) {
+        res.status(500).json({ error: 'Supabase Auth admin is not configured', details: 'SUPABASE_SERVICE_ROLE_KEY must be the JWT service_role key (starts with eyJ...).' });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to create auth user', details: createText });
       return;
     }
-
-    const id = created.json.id as string;
     const inserted = await ensureSingleProfileRow(base, pgCandidates, id, { username, role: 'student', name });
     if (!inserted.ok) {
       res.status(500).json({ error: 'Failed to create profile', details: inserted.text });
+      return;
       return;
     }
     void fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {

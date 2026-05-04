@@ -173,7 +173,7 @@ export interface AppStoreState {
   saveBackendState: () => Promise<void>;
   addApplication: (application: Omit<Application, 'id'>) => Promise<void>;
 
-  salesApproveApplication: (applicationId: string) => Promise<{ username: string; password: string }>;
+  salesApproveApplication: (applicationId: string) => Promise<{ username: string; password: string; emailSent?: boolean; warning?: string }>;
   salesRejectApplication: (applicationId: string) => void;
   salesAddIntakeDetails: (applicationId: string, details: string, attachments: string[]) => void;
   salesSetIntakeMedia: (applicationId: string, media: { videoUrl?: string; passportCopy?: string; highSchoolCertificate?: string; pdfs?: string[] }) => void;
@@ -496,9 +496,15 @@ const useAppStore = create<AppStoreState>()(
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ email: studentEmail, username: creds.username, password: creds.password, name: app.name, phone: app.phone }),
         });
-        const json = (await resp.json()) as { id?: unknown; error?: unknown };
+        const text = await resp.text().catch(() => '');
+        const json = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { id?: unknown; error?: unknown; details?: unknown; emailSent?: unknown; warning?: unknown } | null;
         if (!resp.ok || !json || typeof json.id !== 'string') {
-          throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to create student account');
+          const err = json && typeof json.error === 'string' ? json.error : 'Failed to create student account';
+          const details =
+            json && typeof json.details === 'string'
+              ? json.details
+              : (json && json.details != null ? JSON.stringify(json.details) : '');
+          throw new Error(details ? `${err}: ${details.slice(0, 240)}` : err);
         }
         const studentId = json.id;
 
@@ -545,7 +551,11 @@ const useAppStore = create<AppStoreState>()(
         }
         await get().refreshUsersFromBackend();
         queueBackendSave(get);
-        return creds;
+        return {
+          ...creds,
+          ...(typeof json.emailSent === 'boolean' ? { emailSent: json.emailSent } : {}),
+          ...(typeof json.warning === 'string' ? { warning: json.warning } : {}),
+        };
       },
 
       salesRejectApplication: (applicationId: string) => {
