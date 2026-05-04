@@ -140,8 +140,16 @@ const SalesDashboard: React.FC = () => {
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }),
     });
-    const uploadData = (await resp.json()) as { url?: unknown };
-    if (!resp.ok) throw new Error('Upload failed');
+    const text = await resp.text().catch(() => '');
+    const uploadData = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { url?: unknown; error?: unknown; details?: unknown } | null;
+    if (!resp.ok) {
+      const err = uploadData && typeof uploadData.error === 'string' ? uploadData.error : 'Upload failed';
+      const details =
+        uploadData && typeof uploadData.details === 'string'
+          ? uploadData.details
+          : (uploadData && uploadData.details != null ? JSON.stringify(uploadData.details) : '');
+      throw new Error(details ? `${err}: ${details.slice(0, 200)}` : err);
+    }
     if (!uploadData || typeof uploadData.url !== 'string') throw new Error('Upload did not return a URL');
     return uploadData.url;
   };

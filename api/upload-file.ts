@@ -45,6 +45,9 @@ const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
   if (serviceKey.startsWith('sb_publishable_')) {
     return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key.';
   }
+  if (serviceKey.startsWith('sb_secret_')) {
+    return 'SUPABASE_SERVICE_ROLE_KEY must be the JWT service_role key (starts with eyJ...). The sb_secret_* key cannot be used to upload to Supabase Storage via this server endpoint.';
+  }
   if (/^https?:\/\//i.test(serviceKey)) {
     return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
   }
@@ -75,10 +78,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (!dataBase64) {
       res.status(400).json({ error: 'Missing dataBase64' });
-      return;
-    }
-    if (dataBase64.length > 10_000_000) {
-      res.status(413).json({ error: 'File too large' });
       return;
     }
 
@@ -113,13 +112,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
     const callerId = who.json.id as string;
-    const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
-      method: 'GET',
-      headers: adminHeaders,
-    });
-    const role = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
-      ? (callerProfile.json[0].role as string)
-      : '';
+    const appMeta = who.json.app_metadata && typeof who.json.app_metadata === 'object' ? (who.json.app_metadata as Record<string, unknown>) : null;
+    let role = appMeta && typeof appMeta.role === 'string' ? String(appMeta.role).trim().toLowerCase() : '';
+    if (!role) {
+      const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+        method: 'GET',
+        headers: adminHeaders,
+      });
+      role = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
+        ? String(callerProfile.json[0].role).trim().toLowerCase()
+        : '';
+    }
     const allowed = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency']);
     if (!allowed.has(role)) {
       res.status(403).json({ error: 'Forbidden' });
@@ -127,13 +130,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const bytes = decodeBase64(dataBase64);
+    const maxBytes = 15 * 1024 * 1024;
+    if (bytes.length > maxBytes) {
+      res.status(413).json({ error: 'File too large', details: `Max ${maxBytes} bytes. Received ${bytes.length} bytes.` });
+      return;
+    }
     if (!bytes.length) {
       res.status(400).json({ error: 'Empty file' });
       return;
     }
 
     const random = Math.random().toString(16).slice(2);
-    const objectPath = `${Date.now()}-${random}-${filename}`;
+    const objectPath = `${callerId}/${Date.now()}-${random}-${filename}`;
     const putUrl = `${base}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
 
     const putResp = await fetch(putUrl, {

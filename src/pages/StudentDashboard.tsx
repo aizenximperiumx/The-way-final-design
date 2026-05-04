@@ -17,7 +17,7 @@ import {
 
 const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { applications, documents } = useApp();
+  const { applications, documents, users } = useApp();
   const navigate = useNavigate();
 
   const myApplication = applications.find(app => app.studentId === user?.id) ?? null;
@@ -32,7 +32,30 @@ const StudentDashboard: React.FC = () => {
     { id: 'visa-documents', label: 'Visa required documents', icon: MapPin },
   ] as const;
 
-  const completedCount = admissionSteps.filter(s => documents.some(d => d.studentId === user?.id && d.type === s.id)).length;
+  const myDocs = documents.filter(d => d.studentId === user?.id);
+  const stepStatus = (stepId: string): 'verified' | 'pending' | 'rejected' | 'missing' => {
+    const stepDocs = myDocs.filter(d => d.type === stepId);
+    if (stepDocs.some(d => d.status === 'verified')) return 'verified';
+    if (stepDocs.some(d => d.status === 'pending')) return 'pending';
+    if (stepDocs.some(d => d.status === 'rejected')) return 'rejected';
+    return 'missing';
+  };
+  const completedCount = admissionSteps.filter(s => stepStatus(s.id) === 'verified').length;
+  const nextStep = admissionSteps.find(s => stepStatus(s.id) !== 'verified') ?? null;
+  const nextStatus = nextStep ? stepStatus(nextStep.id) : 'verified';
+  const nextMessage = (() => {
+    if (!myApplication) return 'Your account is ready. Your timeline and documents will appear once your application is approved.';
+    if (!nextStep) return 'All required steps are completed. Your case is ready for final processing.';
+    if (nextStatus === 'pending') return 'This document was uploaded and is waiting for verification.';
+    if (nextStatus === 'rejected') return 'This document was rejected. Please contact your assigned admin to re-upload.';
+    return 'This document has not been uploaded yet. Contact your assigned admin if you already have it.';
+  })();
+  const stepLabelById = Object.fromEntries(admissionSteps.map(s => [s.id, s.label])) as Record<string, string>;
+  const uploadedByName = (docUploadedBy?: string) => {
+    if (!docUploadedBy) return '';
+    const u = users.find(x => x.id === docUploadedBy);
+    return u?.name ?? '';
+  };
 
 
   return (
@@ -78,6 +101,43 @@ const StudentDashboard: React.FC = () => {
         </div>
       </section>
 
+      <section className="bg-white rounded-[36px] p-8 border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)] hover:shadow-[0_22px_70px_-45px_rgba(0,0,0,0.26)] transition-shadow">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Next Required Step</p>
+            <h2 className="text-2xl font-black text-black mt-2 truncate">
+              {nextStep ? nextStep.label : 'Complete'}
+            </h2>
+            <p className="text-sm font-medium text-gray-500 mt-2">
+              {nextMessage}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span
+              className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
+                nextStep
+                  ? (nextStatus === 'verified'
+                    ? 'bg-green-100 text-green-700'
+                    : nextStatus === 'pending'
+                      ? 'bg-amber-100 text-amber-700'
+                      : nextStatus === 'rejected'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-gray-100 text-gray-600')
+                  : 'bg-green-100 text-green-700'
+              }`}
+            >
+              {nextStep ? nextStatus : 'verified'}
+            </span>
+            <button
+              onClick={() => navigate('/messages')}
+              className="bg-black text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-amber-500 hover:text-black transition-all"
+            >
+              Contact Admin
+            </button>
+          </div>
+        </div>
+      </section>
+
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Main Content: Timeline & Documents */}
         <div className="lg:col-span-2 space-y-8">
@@ -86,7 +146,7 @@ const StudentDashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-10">
               <h2 className="text-2xl font-black text-black">Admission Journey</h2>
               <div className="flex items-center gap-2 text-amber-600 font-bold text-sm">
-                Next: {admissionSteps[completedCount]?.label || 'Done'}
+                Next: {nextStep?.label || 'Done'}
                 <ArrowRight className="w-4 h-4" />
               </div>
             </div>
@@ -101,17 +161,22 @@ const StudentDashboard: React.FC = () => {
 
               <div className="relative flex justify-between items-center">
                 {admissionSteps.map((stage, idx) => {
-                  const isCompleted = documents.some(d => d.studentId === user?.id && d.type === stage.id);
-                  const isCurrent = !isCompleted && idx === completedCount;
+                  const status = stepStatus(stage.id);
+                  const isCompleted = status === 'verified';
+                  const isCurrent = status !== 'verified' && idx === completedCount;
                   const Icon = stage.icon;
 
                   return (
                     <div key={stage.id} className="flex flex-col items-center group">
                       <div 
                         className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 relative z-10 ${
-                          isCompleted 
-                            ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30 scale-110' 
-                            : 'bg-white border-2 border-gray-100 text-gray-300'
+                          isCompleted
+                            ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30 scale-110'
+                            : status === 'pending'
+                              ? 'bg-amber-50 border-2 border-amber-100 text-amber-700'
+                              : status === 'rejected'
+                                ? 'bg-red-50 border-2 border-red-100 text-red-700'
+                                : 'bg-white border-2 border-gray-100 text-gray-300'
                         } ${isCurrent ? 'ring-4 ring-amber-100' : ''}`}
                       >
                         <Icon className="w-6 h-6" />
@@ -143,13 +208,14 @@ const StudentDashboard: React.FC = () => {
                 <thead>
                   <tr className="text-left border-b border-gray-100">
                     <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Document Name</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Uploaded By</th>
                     <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
                     <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
                     <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {documents.filter(d => d.studentId === user?.id).map((doc) => (
+                  {myDocs.map((doc) => (
                     <tr key={doc.id} className="group hover:bg-gray-50/60 transition-colors">
                       <td className="py-4">
                         <div className="flex items-center gap-3">
@@ -158,8 +224,18 @@ const StudentDashboard: React.FC = () => {
                           </div>
                           <div>
                             <p className="font-bold text-black text-sm">{doc.title}</p>
-                            <p className="text-[10px] text-gray-400 font-medium">{doc.type}</p>
+                            <p className="text-[10px] text-gray-400 font-medium">{stepLabelById[doc.type] ?? doc.type}</p>
                           </div>
+                        </div>
+                      </td>
+                      <td className="py-4">
+                        <div>
+                          <p className="text-sm font-bold text-black">{uploadedByName(doc.uploadedBy) || '—'}</p>
+                          {doc.uploadedBy && users.find(u => u.id === doc.uploadedBy)?.role && (
+                            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">
+                              {users.find(u => u.id === doc.uploadedBy)?.role}
+                            </p>
+                          )}
                         </div>
                       </td>
                       <td className="py-4">
@@ -184,9 +260,9 @@ const StudentDashboard: React.FC = () => {
                       </td>
                     </tr>
                   ))}
-                  {documents.filter(d => d.studentId === user?.id).length === 0 && (
+                  {myDocs.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-gray-400 font-medium">
+                      <td colSpan={5} className="py-8 text-center text-gray-400 font-medium">
                         No documents uploaded yet
                       </td>
                     </tr>

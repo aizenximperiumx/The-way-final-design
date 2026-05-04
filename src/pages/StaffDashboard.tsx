@@ -22,6 +22,7 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
+import { getSupabase } from '../lib/supabase';
 
 const StaffDashboard: FC = () => {
   const { applications, documents, users, staffUploadDocument, staffAddInternalNote, staffUpdateStudentProfile, staffVerifyDocument, assignUniversity } = useAppStore();
@@ -31,7 +32,7 @@ const StaffDashboard: FC = () => {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [showDocumentModal, setShowDocumentModal] = useState(false);
-  const [newDocument, setNewDocument] = useState<{ title: string; type: string; file?: string }>({ title: '', type: '' });
+  const [newDocument, setNewDocument] = useState<{ title: string; type: string; file?: string; fileObject?: File }>({ title: '', type: '' });
   const [noteText, setNoteText] = useState('');
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
@@ -62,6 +63,39 @@ const StaffDashboard: FC = () => {
     [approvedStudents, selectedStudentId]
   );
 
+  const uploadWebhook = (import.meta.env as { VITE_FILE_UPLOAD_WEBHOOK?: string }).VITE_FILE_UPLOAD_WEBHOOK || '/api/upload-file';
+  const toBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.readAsDataURL(file);
+    });
+  const uploadFile = async (file: File) => {
+    if (!uploadWebhook) return URL.createObjectURL(file);
+    const dataBase64 = await toBase64(file);
+    const supabase = getSupabase();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const resp = await fetch(uploadWebhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }),
+    });
+    const text = await resp.text().catch(() => '');
+    const uploadData = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { url?: unknown; error?: unknown; details?: unknown } | null;
+    if (!resp.ok) {
+      const err = uploadData && typeof uploadData.error === 'string' ? uploadData.error : 'Upload failed';
+      const details =
+        uploadData && typeof uploadData.details === 'string'
+          ? uploadData.details
+          : (uploadData && uploadData.details != null ? JSON.stringify(uploadData.details) : '');
+      throw new Error(details ? `${err}: ${details.slice(0, 200)}` : err);
+    }
+    if (!uploadData || typeof uploadData.url !== 'string') throw new Error('Upload did not return a URL');
+    return uploadData.url;
+  };
+
   const handleSaveProfile = () => {
     if (!selectedStudent?.studentId) {
       toast.error('Student account not linked to this application yet.');
@@ -90,19 +124,25 @@ const StaffDashboard: FC = () => {
     }
   };
 
-  const handleAddDocument = () => {
+  const handleAddDocument = async () => {
     if (!selectedStudent || !selectedStudent.studentId) {
       toast.error('Student account not linked to this application yet.');
       return;
     }
     if (!newDocument.title || !newDocument.type) return;
+    if (!newDocument.fileObject) {
+      toast.error('Please attach a file');
+      return;
+    }
 
     try {
+      const fileUrl = await uploadFile(newDocument.fileObject);
       staffUploadDocument({
         ...newDocument,
         studentId: selectedStudent.studentId,
         title: newDocument.title,
         type: newDocument.type,
+        file: fileUrl,
       });
       toast.success('Document uploaded successfully');
       setShowDocumentModal(false);
@@ -899,7 +939,7 @@ const StaffDashboard: FC = () => {
                       const file = e.target.files?.[0];
                       if (!file) return;
                       const url = URL.createObjectURL(file);
-                      setNewDocument({ ...newDocument, file: url, title: newDocument.title || file.name });
+                      setNewDocument({ ...newDocument, file: url, fileObject: file, title: newDocument.title || file.name });
                     }}
                     className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-medium transition-all outline-none"
                   />
