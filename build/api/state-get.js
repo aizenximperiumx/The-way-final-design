@@ -86,7 +86,12 @@ const safeParseJson = (line) => {
 const getDataDir = () => {
     const raw = process.env.DATA_DIR;
     const value = typeof raw === 'string' ? raw.trim() : '';
-    return value || path.join(os.tmpdir(), 'theway');
+    if (value)
+        return value;
+    const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || process.env.RENDER_EXTERNAL_HOSTNAME);
+    if (isRender)
+        return '/var/data/theway';
+    return path.join(os.tmpdir(), 'theway');
 };
 const readJsonlApplications = async (maxLines) => {
     const filePath = path.join(getDataDir(), 'applications.jsonl');

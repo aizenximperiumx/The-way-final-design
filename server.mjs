@@ -77,7 +77,10 @@ const safeStringify = (value) => {
 const getDataDir = () => {
   const raw = process.env.DATA_DIR;
   const value = typeof raw === 'string' ? raw.trim() : '';
-  return value || path.join(os.tmpdir(), 'theway');
+  if (value) return value;
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || process.env.RENDER_EXTERNAL_HOSTNAME);
+  if (isRender) return '/var/data/theway';
+  return path.join(os.tmpdir(), 'theway');
 };
 
 const appendJsonLine = async (fileName, row) => {
@@ -387,7 +390,7 @@ const inlineApply = async (apiReq, apiRes) => {
     salesOwnerId: null,
     assignedStaffId: null,
     source,
-    agencyId: null,
+    agencyId: typeof body.agencyId === 'string' ? body.agencyId.slice(0, 80) : null,
     contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail.slice(0, 254) : null,
     studentEmail: typeof body.studentEmail === 'string' ? body.studentEmail.slice(0, 254) : null,
     intakeDetails: typeof body.intakeDetails === 'string' ? body.intakeDetails.slice(0, 20_000) : null,
@@ -400,17 +403,9 @@ const inlineApply = async (apiReq, apiRes) => {
     intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,
   };
 
-  try {
-    await appendJsonLine('applications.jsonl', { ...app, receivedAt: now });
-  } catch (e) {
-    const g = globalThis;
-    if (!g.__fallbackApps) g.__fallbackApps = [];
-    g.__fallbackApps.push({ ...app, receivedAt: now, error: e instanceof Error ? e.message : String(e) });
-  }
-
-  const tryUpsertIntoAppState = async () => {
+  const upsertIntoAppState = async () => {
     const env = getAdminEnv();
-    if (!env.ok) return;
+    if (!env.ok) return false;
     const { base, postgrestHeaderCandidates: pgHeaderCandidates } = env;
     const stateResp = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, { method: 'GET' });
     const rawState = (stateResp.ok && Array.isArray(stateResp.json) && stateResp.json[0] && typeof stateResp.json[0] === 'object')
@@ -419,17 +414,31 @@ const inlineApply = async (apiReq, apiRes) => {
     const s = (rawState && typeof rawState === 'object') ? rawState : {};
     const currentApps = Array.isArray(s.applications) ? s.applications : [];
     const alreadyExists = currentApps.some((row) => row && typeof row === 'object' && String(row.id ?? '') === appId);
-    if (alreadyExists) return;
+    if (alreadyExists) return true;
     const nextState = { ...s, applications: [app, ...currentApps].slice(0, 50_000) };
-    await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/app_state`, {
+    const writeResp = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/app_state`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
       body: safeStringify({ org_id: 'default', state: nextState, updated_at: now, updated_by: null }),
     });
+    return Boolean(writeResp.ok);
   };
-  void tryUpsertIntoAppState();
 
-  apiRes.status(200).json({ id: appId });
+  let fileOk = false;
+  try {
+    await appendJsonLine('applications.jsonl', { ...app, receivedAt: now });
+    fileOk = true;
+  } catch (e) {
+    fileOk = false;
+  }
+
+  const stateOk = await upsertIntoAppState().catch(() => false);
+  if (!fileOk && !stateOk) {
+    apiRes.status(500).json({ error: 'Failed to save application' });
+    return;
+  }
+
+  apiRes.status(200).json({ id: appId, persisted: { file: fileOk, state: stateOk } });
 };
 
 const inlineLookupEmail = async (apiReq, apiRes) => {
