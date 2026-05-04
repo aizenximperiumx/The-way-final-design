@@ -88,6 +88,13 @@ const fetchPostgrest = async (candidates, url, init) => {
     }
     return last;
 };
+const getRoleFromProfiles = async (base, pgCandidates, userId) => {
+    const r = await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, { method: 'GET' });
+    const role = (r.ok && Array.isArray(r.json) && r.json[0] && typeof r.json[0] === 'object' && typeof r.json[0].role === 'string')
+        ? String(r.json[0].role).trim().toLowerCase()
+        : '';
+    return role;
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -120,7 +127,10 @@ export default async function handler(req, res) {
             return;
         }
         const appMeta = who.json.app_metadata && typeof who.json.app_metadata === 'object' ? who.json.app_metadata : null;
-        const callerRole = appMeta && typeof appMeta.role === 'string' ? appMeta.role : '';
+        const callerId = who.json.id;
+        const callerRole = appMeta && typeof appMeta.role === 'string'
+            ? String(appMeta.role).trim().toLowerCase()
+            : await getRoleFromProfiles(base, pgCandidates, callerId);
         if (callerRole !== 'ceo') {
             res.status(403).json({ error: 'Forbidden' });
             return;

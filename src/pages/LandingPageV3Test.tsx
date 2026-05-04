@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
@@ -732,15 +732,15 @@ export default function LandingPageV3Test() {
                       <select
                         {...register('program')}
                         className="w-full px-4 py-3 text-[13px] outline-none border rounded"
-                        style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(245,168,0,0.12)', color: 'var(--v3-white)' }}
+                        style={{ background: 'rgba(255,255,255,0.92)', borderColor: 'rgba(245,168,0,0.12)', color: '#0b0b16' }}
                       >
-                        <option value="">Select a program</option>
-                        <option value="Medicine">Medicine</option>
-                        <option value="Dentistry">Dentistry</option>
-                        <option value="Pharmacy">Pharmacy</option>
-                        <option value="Engineering">Engineering</option>
-                        <option value="Business">Business</option>
-                        <option value="Computer Science">Computer Science</option>
+                        <option value="" style={{ color: '#6b7280' }}>Select a program</option>
+                        <option value="Medicine" style={{ color: '#0b0b16' }}>Medicine</option>
+                        <option value="Dentistry" style={{ color: '#0b0b16' }}>Dentistry</option>
+                        <option value="Pharmacy" style={{ color: '#0b0b16' }}>Pharmacy</option>
+                        <option value="Engineering" style={{ color: '#0b0b16' }}>Engineering</option>
+                        <option value="Business" style={{ color: '#0b0b16' }}>Business</option>
+                        <option value="Computer Science" style={{ color: '#0b0b16' }}>Computer Science</option>
                       </select>
                       {errors.program && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.program.message}</p>}
                     </div>
@@ -851,5 +851,4 @@ export default function LandingPageV3Test() {
     </div>
   );
 }
-
 

@@ -1353,7 +1353,7 @@ export default function UniversitiesPage() {
                       style={{ borderColor: 'rgba(245,168,0,0.18)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.03)' }}
                     >
                       <ChevronLeft className="w-4 h-4" />
-                      ÙƒÙ„ Ø§Ù„Ø¬Ø§Ù…Ø¹Ø§Øª
+                      كل الجامعات
                     </Link>
                     <h1 className="mt-4 text-[28px] sm:text-[36px] font-bold tracking-tight v3-serif" style={{ color: 'var(--v3-cream)' }}>
                       {active.name}
@@ -1377,7 +1377,7 @@ export default function UniversitiesPage() {
                           style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(10,22,40,0.40)', color: 'rgba(245,240,232,0.82)' }}
                         >
                           <Globe className="w-4 h-4" />
-                          Ø§Ù„Ù…ÙˆÙ‚Ø¹ Ø§Ù„Ø±Ø³Ù…ÙŠ
+                          الموقع الرسمي
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
                       ) : null}
@@ -1395,7 +1395,7 @@ export default function UniversitiesPage() {
                       className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-[14px] font-semibold"
                       style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}
                     >
-                      Ø§Ù„ØªÙ‚Ø¯ÙŠÙ… Ø§Ù„Ø¢Ù†
+                      التقديم الآن
                       <ExternalLink className="w-4 h-4" />
                     </Link>
                   </div>
@@ -1404,7 +1404,7 @@ export default function UniversitiesPage() {
 
               <div className="grid lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
-                  <SectionCard title="Ù†Ø¨Ø°Ø© Ø¹Ù† Ø§Ù„Ø¬Ø§Ù…Ø¹Ø©" icon={<GraduationCap className="w-5 h-5" />}>
+                  <SectionCard title="نبذة عن الجامعة" icon={<GraduationCap className="w-5 h-5" />}>
                     <div className="space-y-3">
                       {active.description.map((p) => (
                         <p key={p} className="text-[15px] leading-relaxed" style={{ color: 'rgba(245,240,232,0.84)' }}>
@@ -1415,7 +1415,7 @@ export default function UniversitiesPage() {
                   </SectionCard>
 
                   {active.programSections && active.programSections.length > 0 ? (
-                    <SectionCard title="Ø§Ù„Ø¨Ø±Ø§Ù…Ø¬ Ø§Ù„Ø¯Ø±Ø§Ø³ÙŠØ© ÙˆØ§Ù„Ø±Ø³ÙˆÙ…" icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title="البرامج الدراسية والرسوم" icon={<Globe className="w-5 h-5" />}>
                       <div className="space-y-4">
                         {active.programSections.map((s) => (
                           <ProgramTable key={`${active.id}-${s.title}`} section={s} />
@@ -1425,7 +1425,7 @@ export default function UniversitiesPage() {
                   ) : null}
 
                   {active.faq && active.faq.length > 0 ? (
-                    <SectionCard title="Ø§Ù„Ø£Ø³Ø¦Ù„Ø© Ø§Ù„Ø´Ø§Ø¦Ø¹Ø©" icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title="الأسئلة الشائعة" icon={<Globe className="w-5 h-5" />}>
                       <div className="space-y-4">
                         {active.faq.map((f) => (
                           <div
@@ -1444,7 +1444,7 @@ export default function UniversitiesPage() {
 
                 <div className="lg:col-span-4 space-y-6">
                   {active.specialties && active.specialties.length > 0 ? (
-                    <SectionCard title="Ø§Ù„ØªØ®ØµØµØ§Øª" icon={<GraduationCap className="w-5 h-5" />}>
+                    <SectionCard title="التخصصات" icon={<GraduationCap className="w-5 h-5" />}>
                       <div className="flex flex-wrap gap-2">
                         {active.specialties.map((s) => (
                           <span
@@ -1460,25 +1460,25 @@ export default function UniversitiesPage() {
                   ) : null}
 
                   {active.advantages && active.advantages.length > 0 ? (
-                    <SectionCard title="Ù…Ù…ÙŠØ²Ø§Øª Ø§Ù„Ø¯Ø±Ø§Ø³Ø©" icon={<CheckCircle2 className="w-5 h-5" />}>
+                    <SectionCard title="مميزات الدراسة" icon={<CheckCircle2 className="w-5 h-5" />}>
                       <BulletList items={active.advantages} />
                     </SectionCard>
                   ) : null}
 
                   {active.admissionRequirements && active.admissionRequirements.length > 0 ? (
-                    <SectionCard title="Ø´Ø±ÙˆØ· Ø§Ù„Ù‚Ø¨ÙˆÙ„" icon={<CheckCircle2 className="w-5 h-5" />}>
+                    <SectionCard title="شروط القبول" icon={<CheckCircle2 className="w-5 h-5" />}>
                       <BulletList items={active.admissionRequirements} />
                     </SectionCard>
                   ) : null}
 
                   {active.whyTheWay && active.whyTheWay.length > 0 ? (
-                    <SectionCard title="Ù„Ù…Ø§Ø°Ø§ ØªØ®ØªØ§Ø± The WayØŸ" icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title="لماذا تختار The Way؟" icon={<Globe className="w-5 h-5" />}>
                       <BulletList items={active.whyTheWay} />
                     </SectionCard>
                   ) : null}
 
                   {active.registrationSteps && active.registrationSteps.length > 0 ? (
-                    <SectionCard title="Ø®Ø·ÙˆØ§Øª Ø§Ù„ØªØ³Ø¬ÙŠÙ„" icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title="خطوات التسجيل" icon={<Globe className="w-5 h-5" />}>
                       <BulletList items={active.registrationSteps} />
                     </SectionCard>
                   ) : null}
@@ -1491,9 +1491,9 @@ export default function UniversitiesPage() {
                 className="rounded-[34px] border p-8"
                 style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(255,255,255,0.04)' }}
               >
-                <p className="text-[16px] font-semibold" style={{ color: 'var(--v3-cream)' }}>Ù‡Ø°Ù‡ Ø§Ù„Ø¬Ø§Ù…Ø¹Ø© ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯Ø©.</p>
+                <p className="text-[16px] font-semibold" style={{ color: 'var(--v3-cream)' }}>هذه الجامعة غير موجودة.</p>
                 <p className="mt-2 text-[14px]" style={{ color: 'rgba(245,240,232,0.72)' }}>
-                  Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø§Ù„Ø±Ø¬ÙˆØ¹ Ø¥Ù„Ù‰ ØµÙØ­Ø© Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¬Ø§Ù…Ø¹Ø§Øª.
+                  الرجاء الرجوع إلى صفحة جميع الجامعات.
                 </p>
                 <div className="mt-6">
                   <Link
@@ -1501,7 +1501,7 @@ export default function UniversitiesPage() {
                     className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-[14px] font-semibold"
                     style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}
                   >
-                    Ø§Ù„Ø¹ÙˆØ¯Ø© Ù„Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¬Ø§Ù…Ø¹Ø§Øª
+                    العودة لجميع الجامعات
                     <ChevronLeft className="w-4 h-4" />
                   </Link>
                 </div>
@@ -1513,5 +1513,4 @@ export default function UniversitiesPage() {
     </div>
   );
 }
-
 

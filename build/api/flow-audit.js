@@ -1,3 +1,6 @@
+import * as os from 'os';
+import * as path from 'path';
+import { promises as fs } from 'fs';
 const getBearer = (req) => {
     const raw = req.headers?.authorization || req.headers?.Authorization;
     const value = Array.isArray(raw) ? raw[0] : raw;
@@ -41,6 +44,39 @@ const postgrestHeaders = (adminKey) => {
     const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
     return isJwtLike ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
 };
+const getDataDir = () => {
+    const raw = process.env.DATA_DIR;
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    return value || path.join(os.tmpdir(), 'theway');
+};
+const safeParseJson = (line) => {
+    try {
+        return JSON.parse(line);
+    }
+    catch {
+        return null;
+    }
+};
+const readJsonlApplications = async (maxLines) => {
+    const filePath = path.join(getDataDir(), 'applications.jsonl');
+    let content = '';
+    try {
+        content = await fs.readFile(filePath, { encoding: 'utf8' });
+    }
+    catch {
+        return [];
+    }
+    const lines = content.split('\n').filter(Boolean);
+    const slice = lines.length > maxLines ? lines.slice(lines.length - maxLines) : lines;
+    const rows = [];
+    for (const line of slice) {
+        const obj = safeParseJson(line);
+        if (!obj || typeof obj !== 'object')
+            continue;
+        rows.push(obj);
+    }
+    return rows;
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'GET') {
@@ -71,13 +107,17 @@ export default async function handler(req, res) {
             return;
         }
         const callerId = who.json.id;
-        const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
-            method: 'GET',
-            headers: adminHeaders,
-        });
-        const callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
-            ? callerProfile.json[0].role
-            : '';
+        const appMeta = who.json.app_metadata && typeof who.json.app_metadata === 'object' ? who.json.app_metadata : null;
+        let callerRole = (appMeta && typeof appMeta.role === 'string') ? String(appMeta.role).trim().toLowerCase() : '';
+        if (!callerRole) {
+            const callerProfile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(callerId)}&select=role`, {
+                method: 'GET',
+                headers: adminHeaders,
+            });
+            callerRole = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
+                ? String(callerProfile.json[0].role).trim().toLowerCase()
+                : '';
+        }
         if (callerRole !== 'ceo') {
             res.status(403).json({ error: 'Forbidden' });
             return;
@@ -90,15 +130,32 @@ export default async function handler(req, res) {
             ? stateResp.json[0].state
             : {};
         const applications = Array.isArray(state.applications) ? state.applications : [];
+        const fileApps = await readJsonlApplications(2000);
+        const mergedApplications = (() => {
+            if (!fileApps.length)
+                return applications;
+            const byId = new Map();
+            applications.forEach((a) => {
+                const id = typeof a.id === 'string' ? a.id : '';
+                if (id)
+                    byId.set(id, a);
+            });
+            fileApps.forEach((a) => {
+                const id = typeof a.id === 'string' ? a.id : '';
+                if (id && !byId.has(id))
+                    byId.set(id, a);
+            });
+            return Array.from(byId.values());
+        })();
         const chatMessages = Array.isArray(state.chatMessages) ? state.chatMessages : [];
         const appById = new Map();
-        applications.forEach((a) => {
+        mergedApplications.forEach((a) => {
             const id = typeof a.id === 'string' ? a.id : '';
             if (id)
                 appById.set(id, a);
         });
         const issues = [];
-        applications.forEach((a) => {
+        mergedApplications.forEach((a) => {
             const id = typeof a.id === 'string' ? a.id : '';
             const status = typeof a.status === 'string' ? a.status : '';
             const source = typeof a.source === 'string' ? a.source : 'public';
