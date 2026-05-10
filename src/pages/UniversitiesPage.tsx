@@ -24,7 +24,7 @@ type ProgramSection = { title: string; rows: ProgramRow[] };
 type University = {
   id: string;
   name: string;
-  nameEn: string;
+  nameEn?: string;
   imageUrl?: string;
   city?: string;
   cityEn?: string;
@@ -1072,20 +1072,30 @@ const decodeFaq = (value?: { q: string; a: string }[]) => {
   return value.map((f) => ({ q: decodeMojibake(f.q), a: decodeMojibake(f.a) }));
 };
 
-const universities: University[] = rawUniversities.map((u) => ({
+const decodedUniversities: University[] = rawUniversities.map((u) => ({
   ...u,
   name: decodeMojibake(u.name),
+  nameEn: u.nameEn,
   city: decodeMaybe(u.city),
+  cityEn: u.cityEn,
   address: decodeMaybe(u.address),
   website: decodeMaybe(u.website),
   description: decodeList(u.description) ?? [],
+  descriptionEn: u.descriptionEn,
   specialties: decodeList(u.specialties),
+  specialtiesEn: u.specialtiesEn,
   advantages: decodeList(u.advantages),
+  advantagesEn: u.advantagesEn,
   admissionRequirements: decodeList(u.admissionRequirements),
+  admissionRequirementsEn: u.admissionRequirementsEn,
   programSections: decodeProgramSections(u.programSections),
+  programSectionsEn: u.programSectionsEn,
   whyTheWay: decodeList(u.whyTheWay),
+  whyTheWayEn: u.whyTheWayEn,
   registrationSteps: decodeList(u.registrationSteps),
+  registrationStepsEn: u.registrationStepsEn,
   faq: decodeFaq(u.faq),
+  faqEn: u.faqEn,
 }));
 
 const getHomePathForRole = (role: string) => {
@@ -1149,9 +1159,15 @@ function ProgramTable({ section }: { section: ProgramSection }) {
         <table className="w-full text-right">
           <thead>
             <tr className="border-b" style={{ borderColor: 'rgba(245,168,0,0.12)' }}>
-              <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>البرنامج</th>
-              <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>المدة</th>
-              <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>الرسوم</th>
+              <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>
+                 {language === 'ar' ? 'البرنامج' : 'Program'}
+               </th>
+               <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>
+                 {language === 'ar' ? 'المدة' : 'Duration'}
+               </th>
+               <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>
+                 {language === 'ar' ? 'الرسوم' : 'Fee'}
+               </th>
             </tr>
           </thead>
           <tbody>
@@ -1174,10 +1190,10 @@ export default function UniversitiesPage() {
   const { language, setLanguage } = useAppStore();
   const { id } = useParams<{ id?: string }>();
   const universities = useMemo(() => {
-    return rawUniversities.map(u => ({
+    return decodedUniversities.map(u => ({
       ...u,
-      name: language === 'en' ? u.nameEn : u.name,
-      city: language === 'en' ? u.cityEn : u.city,
+      name: (language === 'en' && u.nameEn) ? u.nameEn : u.name,
+      city: (language === 'en' && u.cityEn) ? u.cityEn : u.city,
       description: (language === 'en' && u.descriptionEn) ? u.descriptionEn : u.description,
       specialties: (language === 'en' && u.specialtiesEn) ? u.specialtiesEn : u.specialties,
       advantages: (language === 'en' && u.advantagesEn) ? u.advantagesEn : u.advantages,
@@ -1224,8 +1240,12 @@ export default function UniversitiesPage() {
               <img src={logoUrl} alt="The Way" className="h-11 w-auto object-contain" />
             </Link>
             <div className="hidden sm:block">
-              <p className="text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.82)' }}>الجامعات</p>
-              <p className="text-[11px]" style={{ color: 'rgba(245,240,232,0.55)' }}>اختر الجامعة المناسبة لك</p>
+              <p className="text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.82)' }}>
+                {language === 'ar' ? 'الجامعات' : 'Universities'}
+              </p>
+              <p className="text-[11px]" style={{ color: 'rgba(245,240,232,0.55)' }}>
+                {language === 'ar' ? 'اختر الجامعة المناسبة لك' : 'Choose the right university for you'}
+              </p>
             </div>
           </div>
 
@@ -1264,12 +1284,16 @@ export default function UniversitiesPage() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
                   <div>
-                    <p className="text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.72)' }}>دليل الجامعات</p>
+                    <p className="text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.72)' }}>
+                      {language === 'ar' ? 'دليل الجامعات' : 'University Guide'}
+                    </p>
                     <h1 className="mt-2 text-[28px] sm:text-[34px] font-bold tracking-tight v3-serif" style={{ color: 'var(--v3-cream)' }}>
-                      جميع الجامعات
+                      {language === 'ar' ? 'جميع الجامعات' : 'All Universities'}
                     </h1>
                     <p className="mt-2 text-[15px] leading-relaxed max-w-2xl" style={{ color: 'rgba(245,240,232,0.76)' }}>
-                      ابحث بالاسم أو المدينة أو التخصص، ثم افتح صفحة الجامعة لرؤية التخصصات والرسوم وشروط القبول.
+                      {language === 'ar' 
+                        ? 'ابحث بالاسم أو المدينة أو التخصص، ثم افتح صفحة الجامعة لرؤية التخصصات والرسوم وشروط القبول.' 
+                        : 'Search by name, city or specialty, then open the university page to see specialties, fees and admission requirements.'}
                     </p>
                   </div>
 
@@ -1282,7 +1306,7 @@ export default function UniversitiesPage() {
                       <input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="ابحث عن جامعة أو تخصص..."
+                        placeholder={language === 'ar' ? 'ابحث عن جامعة أو تخصص...' : 'Search for university or specialty...'}
                         className="w-full bg-transparent outline-none text-[14px]"
                         style={{ color: 'var(--v3-cream)' }}
                       />
@@ -1350,10 +1374,12 @@ export default function UniversitiesPage() {
                     ) : null}
 
                     <div className="mt-5 flex items-center justify-between">
-                      <span className="text-[12px]" style={{ color: 'rgba(245,240,232,0.62)' }}>اضغط لعرض التفاصيل</span>
+                      <span className="text-[12px]" style={{ color: 'rgba(245,240,232,0.62)' }}>
+                        {language === 'ar' ? 'اضغط لعرض التفاصيل' : 'Click to view details'}
+                      </span>
                       <span className="inline-flex items-center gap-1 text-[12px] font-semibold" style={{ color: 'var(--v3-yellow)' }}>
-                        <ChevronLeft className="w-4 h-4" />
-                        عرض
+                        {language === 'ar' ? <ChevronLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4 rotate-180" />}
+                        {language === 'ar' ? 'عرض' : 'View'}
                       </span>
                     </div>
                   </Link>
@@ -1390,8 +1416,8 @@ export default function UniversitiesPage() {
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[13px] font-semibold"
                       style={{ borderColor: 'rgba(245,168,0,0.18)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.03)' }}
                     >
-                      <ChevronLeft className="w-4 h-4" />
-                      كل الجامعات
+                      {language === 'ar' ? <ChevronLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4 rotate-180" />}
+                      {language === 'ar' ? 'كل الجامعات' : 'All Universities'}
                     </Link>
                     <h1 className="mt-4 text-[28px] sm:text-[36px] font-bold tracking-tight v3-serif" style={{ color: 'var(--v3-cream)' }}>
                       {active.name}
@@ -1415,7 +1441,7 @@ export default function UniversitiesPage() {
                           style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(10,22,40,0.40)', color: 'rgba(245,240,232,0.82)' }}
                         >
                           <Globe className="w-4 h-4" />
-                          الموقع الرسمي
+                          {language === 'ar' ? 'الموقع الرسمي' : 'Official Website'}
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
                       ) : null}
@@ -1433,7 +1459,7 @@ export default function UniversitiesPage() {
                       className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-[14px] font-semibold"
                       style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}
                     >
-                      التقديم الآن
+                      {language === 'ar' ? 'التقديم الآن' : 'Apply Now'}
                       <ExternalLink className="w-4 h-4" />
                     </Link>
                   </div>
@@ -1442,7 +1468,7 @@ export default function UniversitiesPage() {
 
               <div className="grid lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
-                  <SectionCard title="نبذة عن الجامعة" icon={<GraduationCap className="w-5 h-5" />}>
+                  <SectionCard title={language === 'ar' ? "نبذة عن الجامعة" : "About University"} icon={<GraduationCap className="w-5 h-5" />}>
                     <div className="space-y-3">
                       {active.description.map((p) => (
                         <p key={p} className="text-[15px] leading-relaxed" style={{ color: 'rgba(245,240,232,0.84)' }}>
@@ -1453,7 +1479,7 @@ export default function UniversitiesPage() {
                   </SectionCard>
 
                   {active.programSections && active.programSections.length > 0 ? (
-                    <SectionCard title="البرامج الدراسية والرسوم" icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "البرامج الدراسية والرسوم" : "Programs & Fees"} icon={<Globe className="w-5 h-5" />}>
                       <div className="space-y-4">
                         {active.programSections.map((s) => (
                           <ProgramTable key={`${active.id}-${s.title}`} section={s} />
@@ -1463,7 +1489,7 @@ export default function UniversitiesPage() {
                   ) : null}
 
                   {active.faq && active.faq.length > 0 ? (
-                    <SectionCard title="الأسئلة الشائعة" icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "الأسئلة الشائعة" : "FAQ"} icon={<Globe className="w-5 h-5" />}>
                       <div className="space-y-4">
                         {active.faq.map((f) => (
                           <div
@@ -1482,7 +1508,7 @@ export default function UniversitiesPage() {
 
                 <div className="lg:col-span-4 space-y-6">
                   {active.specialties && active.specialties.length > 0 ? (
-                    <SectionCard title="التخصصات" icon={<GraduationCap className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "التخصصات" : "Specialties"} icon={<GraduationCap className="w-5 h-5" />}>
                       <div className="flex flex-wrap gap-2">
                         {active.specialties.map((s) => (
                           <span
@@ -1498,25 +1524,25 @@ export default function UniversitiesPage() {
                   ) : null}
 
                   {active.advantages && active.advantages.length > 0 ? (
-                    <SectionCard title="مميزات الدراسة" icon={<CheckCircle2 className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "مميزات الدراسة" : "Study Advantages"} icon={<CheckCircle2 className="w-5 h-5" />}>
                       <BulletList items={active.advantages} />
                     </SectionCard>
                   ) : null}
 
                   {active.admissionRequirements && active.admissionRequirements.length > 0 ? (
-                    <SectionCard title="شروط القبول" icon={<CheckCircle2 className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "شروط القبول" : "Admission Requirements"} icon={<CheckCircle2 className="w-5 h-5" />}>
                       <BulletList items={active.admissionRequirements} />
                     </SectionCard>
                   ) : null}
 
                   {active.whyTheWay && active.whyTheWay.length > 0 ? (
-                    <SectionCard title="لماذا تختار The Way؟" icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "لماذا تختار The Way؟" : "Why Choose The Way?"} icon={<Globe className="w-5 h-5" />}>
                       <BulletList items={active.whyTheWay} />
                     </SectionCard>
                   ) : null}
 
                   {active.registrationSteps && active.registrationSteps.length > 0 ? (
-                    <SectionCard title="خطوات التسجيل" icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "خطوات التسجيل" : "Registration Steps"} icon={<Globe className="w-5 h-5" />}>
                       <BulletList items={active.registrationSteps} />
                     </SectionCard>
                   ) : null}
@@ -1529,9 +1555,11 @@ export default function UniversitiesPage() {
                 className="rounded-[34px] border p-8"
                 style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(255,255,255,0.04)' }}
               >
-                <p className="text-[16px] font-semibold" style={{ color: 'var(--v3-cream)' }}>هذه الجامعة غير موجودة.</p>
+                <p className="text-[16px] font-semibold" style={{ color: 'var(--v3-cream)' }}>
+                  {language === 'ar' ? 'هذه الجامعة غير موجودة.' : 'This university does not exist.'}
+                </p>
                 <p className="mt-2 text-[14px]" style={{ color: 'rgba(245,240,232,0.72)' }}>
-                  الرجاء الرجوع إلى صفحة جميع الجامعات.
+                  {language === 'ar' ? 'الرجاء الرجوع إلى صفحة جميع الجامعات.' : 'Please return to the All Universities page.'}
                 </p>
                 <div className="mt-6">
                   <Link

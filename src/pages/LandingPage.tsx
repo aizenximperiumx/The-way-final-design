@@ -17,8 +17,8 @@ import {
   Mail, 
   MapPin, 
   Users,
-  Youtube,
-  Instagram
+  Video,
+  Camera
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
@@ -874,13 +874,13 @@ const LandingPage: React.FC = () => {
               </p>
               <div className="flex items-center gap-3 mt-4">
                 <a href="https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
-                  <Instagram className="w-5 h-5" />
+                  <Camera className="w-5 h-5" />
                 </a>
                 <a href="https://www.tiktok.com/@theway.ge0?_r=1&_t=ZS-95vVkmR2ELa" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
                   <Globe className="w-5 h-5" />
                 </a>
                 <a href="#" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
-                  <Youtube className="w-5 h-5" />
+                  <Video className="w-5 h-5" />
                 </a>
               </div>
             </div>

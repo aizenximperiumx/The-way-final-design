@@ -15,6 +15,7 @@ import {
   GraduationCap,
   UserCircle,
   Building2,
+  Languages,
   X as CloseIcon
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -41,9 +42,22 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Messages', icon: MessageSquare, path: '/messages', roles: ['student', 'staff', 'ceo'] },
 ];
 
+const labelMap: Record<string, { en: string; ar: string }> = {
+  'Dashboard': { en: 'Dashboard', ar: 'لوحة التحكم' },
+  'Universities': { en: 'Universities', ar: 'الجامعات' },
+  'Applications': { en: 'Applications', ar: 'الطلبات' },
+  'Agency Leads': { en: 'Agency Leads', ar: 'طلبات الوكالات' },
+  'Agencies': { en: 'Agencies', ar: 'الوكالات' },
+  'Students': { en: 'Students', ar: 'الطلاب' },
+  'Analytics': { en: 'Analytics', ar: 'التحليلات' },
+  'Appointments': { en: 'Appointments', ar: 'المواعيد' },
+  'Messages': { en: 'Messages', ar: 'الرسائل' },
+  'Logout': { en: 'Logout', ar: 'تسجيل الخروج' },
+};
+
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
-  const { notifications, users } = useAppStore();
+  const { notifications, users, language, setLanguage } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -69,7 +83,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex overflow-hidden tw-mobile-shell">
+    <div className="min-h-screen bg-[#F8F9FA] flex overflow-hidden tw-mobile-shell" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       {/* Sidebar - Desktop */}
       <aside 
         className={`hidden md:flex flex-col bg-black text-white transition-all duration-300 ease-in-out ${
@@ -95,7 +109,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 }`}
               >
                 <item.icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-black' : 'group-hover:text-white'}`} />
-                {isSidebarOpen && <span className="font-bold text-sm tracking-wide">{item.label}</span>}
+                {isSidebarOpen && <span className="font-bold text-sm tracking-wide">{labelMap[item.label]?.[language] || item.label}</span>}
               </Link>
             );
           })}
@@ -107,7 +121,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             className="flex items-center gap-4 w-full px-4 py-3.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all duration-200 group"
           >
             <LogOut className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span className="font-bold text-sm tracking-wide">Logout</span>}
+            {isSidebarOpen && <span className="font-bold text-sm tracking-wide">{labelMap['Logout']?.[language] || 'Logout'}</span>}
           </button>
         </div>
       </aside>
@@ -141,6 +155,15 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
 
           <div className="flex items-center gap-6">
+            <button 
+              onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
+              className="px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-2 hover:bg-gray-50 transition-all"
+              style={{ borderColor: 'rgba(0,0,0,0.05)', color: '#000' }}
+            >
+              <Languages className="w-4 h-4 text-amber-500" />
+              {language === 'en' ? 'العربية' : 'English'}
+            </button>
+
             <button onClick={() => setShowNotifs((v) => !v)} className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-xl transition-all" aria-label="Notifications">
               <Bell className="w-5 h-5" />
               {notifications.some(n => n.userId === user?.id && !n.read) && (

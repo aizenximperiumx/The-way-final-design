@@ -78,7 +78,9 @@ export interface Application {
   email: string;
   phone: string;
   country: string;
-  program: string;
+  program?: string;
+  aviationDegree?: string;
+  studyLevel?: string;
   university?: string;
   status: ApplicationStatus;
   stage: ApplicationStage;
