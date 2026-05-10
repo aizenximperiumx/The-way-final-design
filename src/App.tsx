@@ -67,7 +67,9 @@ const getHomePath = (role: UserRole) => {
   if (role === 'sales') return '/sales';
   if (role === 'ops') return '/ops';
   if (role === 'staff' || role === 'agency_staff') return '/staff';
-  return '/admin';
+  if (role === 'agency') return '/agencies';
+  if (role === 'ceo') return '/admin';
+  return '/';
 };
 
 const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode; allowedRoles: UserRole[] }) => {
@@ -219,7 +221,6 @@ function App() {
 }
 
 export default App;
-
 
 
 

@@ -18,8 +18,11 @@ const LoginPage: React.FC = () => {
   const getHomePath = (role: UserRole) => {
     if (role === 'student') return '/dashboard';
     if (role === 'sales') return '/sales';
-    if (role === 'staff') return '/staff';
-    return '/admin';
+    if (role === 'ops') return '/ops';
+    if (role === 'staff' || role === 'agency_staff') return '/staff';
+    if (role === 'agency') return '/agencies';
+    if (role === 'ceo') return '/admin';
+    return '/';
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -138,5 +141,4 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-
 

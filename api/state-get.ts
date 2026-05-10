@@ -199,13 +199,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const chatMessages = mergedState.chatMessages.filter((row) => {
         const m = asRecord(row);
         if (!m) return false;
-        if (getString(m, 'fromUserId') === userId || getString(m, 'toUserId') === userId) return true;
+        const from = getString(m, 'fromUserId') || getString(m, 'userId');
+        const to = getString(m, 'toUserId');
+        if (from === userId || to === userId) return true;
         const appId = getString(m, 'applicationId');
         return appId === `complaint-${userId}`;
       });
       const chatThreadReadAt: Record<string, string> = {};
       Object.entries(mergedState.chatThreadReadAt).forEach(([k, v]) => {
-        if (k === `complaint-${userId}` || appIds.has(k)) chatThreadReadAt[k] = v;
+        if (k.startsWith(`${userId}|`) || k === `complaint-${userId}` || appIds.has(k)) chatThreadReadAt[k] = v;
       });
       res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt } });
       return;
@@ -214,18 +216,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (role === 'agency') {
       const apps = mergedState.applications.filter((row) => getString(asRecord(row), 'agencyId') === userId);
       const appIds = new Set(apps.map((a) => getString(asRecord(a), 'id')));
+      const studentIds = new Set(apps.map((a) => getString(asRecord(a), 'studentId')).filter(Boolean));
+      const documents = mergedState.documents.filter((row) => studentIds.has(getString(asRecord(row), 'studentId')));
       const chatMessages = mergedState.chatMessages.filter((row) => {
         const m = asRecord(row);
         if (!m) return false;
-        if (getString(m, 'fromUserId') === userId || getString(m, 'toUserId') === userId) return true;
+        const from = getString(m, 'fromUserId') || getString(m, 'userId');
+        const to = getString(m, 'toUserId');
+        if (from === userId || to === userId) return true;
         const appId = getString(m, 'applicationId');
         return appIds.has(appId);
       });
       const chatThreadReadAt: Record<string, string> = {};
       Object.entries(mergedState.chatThreadReadAt).forEach(([k, v]) => {
-        if (appIds.has(k)) chatThreadReadAt[k] = v;
+        if (k.startsWith(`${userId}|`) || appIds.has(k)) chatThreadReadAt[k] = v;
       });
-      res.status(200).json({ ok: true, state: { applications: apps, documents: [], notifications: [], appointments: [], chatMessages, chatThreadReadAt } });
+      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications: [], appointments: [], chatMessages, chatThreadReadAt } });
       return;
     }
 

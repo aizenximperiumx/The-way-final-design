@@ -351,8 +351,14 @@ export default function LandingPageV3Test() {
                   <div className="v3-serif mt-3 text-[22px] font-bold" style={{ color: 'var(--v3-white)' }}>
                     Your Education Partner
                   </div>
-                  <div className="mt-1 text-[12px] tracking-[1px]" style={{ color: 'rgba(245,240,232,0.45)' }}>
-                    Tbilisi - Batumi - Kutaisi - Georgia
+                  <div className="mt-3">
+                    <div
+                      className="inline-flex items-center gap-2 px-3 py-1.5 border"
+                      style={{ borderColor: 'rgba(245,168,0,0.18)', background: 'rgba(10,22,40,0.55)', color: 'rgba(245,240,232,0.70)' }}
+                    >
+                      <MapPin className="w-4 h-4" style={{ color: 'var(--v3-yellow)' }} />
+                      <span className="text-[10px] tracking-[2px] uppercase font-bold">Tbilisi Only</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -906,4 +912,3 @@ export default function LandingPageV3Test() {
     </div>
   );
 }
-

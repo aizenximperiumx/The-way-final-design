@@ -158,6 +158,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       };
     } else if (role === 'student') {
       const allowedThread = (key: string) =>
+        key.startsWith(`${userId}|`) ||
         key === `complaint-${userId}` ||
         current.applications.some((a) => getString(asRecord(a), 'studentId') === userId && getString(asRecord(a), 'id') === key);
       const mergedReadAt: Record<string, string> = { ...current.chatThreadReadAt };
@@ -169,14 +170,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const newMessages = incoming.chatMessages.flatMap((m) => {
         const r = asRecord(m);
         if (!r) return [];
-        if (getString(r, 'fromUserId') !== userId) return [];
+        const sender = getString(r, 'fromUserId') || getString(r, 'userId');
+        if (sender !== userId) return [];
         const text = getString(r, 'text');
         if (!text || text.length > 5000) return [];
         const appId = getString(r, 'applicationId');
         if (appId && !(allowedThread(appId) || appId === `complaint-${userId}`)) return [];
         return [{
           id: `${userId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          fromUserId: userId,
+          userId,
           toUserId: getString(r, 'toUserId'),
           text,
           applicationId: appId || undefined,
@@ -194,14 +196,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const newMessages = incoming.chatMessages.flatMap((m) => {
         const r = asRecord(m);
         if (!r) return [];
-        if (getString(r, 'fromUserId') !== userId) return [];
+        const sender = getString(r, 'fromUserId') || getString(r, 'userId');
+        if (sender !== userId) return [];
         const text = getString(r, 'text');
         if (!text || text.length > 5000) return [];
         const appId = getString(r, 'applicationId');
         if (appId && !allowedApp(appId)) return [];
         return [{
           id: `${userId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          fromUserId: userId,
+          userId,
           toUserId: getString(r, 'toUserId'),
           text,
           applicationId: appId || undefined,
@@ -246,7 +249,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
       const mergedReadAt: Record<string, string> = { ...current.chatThreadReadAt };
       Object.entries(incoming.chatThreadReadAt || {}).forEach(([k, v]) => {
-        if (!allowedApp(k)) return;
+        if (!k.startsWith(`${userId}|`) && !allowedApp(k)) return;
         if (typeof v !== 'string') return;
         mergedReadAt[k] = v;
       });
