@@ -1188,23 +1188,24 @@ function ProgramTable({ section }: { section: ProgramSection }) {
 
 export default function UniversitiesPage() {
   const { user } = useAuth();
-  const { language, setLanguage } = useAppStore();
   const { id } = useParams<{ id?: string }>();
+  const language = 'ar'; // Fixed to Arabic as requested
+  
   const universities = useMemo(() => {
     return decodedUniversities.map(u => ({
       ...u,
-      name: (language === 'en' && u.nameEn) ? u.nameEn : u.name,
-      city: (language === 'en' && u.cityEn) ? u.cityEn : u.city,
-      description: (language === 'en' && u.descriptionEn) ? u.descriptionEn : u.description,
-      specialties: (language === 'en' && u.specialtiesEn) ? u.specialtiesEn : u.specialties,
-      advantages: (language === 'en' && u.advantagesEn) ? u.advantagesEn : u.advantages,
-      admissionRequirements: (language === 'en' && u.admissionRequirementsEn) ? u.admissionRequirementsEn : u.admissionRequirements,
-      programSections: (language === 'en' && u.programSectionsEn) ? u.programSectionsEn : u.programSections,
-      whyTheWay: (language === 'en' && u.whyTheWayEn) ? u.whyTheWayEn : u.whyTheWay,
-      registrationSteps: (language === 'en' && u.registrationStepsEn) ? u.registrationStepsEn : u.registrationSteps,
-      faq: (language === 'en' && u.faqEn) ? u.faqEn : u.faq,
+      name: u.name,
+      city: u.city,
+      description: u.description,
+      specialties: u.specialties,
+      advantages: u.advantages,
+      admissionRequirements: u.admissionRequirements,
+      programSections: u.programSections,
+      whyTheWay: u.whyTheWay,
+      registrationSteps: u.registrationSteps,
+      faq: u.faq,
     }));
-  }, [language]);
+  }, []);
 
   const active = useMemo(() => (id ? universities.find(u => u.id === id) ?? null : null), [id, universities]);
   const [query, setQuery] = useState('');
@@ -1251,14 +1252,6 @@ export default function UniversitiesPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
-              className="px-3 py-1.5 rounded-xl border text-[12px] font-bold flex items-center gap-2"
-              style={{ borderColor: 'rgba(245,168,0,0.2)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.05)' }}
-            >
-              <Languages className="w-4 h-4 text-amber-500" />
-              {language === 'en' ? 'العربية' : 'English'}
-            </button>
             <Link
               to={backHref}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[13px] font-semibold"

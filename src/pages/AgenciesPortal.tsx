@@ -352,64 +352,62 @@ Study Level: ${form.studyLevel}`;
             </div>
           </form>
         </motion.div>
-        {user?.role === 'agency' && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="tw-card tw-card-hover p-8 mt-6">
-            <h2 className="text-xl font-black text-black mb-6">My Submissions</h2>
-            <div className="space-y-3 max-h-[420px] overflow-y-auto custom-scrollbar">
-              {applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user.id).map((a) => {
-                const steps = ['translation','university-approval','recognition-letter','ministry-order','visa-documents'] as const;
-                const done = a.studentId ? steps.filter(s => documents.some(d => d.studentId === a.studentId && d.type === s && d.status === 'verified')).length : 0;
-                const pct = Math.round((done / steps.length) * 100);
-                const stepLabels: Record<typeof steps[number], string> = {
-                  'translation': 'Documents translation',
-                  'university-approval': 'University initial approval',
-                  'recognition-letter': 'Recognition letter',
-                  'ministry-order': 'Ministry order',
-                  'visa-documents': 'Visa required documents',
-                };
-                const next = done < steps.length ? stepLabels[steps[done]] : 'All steps complete';
-                return (
-                <div key={a.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold text-black">{a.name}</p>
-                    <div className="flex items-center gap-2">
-                      {a.hold && (
-                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-700">Needs Info</span>
-                      )}
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${a.status === 'approved' ? 'bg-green-100 text-green-700' : a.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{a.status}</span>
-                    </div>
-                  </div>
-                  <p className="text-xs font-medium text-gray-600 mt-1">{a.university ? getUniversityName(a.university) : '-'}</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">{new Date(a.createdAt).toLocaleDateString()}</p>
-                  {a.status === 'approved' && (
-                    <div className="mt-2">
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-2 bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                      <p className="text-[10px] text-gray-500 font-bold mt-1">Progress: {done}/5 - Next: {next}</p>
-                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1">
-                        {steps.map((s) => {
-                          const has = a.studentId ? documents.some(d => d.studentId === a.studentId && d.type === s && d.status === 'verified') : false;
-                          return (
-                            <div key={s} className={`px-3 py-2 rounded-xl border text-[12px] font-bold ${has ? 'bg-green-50 border-green-100 text-green-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
-                              {stepLabels[s]}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <div className="mt-2">
-                    <button onClick={() => setViewApp({ open: true, id: a.id })} className="px-3 py-2 rounded-xl bg-black text-white text-xs font-bold hover:bg-amber-500 hover:text-black transition-all">View Profile</button>
-                  </div>
-                </div>
-              )})}
-              {applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user.id).length === 0 && (
-                <p className="text-sm font-medium text-gray-500">No submissions yet</p>
-              )}
+
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-black text-black">My Students</h2>
+            <div className="px-4 py-2 bg-white rounded-xl border border-gray-100 shadow-sm text-xs font-bold text-gray-500">
+              Showing {applications.filter(a => a.agencyId === user?.id).length} results
             </div>
-          </motion.div>
-        )}
+          </div>
+          <div className="grid gap-4">
+            {applications.filter(a => a.agencyId === user?.id).length > 0 ? (
+              applications.filter(a => a.agencyId === user?.id).map((app) => (
+                <div key={app.id} className="tw-card p-6 flex flex-wrap items-center justify-between gap-6 hover:border-amber-200 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center font-black text-gray-400">
+                      {app.name.charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-black text-black">{app.name}</h3>
+                      <p className="text-xs font-medium text-gray-500">{app.studentEmail || app.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-8">
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Program</p>
+                      <p className="text-sm font-bold text-black">{app.program}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</p>
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        app.status === 'approved' ? 'bg-green-100 text-green-600' :
+                        app.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                        'bg-amber-100 text-amber-600'
+                      }`}>
+                        {app.status}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stage</p>
+                      <p className="text-sm font-bold text-black capitalize">{app.stage}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setViewApp({ open: true, id: app.id })}
+                    className="px-6 py-2.5 bg-black text-white rounded-xl text-xs font-black hover:bg-amber-500 hover:text-black transition-all"
+                  >
+                    View Details
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="tw-card p-12 text-center border-dashed">
+                <p className="text-gray-400 font-medium">No students found. Submit your first student above!</p>
+              </div>
+            )}
+          </div>
+        </section>
       </main>
       {viewApp?.open && (() => {
         const a = applications.find(x => x.id === viewApp.id);
