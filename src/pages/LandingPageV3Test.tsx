@@ -29,6 +29,7 @@ import gauPhotoUrl from '../../Georgian American University (GAU).jpg';
 import ibsuPhotoUrl from '../../International Black Sea University (IBSU).jpg';
 import tsmuPhotoUrl from '../../Tbilisi state medical university ( TSMU ).jpg';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 const applicationSchema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -65,6 +66,7 @@ function AnimatedCount({ target, suffix }: { target: number; suffix?: string }) 
 }
 
 export default function LandingPageV3Test() {
+  const { user } = useAuth();
   const [navSolid, setNavSolid] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -187,11 +189,11 @@ export default function LandingPageV3Test() {
               )
             ))}
             <a
-              href="#contact"
+              href={user ? "/login" : "#contact"}
               className="v3-btn-fx px-6 py-3 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center gap-2"
               style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}
             >
-              Register Now <ArrowRight className="w-4 h-4" />
+              {user ? "Go to Dashboard" : "Register Now"} <ArrowRight className="w-4 h-4" />
             </a>
           </div>
 
@@ -226,7 +228,7 @@ export default function LandingPageV3Test() {
                   ['#services', 'Our Services'],
                   ['#about', 'About Us'],
                   ['#contact', 'Contact Us'],
-                  ['/login', 'Portal Login'],
+                  ['/login', user ? 'Dashboard' : 'Portal Login'],
                 ].map(([href, label]) => (
                   <div key={href} className="py-4">
                     {href.startsWith('/') ? (
@@ -881,12 +883,12 @@ export default function LandingPageV3Test() {
                   <Link to="/login" className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-semibold border-2 inline-flex items-center gap-2"
                   style={{ borderColor: 'rgba(255,255,255,0.40)', color: 'var(--v3-white)', borderRadius: 4 }}
                 >
-                  Portal Login
+                  {user ? 'My Dashboard' : 'Portal Login'}
                 </Link>
-                <a href="#contact" className="v3-btn-fx block px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold text-center"
+                <a href={user ? "/login" : "#contact"} className="v3-btn-fx block px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold text-center"
                   style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}
                 >
-                  Apply Now - Free
+                  {user ? 'Return to Portal' : 'Apply Now - Free'}
                 </a>
               </div>
             </div>
