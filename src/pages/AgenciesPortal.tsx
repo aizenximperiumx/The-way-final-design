@@ -207,6 +207,13 @@ Study Level: ${form.studyLevel}`;
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <img src={logoUrl} alt="The Way" className="h-10 w-auto object-contain" />
+            <button
+              type="button"
+              onClick={() => setActiveTab(activeTab === 'dashboard' ? 'profile' : 'dashboard')}
+              className="md:hidden px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/10 text-white/80"
+            >
+              {activeTab === 'dashboard' ? 'Agency Profile' : 'Student Management'}
+            </button>
             <div className="hidden md:flex items-center gap-1">
               {[
                 { id: 'dashboard', label: 'Student Management', icon: Building2 },
@@ -469,7 +476,7 @@ Study Level: ${form.studyLevel}`;
                             Tier 1 Partner
                           </div>
                           <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                            Member since {new Date(user?.createdAt ?? '').getFullYear()}
+                            Member since {user?.createdAt ? new Date(user.createdAt).getFullYear() : '-'}
                           </div>
                         </div>
                       </div>
@@ -763,4 +770,3 @@ Study Level: ${form.studyLevel}`;
     </div>
   );
 }
-
