@@ -341,6 +341,23 @@ const LandingPage: React.FC = () => {
                     <p className="text-xl font-bold text-black">+995 571 009 550</p>
                   </div>
                 </div>
+                
+                <div className="pt-4">
+                  <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Follow Us</p>
+                  <div className="flex items-center gap-3">
+                    <a href="https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-amber-500 text-black flex items-center justify-center hover:bg-black hover:text-white transition-all">
+                      <Camera className="w-5 h-5" />
+                    </a>
+                    <a href="https://www.tiktok.com/@theway.ge0?_r=1&_t=ZS-95vVkmR2ELa" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-amber-500 text-black flex items-center justify-center hover:bg-black hover:text-white transition-all">
+                      <Globe className="w-5 h-5" />
+                    </a>
+                    <a href="https://www.youtube.com/@thewaygeorgia" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-amber-500 text-black flex items-center justify-center hover:bg-black hover:text-white transition-all">
+                      <Video className="w-5 h-5" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+                </div>
               </div>
             </div>
 
@@ -405,6 +422,7 @@ const LandingPage: React.FC = () => {
                       <option value="engineering" className="text-black">Engineering</option>
                       <option value="business" className="text-black">Business</option>
                       <option value="computer_science" className="text-black">Computer Science</option>
+                      <option value="aviation" className="text-black">Aviation</option>
                     </select>
                     {errors.program && <p className="text-red-500 text-xs mt-1 font-bold">{errors.program.message}</p>}
                   </div>
@@ -423,17 +441,20 @@ const LandingPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Study Level</label>
-                  <select 
-                    {...register('studyLevel')}
-                    className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none text-black"
-                  >
-                    <option value="" className="text-gray-400">Select Study Level</option>
-                    <option value="bachelor" className="text-black">Bachelor's</option>
-                    <option value="master" className="text-black">Master's</option>
-                  </select>
-                  {errors.studyLevel && <p className="text-red-500 text-xs mt-1 font-bold">{errors.studyLevel.message}</p>}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Study Level</label>
+                    <select 
+                      {...register('studyLevel')}
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none text-black"
+                    >
+                      <option value="" className="text-gray-400">Select Study Level</option>
+                      <option value="bachelor" className="text-black">Bachelor's</option>
+                      <option value="master" className="text-black">Master's</option>
+                    </select>
+                    {errors.studyLevel && <p className="text-red-500 text-xs mt-1 font-bold">{errors.studyLevel.message}</p>}
+                  </div>
+                  <div className="hidden md:block" />
                 </div>
 
                 <button 

@@ -843,46 +843,46 @@ Video: ${intake.videoUrl}`;
       )}
       {credentialsModal.open && (
         <div className="fixed inset-0 z-[150] p-4 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             className="relative bg-white rounded-[40px] p-10 w-full max-w-lg shadow-2xl border border-gray-100 text-center"
           >
-            <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 className="w-10 h-10" />
+            <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
+              <CheckCircle2 className="w-12 h-12" />
             </div>
-            <h3 className="text-3xl font-black text-black mb-2">Account Created!</h3>
-            <p className="text-gray-500 font-medium mb-8">
+            <h3 className="text-4xl font-black text-black mb-3 tracking-tight">Account Created!</h3>
+            <p className="text-gray-500 font-bold mb-10 text-lg">
               {credentialsModal.emailSent 
                 ? "Credentials have been emailed to the student." 
-                : "Account created, but email could not be sent. Please copy credentials manually."}
+                : "Account created successfully. Please copy the credentials below manually."}
             </p>
 
-            <div className="space-y-4">
-              <div className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 text-left relative group">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Username / Email</p>
-                <p className="font-black text-black text-lg">{credentialsModal.username}</p>
+            <div className="space-y-5">
+              <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 text-left relative group hover:border-amber-200 transition-all">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Username / Email</p>
+                <p className="font-black text-black text-xl break-all pr-20">{credentialsModal.username}</p>
                 <button 
                   onClick={() => {
                     navigator.clipboard.writeText(credentialsModal.username || '');
                     toast.success('Username copied');
                   }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white shadow-sm border border-gray-100 px-4 py-2 rounded-xl text-xs font-black hover:bg-black hover:text-white transition-all"
+                  className="absolute right-6 top-1/2 -translate-y-1/2 bg-white shadow-md border border-gray-100 px-5 py-2.5 rounded-2xl text-xs font-black hover:bg-black hover:text-white transition-all active:scale-95"
                 >
                   Copy
                 </button>
               </div>
 
-              <div className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 text-left relative group">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Temporary Password</p>
-                <p className="font-black text-black text-lg">{credentialsModal.password}</p>
+              <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 text-left relative group hover:border-amber-200 transition-all">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Temporary Password</p>
+                <p className="font-black text-black text-xl pr-20">{credentialsModal.password}</p>
                 <button 
                   onClick={() => {
                     navigator.clipboard.writeText(credentialsModal.password || '');
                     toast.success('Password copied');
                   }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white shadow-sm border border-gray-100 px-4 py-2 rounded-xl text-xs font-black hover:bg-black hover:text-white transition-all"
+                  className="absolute right-6 top-1/2 -translate-y-1/2 bg-white shadow-md border border-gray-100 px-5 py-2.5 rounded-2xl text-xs font-black hover:bg-black hover:text-white transition-all active:scale-95"
                 >
                   Copy
                 </button>
@@ -891,9 +891,16 @@ Video: ${intake.videoUrl}`;
 
             <button 
               onClick={() => setCredentialsModal({ open: false })}
-              className="mt-10 w-full bg-black text-white py-5 rounded-[28px] font-black text-lg hover:bg-amber-500 hover:text-black transition-all shadow-xl shadow-black/10"
+              className="mt-12 w-full bg-black text-white py-6 rounded-[30px] font-black text-xl hover:bg-amber-500 hover:text-black transition-all shadow-xl shadow-black/10 active:scale-95"
             >
               Done
+            </button>
+            
+            <button 
+              onClick={() => setCredentialsModal({ open: false })}
+              className="absolute top-6 right-8 text-gray-400 hover:text-black transition-all"
+            >
+              <X className="w-6 h-6" />
             </button>
           </motion.div>
         </div>
