@@ -1150,6 +1150,7 @@ function BulletList({ items }: { items: string[] }) {
 }
 
 function ProgramTable({ section }: { section: ProgramSection }) {
+  const { language } = useAppStore();
   return (
     <div className="overflow-hidden rounded-[22px] border" style={{ borderColor: 'rgba(245,168,0,0.18)' }}>
       <div className="px-4 sm:px-5 py-3 border-b" style={{ borderColor: 'rgba(245,168,0,0.18)', background: 'rgba(245,168,0,0.10)' }}>
