@@ -357,8 +357,6 @@ const LandingPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-                </div>
-              </div>
             </div>
 
             <div className="bg-white p-8 sm:p-12 rounded-[40px] shadow-2xl shadow-black/5 border border-gray-100">
