@@ -1190,6 +1190,7 @@ export default function UniversitiesPage() {
   const { user } = useAuth();
   const { id } = useParams<{ id?: string }>();
   const language = 'ar'; // Fixed to Arabic as requested
+  const isRTL = true; // Arabic is RTL
   
   const universities = useMemo(() => {
     return decodedUniversities.map(u => ({
@@ -1227,7 +1228,7 @@ export default function UniversitiesPage() {
   const backHref = user ? getHomePathForRole(user.role) : '/';
 
   return (
-    <div className="v3 min-h-screen" dir={language === 'ar' ? 'rtl' : 'ltr'} style={{ fontFamily: language === 'ar' ? 'var(--font-arabic)' : 'var(--font-sans)' }}>
+    <div className="v3 min-h-screen" dir={isRTL ? 'rtl' : 'ltr'} style={{ fontFamily: isRTL ? 'var(--font-arabic)' : 'var(--font-sans)' }}>
       <header
         className="sticky top-0 z-40 border-b"
         style={{
@@ -1257,8 +1258,8 @@ export default function UniversitiesPage() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[13px] font-semibold"
               style={{ borderColor: 'rgba(245,168,0,0.18)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.03)' }}
             >
-              {language === 'ar' ? <ArrowLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-              {language === 'ar' ? 'رجوع' : 'Back'}
+              {isRTL ? <ArrowLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              {isRTL ? 'رجوع' : 'Back'}
             </Link>
           </div>
         </div>
@@ -1410,8 +1411,8 @@ export default function UniversitiesPage() {
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[13px] font-semibold"
                       style={{ borderColor: 'rgba(245,168,0,0.18)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.03)' }}
                     >
-                      {language === 'ar' ? <ChevronLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4 rotate-180" />}
-                      {language === 'ar' ? 'كل الجامعات' : 'All Universities'}
+                      {isRTL ? <ChevronLeft className="w-4 h-4 rotate-180" /> : <ChevronLeft className="w-4 h-4" />}
+                      {isRTL ? 'كل الجامعات' : 'All Universities'}
                     </Link>
                     <h1 className="mt-4 text-[28px] sm:text-[36px] font-bold tracking-tight v3-serif" style={{ color: 'var(--v3-cream)' }}>
                       {active.name}

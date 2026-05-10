@@ -35,12 +35,9 @@ const applicationSchema = z.object({
   email: z.string().email('Invalid email address'),
   phone: z.string().min(5, 'Phone number is required'),
   country: z.string().min(2, 'Country is required'),
-  program: z.string().optional(),
+  program: z.string().min(1, 'Please select a program'),
   aviationDegree: z.string().optional(),
   studyLevel: z.string().min(1, 'Please select a study level'),
-}).refine(data => data.program || data.aviationDegree, {
-  message: "Please select either a regular program or an aviation degree",
-  path: ["program"]
 });
 
 type ApplicationFormValues = z.infer<typeof applicationSchema>;
@@ -52,6 +49,9 @@ const LandingPage: React.FC = () => {
   const [heroIdx, setHeroIdx] = useState(0);
 
   useEffect(() => {
+    // Force a scroll to top on load to ensure proper rendering
+    window.scrollTo(0, 0);
+    
     const handleScroll = () => {
       setNavSolid(window.scrollY > 50);
     };
@@ -218,7 +218,7 @@ const LandingPage: React.FC = () => {
               className="relative"
             >
               <div
-                className="relative z-10 rounded-[40px] overflow-hidden shadow-2xl border border-white/10 bg-black/40 flex items-center justify-center"
+                className="relative z-10 rounded-[40px] overflow-hidden shadow-2xl border border-white/10 bg-black/40 flex items-center justify-center min-h-[300px] md:min-h-[560px]"
               >
                 <motion.img
                   key={heroIdx}
@@ -227,7 +227,7 @@ const LandingPage: React.FC = () => {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.6 }}
-                  className="w-full h-[300px] md:h-[560px] object-contain"
+                  className="w-full h-auto max-h-[300px] md:max-h-[560px] object-contain"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent pointer-events-none" />
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
@@ -316,11 +316,20 @@ const LandingPage: React.FC = () => {
               <div className="space-y-8">
                 <div className="flex items-start gap-6">
                   <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
+                    <MapPin className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Office</p>
+                    <p className="text-xl font-bold text-black">Vakhtang Chabukiani 2, Tbilisi, Georgia</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-6">
+                  <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
                     <Mail className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Email us 24/7</p>
-                    <p className="text-xl font-bold text-black">info@thewayge.com</p>
+                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Email</p>
+                    <p className="text-xl font-bold text-black">info@theway.ge</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-6">
@@ -328,17 +337,8 @@ const LandingPage: React.FC = () => {
                     <Phone className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Call us any time</p>
-                    <p className="text-xl font-bold text-black">+995 500 01 800</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-6">
-                  <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
-                    <MapPin className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Our location</p>
-                    <p className="text-xl font-bold text-black">Tbilisi, Georgia</p>
+                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Phone</p>
+                    <p className="text-xl font-bold text-black">+995 571 009 550</p>
                   </div>
                 </div>
               </div>
@@ -355,7 +355,7 @@ const LandingPage: React.FC = () => {
                     <input 
                       {...register('name')}
                       placeholder="John Doe"
-                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium"
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium text-black"
                     />
                     {errors.name && <p className="text-red-500 text-xs mt-1 font-bold">{errors.name.message}</p>}
                   </div>
@@ -364,7 +364,7 @@ const LandingPage: React.FC = () => {
                     <input 
                       {...register('email')}
                       placeholder="john@example.com"
-                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium"
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium text-black"
                     />
                     {errors.email && <p className="text-red-500 text-xs mt-1 font-bold">{errors.email.message}</p>}
                   </div>
@@ -376,7 +376,7 @@ const LandingPage: React.FC = () => {
                     <input 
                       {...register('phone')}
                       placeholder="+995 ..."
-                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium"
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium text-black"
                     />
                     {errors.phone && <p className="text-red-500 text-xs mt-1 font-bold">{errors.phone.message}</p>}
                   </div>
@@ -385,7 +385,7 @@ const LandingPage: React.FC = () => {
                     <input 
                       {...register('country')}
                       placeholder="Georgia"
-                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium"
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium text-black"
                     />
                     {errors.country && <p className="text-red-500 text-xs mt-1 font-bold">{errors.country.message}</p>}
                   </div>
@@ -396,12 +396,15 @@ const LandingPage: React.FC = () => {
                     <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Select Program</label>
                     <select 
                       {...register('program')}
-                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none"
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none text-black"
                     >
-                      <option value="">Select Program</option>
-                      <option value="bachelor">Bachelor's Degree</option>
-                      <option value="master">Master's Degree</option>
-                      <option value="phd">Doctorate / PhD</option>
+                      <option value="" className="text-gray-400">Select Program</option>
+                      <option value="medicine" className="text-black">Medicine</option>
+                      <option value="dentistry" className="text-black">Dentistry</option>
+                      <option value="pharmacy" className="text-black">Pharmacy</option>
+                      <option value="engineering" className="text-black">Engineering</option>
+                      <option value="business" className="text-black">Business</option>
+                      <option value="computer_science" className="text-black">Computer Science</option>
                     </select>
                     {errors.program && <p className="text-red-500 text-xs mt-1 font-bold">{errors.program.message}</p>}
                   </div>
@@ -409,13 +412,13 @@ const LandingPage: React.FC = () => {
                     <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Aviation Degree</label>
                     <select 
                       {...register('aviationDegree')}
-                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none"
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none text-black"
                     >
-                      <option value="">Aviation Degree (Optional)</option>
-                      <option value="pilot">Commercial Pilot License (CPL)</option>
-                      <option value="atpl">Airline Transport Pilot License (ATPL)</option>
-                      <option value="engineering">Aviation Engineering</option>
-                      <option value="management">Aviation Management</option>
+                      <option value="" className="text-gray-400">Aviation Degree (Optional)</option>
+                      <option value="pilot" className="text-black">Commercial Pilot License (CPL)</option>
+                      <option value="atpl" className="text-black">Airline Transport Pilot License (ATPL)</option>
+                      <option value="engineering" className="text-black">Aviation Engineering</option>
+                      <option value="management" className="text-black">Aviation Management</option>
                     </select>
                   </div>
                 </div>
@@ -424,11 +427,11 @@ const LandingPage: React.FC = () => {
                   <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Study Level</label>
                   <select 
                     {...register('studyLevel')}
-                    className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none"
+                    className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none text-black"
                   >
-                    <option value="">Select Study Level</option>
-                    <option value="bachelor">Bachelor's</option>
-                    <option value="master">Master's</option>
+                    <option value="" className="text-gray-400">Select Study Level</option>
+                    <option value="bachelor" className="text-black">Bachelor's</option>
+                    <option value="master" className="text-black">Master's</option>
                   </select>
                   {errors.studyLevel && <p className="text-red-500 text-xs mt-1 font-bold">{errors.studyLevel.message}</p>}
                 </div>
@@ -452,17 +455,17 @@ const LandingPage: React.FC = () => {
             <div className="col-span-2">
               <img src={logoUrl} alt="The Way" className="h-16 w-auto mb-8 object-contain" />
               <p className="text-white/60 text-lg max-w-sm mb-8">The Right Path to Your Success. Join our community and start your international journey today.</p>
-              <div className="flex items-center gap-3 mt-4">
-                <a href="https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
-                  <Camera className="w-5 h-5" />
-                </a>
-                <a href="https://www.tiktok.com/@theway.ge0?_r=1&_t=ZS-95vVkmR2ELa" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
-                  <Globe className="w-5 h-5" />
-                </a>
-                <a href="#" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
-                  <Video className="w-5 h-5" />
-                </a>
-              </div>
+                <div className="flex items-center gap-3 mt-4">
+                  <a href="https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
+                    <Camera className="w-5 h-5" />
+                  </a>
+                  <a href="https://www.tiktok.com/@theway.ge0?_r=1&_t=ZS-95vVkmR2ELa" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
+                    <Globe className="w-5 h-5" />
+                  </a>
+                  <a href="https://www.youtube.com/@thewaygeorgia" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
+                    <Video className="w-5 h-5" />
+                  </a>
+                </div>
             </div>
             
             <div>
