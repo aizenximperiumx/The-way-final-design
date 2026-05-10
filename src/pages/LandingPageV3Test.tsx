@@ -7,6 +7,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import {
   ArrowRight,
+  Camera,
   Check,
   Globe,
   Mail,
@@ -17,6 +18,7 @@ import {
   Share2,
   ShieldCheck,
   Users,
+  Video,
   X,
 } from 'lucide-react';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
@@ -37,6 +39,8 @@ const applicationSchema = z.object({
   phone: z.string().min(5, 'Phone number is required'),
   country: z.string().min(2, 'Country is required'),
   program: z.string().min(1, 'Please select a program'),
+  aviationDegree: z.string().optional(),
+  studyLevel: z.string().min(1, 'Please select a study level'),
 });
 
 type ApplicationForm = z.infer<typeof applicationSchema>;
@@ -89,6 +93,7 @@ export default function LandingPageV3Test() {
     'Business',
     'Architecture',
     'Computer Science',
+    'Aviation',
   ]), []);
 
   const onSubmit = async (data: ApplicationForm) => {
@@ -253,7 +258,7 @@ export default function LandingPageV3Test() {
       </AnimatePresence>
 
       <main id="home" className="pt-[72px] lg:pt-[114px]">
-        <section className="relative min-h-[680px] h-[100vh] overflow-hidden flex items-center">
+        <section className="relative min-h-screen md:h-[100vh] overflow-hidden flex flex-col md:flex-row md:items-center">
           <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 20% 50%, rgba(245,168,0,0.07) 0%, transparent 60%), linear-gradient(135deg, #0A1628 0%, #0D1F3C 50%, #0A1628 100%)' }} />
           <div className="absolute inset-0 opacity-70" style={{ backgroundImage: 'linear-gradient(rgba(245,168,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(245,168,0,0.04) 1px, transparent 1px)', backgroundSize: '80px 80px' }} />
           <div className="absolute inset-0 opacity-25">
@@ -261,33 +266,33 @@ export default function LandingPageV3Test() {
           </div>
           <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,22,40,0.30), rgba(10,22,40,0.94))' }} />
 
-          <div className="relative z-10 max-w-7xl mx-auto px-6 w-full">
+          <div className="relative z-10 max-w-7xl mx-auto px-6 w-full py-20 md:py-0 flex-grow flex flex-col justify-center">
             <div className="max-w-3xl">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-[2px]" style={{ background: 'var(--v3-yellow)' }} />
-                <p className="text-[11px] tracking-[4px] uppercase font-semibold" style={{ color: 'var(--v3-yellow)' }}>
+                <p className="text-[10px] sm:text-[11px] tracking-[2px] sm:tracking-[4px] uppercase font-semibold" style={{ color: 'var(--v3-yellow)' }}>
                   Your Gateway to Education in Georgia
                 </p>
               </div>
-              <h1 className="v3-serif mt-6 font-black leading-[0.93] text-[44px] sm:text-[74px] lg:text-[96px]" style={{ color: 'var(--v3-white)' }}>
+              <h1 className="v3-serif mt-6 font-black leading-[1.1] sm:leading-[0.93] text-[34px] xs:text-[38px] sm:text-[74px] lg:text-[96px]" style={{ color: 'var(--v3-white)' }}>
                 Study in<br />
                 <em className="italic" style={{ color: 'var(--v3-yellow)' }}>Georgia</em><br />
-                <span className="block" style={{ WebkitTextStroke: '1px rgba(255,255,255,0.18)', color: 'transparent' }}>The Right Way</span>
+                <span className="block mt-2 md:mt-0" style={{ WebkitTextStroke: '1px rgba(255,255,255,0.18)', color: 'transparent', fontSize: '0.85em' }}>The Right Way</span>
               </h1>
-              <p className="v3-body mt-6 text-[20px] leading-[1.75] max-w-[520px]" style={{ color: 'rgba(245,240,232,0.65)' }}>
+              <p className="v3-body mt-6 text-[15px] sm:text-[20px] leading-[1.6] sm:leading-[1.75] max-w-[520px]" style={{ color: 'rgba(245,240,232,0.65)' }}>
                 We guide international students through every step of enrolling in Georgia&apos;s top universities - from application to graduation and beyond.
               </p>
-              <div className="mt-10 flex flex-wrap gap-3">
+              <div className="mt-8 sm:mt-10 flex flex-wrap gap-3">
                 <Link
                   to="/universities"
-                  className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center gap-2"
+                  className="v3-btn-fx w-full sm:w-auto px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center justify-center gap-2"
                   style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}
                 >
                   Explore Universities <ArrowRight className="w-4 h-4" />
                 </Link>
                 <a
                   href="#contact"
-                  className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-semibold inline-flex items-center gap-2 border-2"
+                  className="v3-btn-fx w-full sm:w-auto px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-semibold inline-flex items-center justify-center gap-2 border-2"
                   style={{ borderColor: 'rgba(255,255,255,0.40)', color: 'var(--v3-white)', borderRadius: 4 }}
                 >
                   Apply Now - Free
@@ -303,16 +308,16 @@ export default function LandingPageV3Test() {
             </div>
           </div>
 
-          <div className="absolute left-0 right-0 bottom-0 grid grid-cols-2 lg:grid-cols-4 border-t" style={{ borderColor: 'var(--v3-glass-border)', background: 'rgba(10,22,40,0.75)', backdropFilter: 'blur(16px)' }}>
+          <div className="relative md:absolute left-0 right-0 bottom-0 grid grid-cols-2 lg:grid-cols-4 border-t" style={{ borderColor: 'var(--v3-glass-border)', background: 'rgba(10,22,40,0.95)', backdropFilter: 'blur(16px)' }}>
             {[
               { n: 5000, s: '+', l: 'Students Enrolled' },
               { n: 40, s: '+', l: 'Partner Universities' },
               { n: 15, s: '+', l: 'Years Experience' },
               { n: 98, s: '%', l: 'Success Rate' },
             ].map((it) => (
-              <div key={it.l} className="px-6 py-5 border-r last:border-r-0 border-b lg:border-b-0" style={{ borderColor: 'var(--v3-glass-border)' }}>
+              <div key={it.l} className="px-4 sm:px-6 py-4 sm:py-5 border-r last:border-r-0 border-b lg:border-b-0" style={{ borderColor: 'var(--v3-glass-border)' }}>
                 <AnimatedCount target={it.n} suffix={it.s} />
-                <div className="text-[10px] tracking-[2px] uppercase mt-1" style={{ color: 'rgba(245,240,232,0.45)' }}>
+                <div className="text-[9px] sm:text-[10px] tracking-[1.5px] sm:tracking-[2px] uppercase mt-1" style={{ color: 'rgba(245,240,232,0.45)' }}>
                   {it.l}
                 </div>
               </div>
@@ -664,15 +669,28 @@ export default function LandingPageV3Test() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-8 flex gap-2">
-                  {[Globe, Share2, MessageCircle, Users].map((I, idx) => (
-                    <a key={idx} href="#contact" className="w-10 h-10 rounded-full flex items-center justify-center border"
-                      style={{ borderColor: 'rgba(245,168,0,0.20)', background: 'rgba(245,168,0,0.08)', color: 'var(--v3-yellow)' }}
-                      aria-label="Social"
+                <div className="mt-8">
+                  <p className="text-[10px] tracking-[3px] uppercase font-bold mb-4" style={{ color: 'var(--v3-yellow)' }}>Follow Us</p>
+                  <div className="flex gap-3">
+                    <a href="https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-xl flex items-center justify-center border hover:bg-[var(--v3-yellow)] hover:text-[var(--v3-navy)] transition-all"
+                      style={{ borderColor: 'rgba(245,168,0,0.25)', background: 'rgba(245,168,0,0.05)', color: 'var(--v3-yellow)' }}
+                      aria-label="Instagram"
                     >
-                      <I className="w-5 h-5" />
+                      <Camera className="w-5 h-5" />
                     </a>
-                  ))}
+                    <a href="https://www.tiktok.com/@theway.ge0?_r=1&_t=ZS-95vVkmR2ELa" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-xl flex items-center justify-center border hover:bg-[var(--v3-yellow)] hover:text-[var(--v3-navy)] transition-all"
+                      style={{ borderColor: 'rgba(245,168,0,0.25)', background: 'rgba(245,168,0,0.05)', color: 'var(--v3-yellow)' }}
+                      aria-label="TikTok"
+                    >
+                      <Globe className="w-5 h-5" />
+                    </a>
+                    <a href="https://www.youtube.com/@thewaygeorgia" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-xl flex items-center justify-center border hover:bg-[var(--v3-yellow)] hover:text-[var(--v3-navy)] transition-all"
+                      style={{ borderColor: 'rgba(245,168,0,0.25)', background: 'rgba(245,168,0,0.05)', color: 'var(--v3-yellow)' }}
+                      aria-label="YouTube"
+                    >
+                      <Video className="w-5 h-5" />
+                    </a>
+                  </div>
                 </div>
               </div>
 
@@ -688,7 +706,7 @@ export default function LandingPageV3Test() {
                         <input
                           {...register('name')}
                           className="w-full px-4 py-3 text-[13px] outline-none border rounded"
-                          style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(245,168,0,0.12)', color: 'var(--v3-white)' }}
+                          style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
                           placeholder="Your name"
                         />
                         {errors.name && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.name.message}</p>}
@@ -699,7 +717,7 @@ export default function LandingPageV3Test() {
                           type="email"
                           {...register('email')}
                           className="w-full px-4 py-3 text-[13px] outline-none border rounded"
-                          style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(245,168,0,0.12)', color: 'var(--v3-white)' }}
+                          style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
                           placeholder="you@email.com"
                         />
                         {errors.email && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.email.message}</p>}
@@ -711,7 +729,7 @@ export default function LandingPageV3Test() {
                         <input
                           {...register('phone')}
                           className="w-full px-4 py-3 text-[13px] outline-none border rounded"
-                          style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(245,168,0,0.12)', color: 'var(--v3-white)' }}
+                          style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
                           placeholder="+1..."
                         />
                         {errors.phone && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.phone.message}</p>}
@@ -721,28 +739,58 @@ export default function LandingPageV3Test() {
                         <input
                           {...register('country')}
                           className="w-full px-4 py-3 text-[13px] outline-none border rounded"
-                          style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(245,168,0,0.12)', color: 'var(--v3-white)' }}
+                          style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
                           placeholder="Your country"
                         />
                         {errors.country && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.country.message}</p>}
                       </div>
                     </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Program</label>
+                        <select
+                          {...register('program')}
+                          className="w-full px-4 py-3 text-[13px] outline-none border rounded"
+                          style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
+                        >
+                          <option value="">Select a program</option>
+                          <option value="Medicine">Medicine</option>
+                          <option value="Dentistry">Dentistry</option>
+                          <option value="Pharmacy">Pharmacy</option>
+                          <option value="Engineering">Engineering</option>
+                          <option value="Business">Business</option>
+                          <option value="Computer Science">Computer Science</option>
+                          <option value="Aviation">Aviation</option>
+                        </select>
+                        {errors.program && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.program.message}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Aviation Degree (Optional)</label>
+                        <select
+                          {...register('aviationDegree')}
+                          className="w-full px-4 py-3 text-[13px] outline-none border rounded"
+                          style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
+                        >
+                          <option value="">None / Not Aviation</option>
+                          <option value="CPL">Commercial Pilot License (CPL)</option>
+                          <option value="ATPL">Airline Transport Pilot License (ATPL)</option>
+                          <option value="Engineering">Aviation Engineering</option>
+                          <option value="Management">Aviation Management</option>
+                        </select>
+                      </div>
+                    </div>
                     <div>
-                      <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Program</label>
+                      <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Study Level</label>
                       <select
-                        {...register('program')}
+                        {...register('studyLevel')}
                         className="w-full px-4 py-3 text-[13px] outline-none border rounded"
-                        style={{ background: 'rgba(255,255,255,0.92)', borderColor: 'rgba(245,168,0,0.12)', color: '#0b0b16' }}
+                        style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
                       >
-                        <option value="" style={{ color: '#6b7280' }}>Select a program</option>
-                        <option value="Medicine" style={{ color: '#0b0b16' }}>Medicine</option>
-                        <option value="Dentistry" style={{ color: '#0b0b16' }}>Dentistry</option>
-                        <option value="Pharmacy" style={{ color: '#0b0b16' }}>Pharmacy</option>
-                        <option value="Engineering" style={{ color: '#0b0b16' }}>Engineering</option>
-                        <option value="Business" style={{ color: '#0b0b16' }}>Business</option>
-                        <option value="Computer Science" style={{ color: '#0b0b16' }}>Computer Science</option>
+                        <option value="">Select Level</option>
+                        <option value="Bachelor">Bachelor&apos;s</option>
+                        <option value="Master">Master&apos;s</option>
                       </select>
-                      {errors.program && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.program.message}</p>}
+                      {errors.studyLevel && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.studyLevel.message}</p>}
                     </div>
                     <div className="pt-2">
                       <button
