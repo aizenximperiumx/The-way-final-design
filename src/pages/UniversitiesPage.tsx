@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, CheckCircle2, ChevronLeft, ExternalLink, Globe, GraduationCap, MapPin, Search, X, Languages } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronLeft, ExternalLink, Globe, GraduationCap, MapPin, Search, X } from 'lucide-react';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 import ugPhotoUrl from '../../University of Georgia ( UG ).jpg';
 import gauPhotoUrl from '../../Georgian American University (GAU).jpg';

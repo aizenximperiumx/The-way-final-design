@@ -15,7 +15,6 @@ import {
   GraduationCap,
   UserCircle,
   Building2,
-  Languages,
   X as CloseIcon
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -41,19 +40,6 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Appointments', icon: Calendar, path: '/appointments', roles: ['student', 'staff', 'agency_staff', 'ceo'] },
   { label: 'Messages', icon: MessageSquare, path: '/messages', roles: ['student', 'staff', 'ceo'] },
 ];
-
-const labelMap: Record<string, { en: string; ar: string }> = {
-  'Dashboard': { en: 'Dashboard', ar: 'لوحة التحكم' },
-  'Universities': { en: 'Universities', ar: 'الجامعات' },
-  'Applications': { en: 'Applications', ar: 'الطلبات' },
-  'Agency Leads': { en: 'Agency Leads', ar: 'طلبات الوكالات' },
-  'Agencies': { en: 'Agencies', ar: 'الوكالات' },
-  'Students': { en: 'Students', ar: 'الطلاب' },
-  'Analytics': { en: 'Analytics', ar: 'التحليلات' },
-  'Appointments': { en: 'Appointments', ar: 'المواعيد' },
-  'Messages': { en: 'Messages', ar: 'الرسائل' },
-  'Logout': { en: 'Logout', ar: 'تسجيل الخروج' },
-};
 
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();

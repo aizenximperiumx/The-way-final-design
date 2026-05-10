@@ -2,11 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowRight, 
-  CheckCircle2, 
   Menu, 
   X, 
-  GraduationCap, 
-  BookOpen, 
   Award, 
   TrendingUp, 
   Shield, 
@@ -19,7 +16,7 @@ import {
   Video,
   Camera
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -48,44 +45,15 @@ const applicationSchema = z.object({
 
 type ApplicationFormValues = z.infer<typeof applicationSchema>;
 
-const Testimonials = () => {
-  const testimonials = [
-    { name: 'Ahmed M.', university: 'Alte University', text: 'The Way made my dream of studying medicine in Georgia a reality. They handled everything from translation to my residence permit.', rating: 5 },
-    { name: 'Sarah K.', university: 'University of Georgia', text: 'Professional and reliable. I felt supported throughout the whole process, even after arriving in Tbilisi.', rating: 5 },
-    { name: 'Omar R.', university: 'Ilia State University', text: 'The team is very knowledgeable and helped me choose the right university for my engineering degree.', rating: 5 }
-  ];
-
-  return (
-    <div className="grid md:grid-cols-3 gap-8">
-      {testimonials.map((t, i) => (
-        <div key={i} className="bg-white/5 border border-white/10 p-8 rounded-[32px] hover:bg-white/10 transition-all">
-          <div className="flex gap-1 mb-4 text-amber-500">
-            {[...Array(t.rating)].map((_, i) => <Award key={i} className="w-4 h-4 fill-current" />)}
-          </div>
-          <p className="text-white/80 mb-6 italic">"{t.text}"</p>
-          <div>
-            <div className="font-bold text-white">{t.name}</div>
-            <div className="text-amber-500 text-sm">{t.university}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
 const LandingPage: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { addApplication } = useAppStore();
-  const navigate = useNavigate();
   const [navSolid, setNavSolid] = useState(false);
   const [heroIdx, setHeroIdx] = useState(0);
-  const [showApplyRibbon, setShowApplyRibbon] = useState(false);
-  const [newsletterEmail, setNewsletterEmail] = useState('');
 
   useEffect(() => {
     const handleScroll = () => {
       setNavSolid(window.scrollY > 50);
-      setShowApplyRibbon(window.scrollY > 600);
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
@@ -109,17 +77,6 @@ const LandingPage: React.FC = () => {
       toast.error('Failed to submit application. Please try again.');
     }
   };
-
-  const UNIVERSITY_OPTIONS = [
-    { id: 'ug', name: 'University of Georgia' },
-    { id: 'tsmu', name: 'Tbilisi State Medical University' },
-    { id: 'tsu', name: 'Tbilisi State University' },
-    { id: 'ilia', name: 'Ilia State University' },
-    { id: 'gtu', name: 'Georgian Technical University' },
-    { id: 'ciu', name: 'Caucasus International University' },
-    { id: 'alte', name: 'Alte University' },
-    { id: 'gau', name: 'Georgian American University' },
-  ] as const;
 
   return (
     <div className="min-h-screen bg-[#050A14] font-sans" dir="ltr">
