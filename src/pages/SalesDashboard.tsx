@@ -4,6 +4,7 @@ import {
   CheckCircle2, 
   Clock,
   XCircle, 
+  X,
   Mail, 
   Globe, 
   GraduationCap, 
