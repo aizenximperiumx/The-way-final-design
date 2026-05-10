@@ -163,8 +163,10 @@ export interface AppStoreState {
   appointments: Appointment[];
   chatMessages: ChatMessage[];
   chatThreadReadAt: Record<string, string>;
+  language: 'en' | 'ar';
   backendHydrated: boolean;
 
+  setLanguage: (lang: 'en' | 'ar') => void;
   login: (username: string, password: string) => Promise<User | null>;
   logout: () => void;
   restoreSession: () => Promise<void>;
@@ -240,8 +242,10 @@ const useAppStore = create<AppStoreState>()(
       chatMessages: [],
       chatThreadReadAt: {},
       appointments: [],
+      language: 'en',
       backendHydrated: false,
 
+      setLanguage: (language) => set({ language }),
       // Your actions here
       login: async (username: string, password: string) => {
         const maskEmail = (value: string) => {

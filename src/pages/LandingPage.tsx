@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -16,9 +16,11 @@ import {
   Phone, 
   Mail, 
   MapPin, 
-  Users
+  Users,
+  Youtube,
+  Instagram
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useAppStore } from '../store/appStore';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 import vvvUrl from '../../vvv.webp';
 import cccUrl from '../../ccc.webp';
@@ -34,15 +36,19 @@ const applicationSchema = z.object({
   email: z.string().email('Invalid email address'),
   phone: z.string().min(5, 'Phone number is required'),
   country: z.string().min(2, 'Country is required'),
-  program: z.string().min(1, 'Please select a program'),
+  program: z.string().optional(),
+  aviationDegree: z.string().optional(),
+  studyLevel: z.string().min(1, 'Please select a study level'),
+}).refine(data => data.program || data.aviationDegree, {
+  message: "Please select either a regular program or an aviation degree",
+  path: ["program"]
 });
 
 type ApplicationForm = z.infer<typeof applicationSchema>;
 
 const LandingPage: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [language, setLanguage] = useState<'en' | 'ar'>('en');
-  const { addApplication } = useApp();
+  const { addApplication, language, setLanguage } = useAppStore();
   const navigate = useNavigate();
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [showApplyRibbon, setShowApplyRibbon] = useState(false);
@@ -173,6 +179,10 @@ const LandingPage: React.FC = () => {
         phone: 'Phone Number',
         country: 'Country',
         program: 'Select Program',
+        aviation: 'Aviation Degree',
+        level: 'Study Level',
+        bachelor: 'Bachelor\'s',
+        master: 'Master\'s',
         message: 'Your Message (Optional)',
         submit: 'Send Application'
       },
@@ -238,6 +248,10 @@ const LandingPage: React.FC = () => {
         phone: 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ',
         country: 'Ø§Ù„Ø¯ÙˆÙ„Ø©',
         program: 'Ø§Ø®ØªØ± Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬',
+        aviation: 'ØªØ®ØµØµ Ø§Ù„Ø·ÙŠØ±Ø§Ù†',
+        level: 'Ø§Ù„Ù…Ø³ØªÙˆÙ‰ Ø§Ù„Ø¯Ø±Ø§Ø³ÙŠ',
+        bachelor: 'Ø¨ÙƒØ§Ù„ÙˆØ±ÙŠÙˆØ³',
+        master: 'Ù…Ø§Ø¬Ø³ØªÙŠØ±',
         message: 'Ø±Ø³Ø§Ù„ØªÙƒ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)',
         submit: 'Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„Ø·Ù„Ø¨'
       },
@@ -329,13 +343,13 @@ const LandingPage: React.FC = () => {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-24 overflow-hidden bg-[#050A14]">
+      <section className="relative pt-20 md:pt-32 pb-24 overflow-hidden bg-[#050A14]">
         <div className="absolute inset-0 bg-gradient-to-b from-black via-[#050A14] to-[#050A14] z-0 pointer-events-none"></div>
         <div className="ambient-blob ambient-blob--1 z-0"></div>
         <div className="ambient-blob ambient-blob--2 z-0"></div>
         <div className="ambient-blob ambient-blob--3 z-0"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative z-10 grid lg:grid-cols-2 gap-12 items-center">
+          <div className="relative z-10 grid lg:grid-cols-2 gap-8 md:gap-12 items-center">
             <motion.div
               initial={{ opacity: 0, x: isRTL ? 50 : -50 }}
               animate={{ opacity: 1, x: 0 }}
@@ -345,7 +359,7 @@ const LandingPage: React.FC = () => {
                 <Award className="w-4 h-4" />
                 {content.hero.badge}
               </div>
-              <h1 className="text-5xl lg:text-7xl font-black text-white leading-[1.05] tracking-tight mb-6">
+              <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black text-white leading-[1.1] tracking-tight mb-6">
                 {content.hero.title}
               </h1>
               <p className="text-lg lg:text-xl text-white/70 mb-10 max-w-xl leading-relaxed">
@@ -421,7 +435,7 @@ const LandingPage: React.FC = () => {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.6 }}
-                  className="w-full h-[560px] object-contain"
+                  className="w-full h-[300px] md:h-[560px] object-contain"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent pointer-events-none" />
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
@@ -675,18 +689,46 @@ const LandingPage: React.FC = () => {
                   </div>
                 </div>
 
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">{content.contact.program}</label>
+                    <select 
+                      {...register('program')}
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none"
+                    >
+                      <option value="">{content.contact.program}</option>
+                      <option value="bachelor">Bachelor's Degree</option>
+                      <option value="master">Master's Degree</option>
+                      <option value="phd">Doctorate / PhD</option>
+                    </select>
+                    {errors.program && <p className="text-red-500 text-xs mt-1 font-bold">{errors.program.message}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">{content.contact.aviation}</label>
+                    <select 
+                      {...register('aviationDegree')}
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none"
+                    >
+                      <option value="">{content.contact.aviation}</option>
+                      <option value="pilot">Commercial Pilot License (CPL)</option>
+                      <option value="atpl">Airline Transport Pilot License (ATPL)</option>
+                      <option value="engineering">Aviation Engineering</option>
+                      <option value="management">Aviation Management</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">{content.contact.program}</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">{content.contact.level}</label>
                   <select 
-                    {...register('program')}
+                    {...register('studyLevel')}
                     className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none"
                   >
-                    <option value="">Select a program</option>
-                    <option value="bachelor">Bachelor's Degree</option>
-                    <option value="master">Master's Degree</option>
-                    <option value="phd">Doctorate / PhD</option>
+                    <option value="">{content.contact.level}</option>
+                    <option value="bachelor">{content.contact.bachelor}</option>
+                    <option value="master">{content.contact.master}</option>
                   </select>
-                  {errors.program && <p className="text-red-500 text-xs mt-1 font-bold">{errors.program.message}</p>}
+                  {errors.studyLevel && <p className="text-red-500 text-xs mt-1 font-bold">{errors.studyLevel.message}</p>}
                 </div>
 
                 <button 
@@ -831,14 +873,14 @@ const LandingPage: React.FC = () => {
                 {language === 'ar' ? 'ØªØ§Ø¨Ø¹Ù†Ø§ Ø¹Ù„Ù‰:' : 'Follow us on:'}
               </p>
               <div className="flex items-center gap-3 mt-4">
-                <a href="#" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
+                <a href="https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
+                  <Instagram className="w-5 h-5" />
+                </a>
+                <a href="https://www.tiktok.com/@theway.ge0?_r=1&_t=ZS-95vVkmR2ELa" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
                   <Globe className="w-5 h-5" />
                 </a>
                 <a href="#" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
-                  <Mail className="w-5 h-5" />
-                </a>
-                <a href="#" className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all">
-                  <Phone className="w-5 h-5" />
+                  <Youtube className="w-5 h-5" />
                 </a>
               </div>
             </div>

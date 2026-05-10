@@ -30,6 +30,8 @@ export default function AgenciesPortal() {
     secondNationality: '',
     homeAddress: '',
     university: '',
+    aviationDegree: '',
+    studyLevel: '',
   });
   const [viewApp, setViewApp] = useState<{ open: boolean; id?: string }>({ open: false });
 
@@ -154,7 +156,9 @@ DOB: ${form.dob}
 Nationality: ${form.nationality}
 Second nationality: ${form.secondNationality}
 Home address: ${form.homeAddress}
-University: ${getUniversityName(form.university)}`;
+University: ${getUniversityName(form.university)}
+Aviation Degree: ${form.aviationDegree}
+Study Level: ${form.studyLevel}`;
     const application = {
       name: form.fullName,
       email: form.studentEmail,
@@ -162,13 +166,13 @@ University: ${getUniversityName(form.university)}`;
       studentEmail: form.studentEmail,
       phone: form.phone,
       country: form.country,
-      program: 'General',
+      program: form.aviationDegree ? `Aviation: ${form.aviationDegree}` : 'General',
       university: form.university || undefined,
       status: 'submitted' as const,
       stage: 'applied' as const,
       createdAt: new Date().toISOString(),
       internalNotes: [
-        { id: Date.now().toString(), authorName: user.name, text: `Agency submission\nAge: ${form.age}\nPassport: ${form.passportNumber}\nDOB: ${form.dob}\nNationality: ${form.nationality}\nSecond: ${form.secondNationality}\nAddress: ${form.homeAddress}\nVideo: ${videoUrl}\nPDFs: ${pdfs.join(', ')}`, createdAt: new Date().toISOString() }
+        { id: Date.now().toString(), authorName: user.name, text: `Agency submission\nAge: ${form.age}\nPassport: ${form.passportNumber}\nDOB: ${form.dob}\nNationality: ${form.nationality}\nSecond: ${form.secondNationality}\nAddress: ${form.homeAddress}\nAviation: ${form.aviationDegree}\nLevel: ${form.studyLevel}\nVideo: ${videoUrl}\nPDFs: ${pdfs.join(', ')}`, createdAt: new Date().toISOString() }
       ],
       source: 'agency' as const,
       agencyId: user.id,
@@ -187,7 +191,7 @@ University: ${getUniversityName(form.university)}`;
       return;
     }
     setForm({
-      fullName: '', age: '', country: '', phone: '', contactEmail: '', studentEmail: '', passportNumber: '', dob: '', nationality: '', secondNationality: '', homeAddress: '', university: '',
+      fullName: '', age: '', country: '', phone: '', contactEmail: '', studentEmail: '', passportNumber: '', dob: '', nationality: '', secondNationality: '', homeAddress: '', university: '', aviationDegree: '', studyLevel: '',
     });
     setVideoUrl('');
     setPdfs([]);
@@ -212,6 +216,25 @@ University: ${getUniversityName(form.university)}`;
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+          {[
+            { label: 'Total Students', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id).length, icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
+            { label: 'Approved', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id && a.status === 'approved').length, icon: Shield, color: 'text-green-500', bg: 'bg-green-50' },
+            { label: 'Pending', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id && a.status === 'submitted').length, icon: Upload, color: 'text-amber-500', bg: 'bg-amber-50' },
+            { label: 'Documents', value: documents.filter(d => applications.some(a => a.studentId === d.studentId && a.agencyId === user?.id)).length, icon: Send, color: 'text-purple-500', bg: 'bg-purple-50' },
+          ].map((stat, i) => (
+            <div key={i} className="tw-card p-6 flex items-center gap-4">
+              <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
+                <stat.icon className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{stat.label}</p>
+                <p className="text-2xl font-black text-black">{stat.value}</p>
+              </div>
+            </div>
+          ))}
+        </section>
+
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="tw-card tw-card-hover p-8">
           <h1 className="text-2xl font-black text-black mb-6">Submit New Student</h1>
           <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
@@ -266,6 +289,24 @@ University: ${getUniversityName(form.university)}`;
                 {UNIVERSITY_OPTIONS.map((u) => (
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Aviation Degree (if applicable)</label>
+              <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.aviationDegree} onChange={(e) => setForm({ ...form, aviationDegree: e.target.value })}>
+                <option value="">None / Not Aviation</option>
+                <option value="pilot">Commercial Pilot License (CPL)</option>
+                <option value="atpl">Airline Transport Pilot License (ATPL)</option>
+                <option value="engineering">Aviation Engineering</option>
+                <option value="management">Aviation Management</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Study Level</label>
+              <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.studyLevel} onChange={(e) => setForm({ ...form, studyLevel: e.target.value })} required>
+                <option value="" disabled>Select level</option>
+                <option value="bachelor">Bachelor's</option>
+                <option value="master">Master's</option>
               </select>
             </div>
 

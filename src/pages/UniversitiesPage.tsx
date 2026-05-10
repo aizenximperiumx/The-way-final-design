@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, CheckCircle2, ChevronLeft, ExternalLink, Globe, GraduationCap, MapPin, Search, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronLeft, ExternalLink, Globe, GraduationCap, MapPin, Search, X, Languages } from 'lucide-react';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 import ugPhotoUrl from '../../University of Georgia ( UG ).jpg';
 import gauPhotoUrl from '../../Georgian American University (GAU).jpg';
@@ -16,6 +16,7 @@ import ciuPhotoUrl from '../../Caucasus International University (CIU).jpg';
 import iliaPhotoUrl from '../../Ilia State University (ISU).jpg';
 import altePhotoUrl from '../../Alte University.jpg';
 import { useAuth } from '../context/AuthContext';
+import { useAppStore } from '../store/appStore';
 
 type ProgramRow = { program: string; duration?: string; fee?: string };
 type ProgramSection = { title: string; rows: ProgramRow[] };
@@ -23,26 +24,38 @@ type ProgramSection = { title: string; rows: ProgramRow[] };
 type University = {
   id: string;
   name: string;
+  nameEn: string;
   imageUrl?: string;
   city?: string;
+  cityEn?: string;
   address?: string;
   website?: string;
   description: string[];
+  descriptionEn?: string[];
   specialties?: string[];
+  specialtiesEn?: string[];
   advantages?: string[];
+  advantagesEn?: string[];
   admissionRequirements?: string[];
+  admissionRequirementsEn?: string[];
   programSections?: ProgramSection[];
+  programSectionsEn?: ProgramSection[];
   whyTheWay?: string[];
+  whyTheWayEn?: string[];
   registrationSteps?: string[];
+  registrationStepsEn?: string[];
   faq?: { q: string; a: string }[];
+  faqEn?: { q: string; a: string }[];
 };
 
 const rawUniversities: University[] = [
   {
     id: 'ug',
     name: 'Ø¬Ø§Ù…Ø¹Ø© Ø¬ÙˆØ±Ø¬ÙŠØ§',
+    nameEn: 'University of Georgia (UG)',
     imageUrl: ugPhotoUrl,
     city: 'ØªØ¨Ù„ÙŠØ³ÙŠ',
+    cityEn: 'Tbilisi',
     address: 'Merab Kostava St, Tbilisi 0171, Georgia',
     website: 'https://www.ug.edu.ge/en',
     description: [
@@ -1158,8 +1171,25 @@ function ProgramTable({ section }: { section: ProgramSection }) {
 
 export default function UniversitiesPage() {
   const { user } = useAuth();
+  const { language, setLanguage } = useAppStore();
   const { id } = useParams<{ id?: string }>();
-  const active = useMemo(() => (id ? universities.find(u => u.id === id) ?? null : null), [id]);
+  const universities = useMemo(() => {
+    return rawUniversities.map(u => ({
+      ...u,
+      name: language === 'en' ? u.nameEn : u.name,
+      city: language === 'en' ? u.cityEn : u.city,
+      description: (language === 'en' && u.descriptionEn) ? u.descriptionEn : u.description,
+      specialties: (language === 'en' && u.specialtiesEn) ? u.specialtiesEn : u.specialties,
+      advantages: (language === 'en' && u.advantagesEn) ? u.advantagesEn : u.advantages,
+      admissionRequirements: (language === 'en' && u.admissionRequirementsEn) ? u.admissionRequirementsEn : u.admissionRequirements,
+      programSections: (language === 'en' && u.programSectionsEn) ? u.programSectionsEn : u.programSections,
+      whyTheWay: (language === 'en' && u.whyTheWayEn) ? u.whyTheWayEn : u.whyTheWay,
+      registrationSteps: (language === 'en' && u.registrationStepsEn) ? u.registrationStepsEn : u.registrationSteps,
+      faq: (language === 'en' && u.faqEn) ? u.faqEn : u.faq,
+    }));
+  }, [language]);
+
+  const active = useMemo(() => (id ? universities.find(u => u.id === id) ?? null : null), [id, universities]);
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -1179,7 +1209,7 @@ export default function UniversitiesPage() {
   const backHref = user ? getHomePathForRole(user.role) : '/';
 
   return (
-    <div className="v3 min-h-screen" dir="rtl" style={{ fontFamily: 'var(--font-arabic)' }}>
+    <div className="v3 min-h-screen" dir={language === 'ar' ? 'rtl' : 'ltr'} style={{ fontFamily: language === 'ar' ? 'var(--font-arabic)' : 'var(--font-sans)' }}>
       <header
         className="sticky top-0 z-40 border-b"
         style={{
@@ -1199,14 +1229,22 @@ export default function UniversitiesPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
+              className="px-3 py-1.5 rounded-xl border text-[12px] font-bold flex items-center gap-2"
+              style={{ borderColor: 'rgba(245,168,0,0.2)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.05)' }}
+            >
+              <Languages className="w-4 h-4 text-amber-500" />
+              {language === 'en' ? 'العربية' : 'English'}
+            </button>
             <Link
               to={backHref}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[13px] font-semibold"
               style={{ borderColor: 'rgba(245,168,0,0.18)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.03)' }}
             >
-              <ArrowLeft className="w-4 h-4" />
-              رجوع
+              {language === 'ar' ? <ArrowLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              {language === 'ar' ? 'رجوع' : 'Back'}
             </Link>
           </div>
         </div>

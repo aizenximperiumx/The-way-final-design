@@ -33,6 +33,7 @@ const SalesDashboard: React.FC = () => {
   const [previewModal, setPreviewModal] = useState<{ open: boolean; app?: Application }>({ open: false });
   const [assignModal, setAssignModal] = useState<{ open: boolean; stuId?: string; staffId?: string }>({ open: false });
   const [requestModal, setRequestModal] = useState<{ open: boolean; app?: Application; message: string }>({ open: false, message: '' });
+  const [credentialsModal, setCredentialsModal] = useState<{ open: boolean; username?: string; password?: string; emailSent?: boolean }>({ open: false });
   type IntakeForm = {
     fullName: string;
     age: string;
@@ -45,6 +46,8 @@ const SalesDashboard: React.FC = () => {
     secondNationality: string;
     homeAddress: string;
     university: string;
+    aviationDegree: string;
+    studyLevel: string;
     videoUrl: string;
     passportCopyUrl: string;
     highSchoolCertificateUrl: string;
@@ -62,6 +65,8 @@ const SalesDashboard: React.FC = () => {
     secondNationality: '',
     homeAddress: '',
     university: '',
+    aviationDegree: '',
+    studyLevel: '',
     videoUrl: '',
     passportCopyUrl: '',
     highSchoolCertificateUrl: '',
@@ -97,11 +102,12 @@ const SalesDashboard: React.FC = () => {
   const handleApprove = async (application: Application) => {
     try {
       const creds = await salesApproveApplication(application.id);
-      if (creds.emailSent === false) {
-        toast.success(`Account created. Email not sent. Username: ${creds.username}  Password: ${creds.password}`, { duration: 12_000 });
-      } else {
-        toast.success('Account created. Credentials were emailed to the student.', { duration: 6000 });
-      }
+      setCredentialsModal({ 
+        open: true, 
+        username: creds.username, 
+        password: creds.password, 
+        emailSent: creds.emailSent !== false 
+      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to approve application');
     }
@@ -157,7 +163,7 @@ const SalesDashboard: React.FC = () => {
   const opsChecklist = (application: Application) => {
     const missing: string[] = [];
     if (!application.studentEmail) missing.push('Student Email');
-    if (!application.university) missing.push('University');
+    if (!application.university && !application.intakeDetails?.includes('Aviation')) missing.push('University');
     if (!application.intakeVideoUrl) missing.push('Video');
     if (!application.intakePassportCopy) missing.push('Passport');
     if (!application.intakeHighSchoolCertificate) missing.push('HS Certificate');
@@ -239,6 +245,8 @@ Nationality: ${intake.nationality}
 Second nationality: ${intake.secondNationality}
 Address: ${intake.homeAddress}
 University: ${intake.university}
+Aviation Degree: ${intake.aviationDegree}
+Study Level: ${intake.studyLevel}
 Video: ${intake.videoUrl}`;
     try {
       // assign university if student is already created (optional)
@@ -254,7 +262,7 @@ Video: ${intake.videoUrl}`;
       });
       toast.success('Intake details saved');
       setIntakeModal({ open: false });
-      setIntake({ fullName: '', age: '', country: '', phone: '', email: '', passportNumber: '', dob: '', nationality: '', secondNationality: '', homeAddress: '', university: '', videoUrl: '', passportCopyUrl: '', highSchoolCertificateUrl: '', pdfs: [] });
+      setIntake({ fullName: '', age: '', country: '', phone: '', email: '', passportNumber: '', dob: '', nationality: '', secondNationality: '', homeAddress: '', university: '', aviationDegree: '', studyLevel: '', videoUrl: '', passportCopyUrl: '', highSchoolCertificateUrl: '', pdfs: [] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save intake');
     }
@@ -625,11 +633,13 @@ Video: ${intake.videoUrl}`;
                   { key: 'dob', label: 'Date of birth' },
                   { key: 'nationality', label: 'Nationality' },
                   { key: 'secondNationality', label: 'Second nationality (optional)' },
-                    { key: 'homeAddress', label: 'Home address' },
+                  { key: 'homeAddress', label: 'Home address' },
                   { key: 'university', label: 'University to enroll' },
+                  { key: 'aviationDegree', label: 'Aviation Degree (if applicable)' },
+                  { key: 'studyLevel', label: 'Study Level' },
                 ] as Array<{ key: keyof IntakeForm; label: string }>
               ).map((f, i) => (
-                <div key={i} className={f.key === 'homeAddress' || f.key === 'university' ? 'md:col-span-2' : ''}>
+                <div key={i} className={f.key === 'homeAddress' || f.key === 'university' || f.key === 'aviationDegree' || f.key === 'studyLevel' ? 'md:col-span-2' : ''}>
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{f.label}</label>
                       {f.key === 'university' ? (
                         <select
@@ -641,6 +651,28 @@ Video: ${intake.videoUrl}`;
                           {UNIVERSITY_OPTIONS.map((u) => (
                             <option key={u.id} value={u.id}>{u.name}</option>
                           ))}
+                        </select>
+                      ) : f.key === 'aviationDegree' ? (
+                        <select
+                          value={intake.aviationDegree || ''}
+                          onChange={(e) => setIntake((prev) => ({ ...prev, aviationDegree: e.target.value }))}
+                          className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none"
+                        >
+                          <option value="">None / Not Aviation</option>
+                          <option value="pilot">Commercial Pilot License (CPL)</option>
+                          <option value="atpl">Airline Transport Pilot License (ATPL)</option>
+                          <option value="engineering">Aviation Engineering</option>
+                          <option value="management">Aviation Management</option>
+                        </select>
+                      ) : f.key === 'studyLevel' ? (
+                        <select
+                          value={intake.studyLevel || ''}
+                          onChange={(e) => setIntake((prev) => ({ ...prev, studyLevel: e.target.value }))}
+                          className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none"
+                        >
+                          <option value="" disabled>Select level</option>
+                          <option value="bachelor">Bachelor's</option>
+                          <option value="master">Master's</option>
                         </select>
                       ) : (
                         <input
@@ -807,6 +839,63 @@ Video: ${intake.videoUrl}`;
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {credentialsModal.open && (
+        <div className="fixed inset-0 z-[150] p-4 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="relative bg-white rounded-[40px] p-10 w-full max-w-lg shadow-2xl border border-gray-100 text-center"
+          >
+            <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
+            <h3 className="text-3xl font-black text-black mb-2">Account Created!</h3>
+            <p className="text-gray-500 font-medium mb-8">
+              {credentialsModal.emailSent 
+                ? "Credentials have been emailed to the student." 
+                : "Account created, but email could not be sent. Please copy credentials manually."}
+            </p>
+
+            <div className="space-y-4">
+              <div className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 text-left relative group">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Username / Email</p>
+                <p className="font-black text-black text-lg">{credentialsModal.username}</p>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(credentialsModal.username || '');
+                    toast.success('Username copied');
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white shadow-sm border border-gray-100 px-4 py-2 rounded-xl text-xs font-black hover:bg-black hover:text-white transition-all"
+                >
+                  Copy
+                </button>
+              </div>
+
+              <div className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 text-left relative group">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Temporary Password</p>
+                <p className="font-black text-black text-lg">{credentialsModal.password}</p>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(credentialsModal.password || '');
+                    toast.success('Password copied');
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white shadow-sm border border-gray-100 px-4 py-2 rounded-xl text-xs font-black hover:bg-black hover:text-white transition-all"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setCredentialsModal({ open: false })}
+              className="mt-10 w-full bg-black text-white py-5 rounded-[28px] font-black text-lg hover:bg-amber-500 hover:text-black transition-all shadow-xl shadow-black/10"
+            >
+              Done
+            </button>
+          </motion.div>
         </div>
       )}
     </div>
