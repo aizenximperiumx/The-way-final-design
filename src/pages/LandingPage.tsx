@@ -59,9 +59,10 @@ const LandingPage: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<ApplicationFormValues>({
+  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm<ApplicationFormValues>({
     resolver: zodResolver(applicationSchema)
   });
+  const selectedProgram = watch('program');
 
   const onSubmit = async (data: ApplicationFormValues) => {
     try {
@@ -424,19 +425,21 @@ const LandingPage: React.FC = () => {
                     </select>
                     {errors.program && <p className="text-red-500 text-xs mt-1 font-bold">{errors.program.message}</p>}
                   </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Aviation Degree</label>
-                    <select 
-                      {...register('aviationDegree')}
-                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none text-black"
-                    >
-                      <option value="" className="text-gray-400">Aviation Degree (Optional)</option>
-                      <option value="pilot" className="text-black">Commercial Pilot License (CPL)</option>
-                      <option value="atpl" className="text-black">Airline Transport Pilot License (ATPL)</option>
-                      <option value="engineering" className="text-black">Aviation Engineering</option>
-                      <option value="management" className="text-black">Aviation Management</option>
-                    </select>
-                  </div>
+                  {selectedProgram === 'aviation' && (
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Aviation Degree</label>
+                      <select 
+                        {...register('aviationDegree')}
+                        className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none transition-all font-medium appearance-none text-black"
+                      >
+                        <option value="" className="text-gray-400">Aviation Degree (Optional)</option>
+                        <option value="pilot" className="text-black">Commercial Pilot License (CPL)</option>
+                        <option value="atpl" className="text-black">Airline Transport Pilot License (ATPL)</option>
+                        <option value="engineering" className="text-black">Aviation Engineering</option>
+                        <option value="management" className="text-black">Aviation Management</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6">

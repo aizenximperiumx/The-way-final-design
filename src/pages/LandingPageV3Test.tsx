@@ -13,11 +13,8 @@ import {
   Mail,
   MapPin,
   Menu,
-  MessageCircle,
   Phone,
-  Share2,
   ShieldCheck,
-  Users,
   Video,
   X,
 } from 'lucide-react';
@@ -73,9 +70,10 @@ export default function LandingPageV3Test() {
   const navigate = useNavigate();
   const { addApplication } = useApp();
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<ApplicationForm>({
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<ApplicationForm>({
     resolver: zodResolver(applicationSchema),
   });
+  const selectedProgram = watch('program');
 
   useEffect(() => {
     const onScroll = () => setNavSolid(window.scrollY > 24);
@@ -127,15 +125,16 @@ export default function LandingPageV3Test() {
           </div>
           <div className="flex items-center gap-3">
             {[
-              { icon: Globe, label: 'Website' },
-              { icon: Share2, label: 'Share' },
-              { icon: MessageCircle, label: 'WhatsApp' },
-              { icon: Users, label: 'Community' },
+              { icon: Globe, label: 'TikTok', href: 'https://www.tiktok.com/@theway.ge0?_r=1&_t=ZS-95vVkmR2ELa' },
+              { icon: Camera, label: 'Instagram', href: 'https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr' },
+              { icon: Video, label: 'YouTube', href: 'https://www.youtube.com/@thewaygeorgia' },
             ].map((s) => (
               <a
                 key={s.label}
-                href="#contact"
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[var(--v3-yellow)]"
+                href={s.href}
+                target="_blank"
+                rel="noreferrer"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-[var(--v3-yellow)] hover:scale-110 transition-transform"
                 style={{ background: 'var(--v3-navy)' }}
                 aria-label={s.label}
               >
@@ -764,20 +763,22 @@ export default function LandingPageV3Test() {
                         </select>
                         {errors.program && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.program.message}</p>}
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Aviation Degree (Optional)</label>
-                        <select
-                          {...register('aviationDegree')}
-                          className="w-full px-4 py-3 text-[13px] outline-none border rounded"
-                          style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
-                        >
-                          <option value="">None / Not Aviation</option>
-                          <option value="CPL">Commercial Pilot License (CPL)</option>
-                          <option value="ATPL">Airline Transport Pilot License (ATPL)</option>
-                          <option value="Engineering">Aviation Engineering</option>
-                          <option value="Management">Aviation Management</option>
-                        </select>
-                      </div>
+                      {selectedProgram === 'Aviation' && (
+                        <div>
+                          <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Aviation Degree (Optional)</label>
+                          <select
+                            {...register('aviationDegree')}
+                            className="w-full px-4 py-3 text-[13px] outline-none border rounded"
+                            style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
+                          >
+                            <option value="">None / Not Aviation</option>
+                            <option value="CPL">Commercial Pilot License (CPL)</option>
+                            <option value="ATPL">Airline Transport Pilot License (ATPL)</option>
+                            <option value="Engineering">Aviation Engineering</option>
+                            <option value="Management">Aviation Management</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Study Level</label>
@@ -838,12 +839,16 @@ export default function LandingPageV3Test() {
                 Helping international students gain admission to Georgia&apos;s top universities with clear steps, fast follow-up, and full guidance.
               </p>
               <div className="mt-6 flex gap-2">
-                {[Globe, Share2, MessageCircle, Users].map((I, idx) => (
-                  <a key={idx} href="#contact" className="w-9 h-9 rounded-full flex items-center justify-center border"
+                {[
+                  { icon: Globe, label: 'TikTok', href: 'https://www.tiktok.com/@theway.ge0?_r=1&_t=ZS-95vVkmR2ELa' },
+                  { icon: Camera, label: 'Instagram', href: 'https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr' },
+                  { icon: Video, label: 'YouTube', href: 'https://www.youtube.com/@thewaygeorgia' },
+                ].map((s, idx) => (
+                  <a key={idx} href={s.href} target="_blank" rel="noreferrer" className="w-9 h-9 rounded-full flex items-center justify-center border hover:bg-amber-500 hover:text-black transition-all"
                     style={{ borderColor: 'rgba(245,168,0,0.20)', color: 'rgba(245,240,232,0.38)' }}
-                    aria-label="Social"
+                    aria-label={s.label}
                   >
-                    <I className="w-4 h-4" />
+                    <s.icon className="w-4 h-4" />
                   </a>
                 ))}
               </div>

@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useAuth } from '../context/AuthContext';
-import { motion } from 'framer-motion';
-import { Upload, Shield, Video, FileText, Send } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Upload, Shield, Video, FileText, Send, User, Award, TrendingUp, Building2, LogOut, ChevronRight } from 'lucide-react';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 import toast from 'react-hot-toast';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
 
 export default function AgenciesPortal() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { addApplication, applications, documents, users, chatMessages, addChatMessage, agencyAddExtraDocs } = useAppStore();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'profile'>('dashboard');
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [pdfs, setPdfs] = useState<string[]>([]);
   const [passportCopyUrl, setPassportCopyUrl] = useState<string>('');
@@ -202,212 +203,380 @@ Study Level: ${form.studyLevel}`;
 
   return (
     <div className="min-h-screen bg-[#F8F9FA]">
-      <header className="bg-black text-white">
+      <header className="bg-black text-white sticky top-0 z-[100]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={logoUrl} alt="The Way" className="h-12 w-auto object-contain" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Agencies Portal</p>
+          <div className="flex items-center gap-6">
+            <img src={logoUrl} alt="The Way" className="h-10 w-auto object-contain" />
+            <div className="hidden md:flex items-center gap-1">
+              {[
+                { id: 'dashboard', label: 'Student Management', icon: Building2 },
+                { id: 'profile', label: 'Agency Profile', icon: User },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+                    activeTab === tab.id ? 'bg-amber-500 text-black' : 'text-white/40 hover:text-white'
+                  }`}
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Shield className="w-5 h-5 text-amber-500" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/60">{user?.role === 'agency' ? user.name : 'Login required'}</p>
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-white/5 rounded-xl border border-white/10">
+              <Award className="w-4 h-4 text-amber-500" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/60">
+                {user?.points ?? 0} Points
+              </p>
+            </div>
+            <button 
+              onClick={() => logout()}
+              className="p-2.5 bg-white/5 text-white/60 hover:text-white hover:bg-red-500/10 rounded-xl transition-all"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          {[
-            { label: 'Total Students', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id).length, icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
-            { label: 'Approved', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id && a.status === 'approved').length, icon: Shield, color: 'text-green-500', bg: 'bg-green-50' },
-            { label: 'Pending', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id && a.status === 'submitted').length, icon: Upload, color: 'text-amber-500', bg: 'bg-amber-50' },
-            { label: 'Documents', value: documents.filter(d => applications.some(a => a.studentId === d.studentId && a.agencyId === user?.id)).length, icon: Send, color: 'text-purple-500', bg: 'bg-purple-50' },
-          ].map((stat, i) => (
-            <div key={i} className="tw-card p-6 flex items-center gap-4">
-              <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
-                <stat.icon className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{stat.label}</p>
-                <p className="text-2xl font-black text-black">{stat.value}</p>
-              </div>
-            </div>
-          ))}
-        </section>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="tw-card tw-card-hover p-8">
-          <h1 className="text-2xl font-black text-black mb-6">Submit New Student</h1>
-          <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Full name</label>
-              <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Age</label>
-              <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Country</label>
-              <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Phone number</label>
-              <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contact Email</label>
-              <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Student Email</label>
-              <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.studentEmail} onChange={(e) => setForm({ ...form, studentEmail: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Passport number</label>
-              <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.passportNumber} onChange={(e) => setForm({ ...form, passportNumber: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Date of birth</label>
-              <input type="date" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Nationality</label>
-              <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Second nationality (optional)</label>
-              <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.secondNationality} onChange={(e) => setForm({ ...form, secondNationality: e.target.value })} />
-            </div>
-            <div className="md:col-span-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Home address</label>
-              <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.homeAddress} onChange={(e) => setForm({ ...form, homeAddress: e.target.value })} required />
-            </div>
-            <div className="md:col-span-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">University to enroll</label>
-              <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })} required>
-                <option value="" disabled>Select university</option>
-                {UNIVERSITY_OPTIONS.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
+        <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' ? (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                {[
+                  { label: 'Total Students', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id).length, icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
+                  { label: 'Approved', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id && a.status === 'approved').length, icon: Shield, color: 'text-green-500', bg: 'bg-green-50' },
+                  { label: 'Pending', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id && a.status === 'submitted').length, icon: Upload, color: 'text-amber-500', bg: 'bg-amber-50' },
+                  { label: 'Documents', value: documents.filter(d => applications.some(a => a.studentId === d.studentId && a.agencyId === user?.id)).length, icon: Send, color: 'text-purple-500', bg: 'bg-purple-50' },
+                ].map((stat, i) => (
+                  <div key={i} className="tw-card p-6 flex items-center gap-4">
+                    <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
+                      <stat.icon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{stat.label}</p>
+                      <p className="text-2xl font-black text-black">{stat.value}</p>
+                    </div>
+                  </div>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Aviation Degree (if applicable)</label>
-              <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.aviationDegree} onChange={(e) => setForm({ ...form, aviationDegree: e.target.value })}>
-                <option value="">None / Not Aviation</option>
-                <option value="pilot">Commercial Pilot License (CPL)</option>
-                <option value="atpl">Airline Transport Pilot License (ATPL)</option>
-                <option value="engineering">Aviation Engineering</option>
-                <option value="management">Aviation Management</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Study Level</label>
-              <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={form.studyLevel} onChange={(e) => setForm({ ...form, studyLevel: e.target.value })} required>
-                <option value="" disabled>Select level</option>
-                <option value="bachelor">Bachelor's</option>
-                <option value="master">Master's</option>
-              </select>
-            </div>
+              </section>
 
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload video (&gt;=40s)</label>
-              <div className="flex items-center gap-3">
-              <input type="file" accept="video/*" capture onChange={(e) => onFileVideo(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" />
-              <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2">Tip: If your video is in iCloud/OneDrive, mark it "Always keep on this device" or copy it to Downloads before uploading.</p>
-                {videoUrl && <Video className="w-5 h-5 text-amber-500" />}
-              </div>
-            </div>
-          <div>
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Passport Copy</label>
-            <div className="flex items-center gap-3">
-              <input type="file" accept="image/*,.pdf" onChange={(e) => onPassportCopy(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" />
-            </div>
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">High School Certificate</label>
-            <div className="flex items-center gap-3">
-              <input type="file" accept="image/*,.pdf" onChange={(e) => onHighSchool(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" />
-            </div>
-          </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload PDFs</label>
-              <div className="flex items-center gap-3">
-                <input multiple type="file" accept="application/pdf" onChange={(e) => onFilePdf(e.target.files)} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" />
-                {pdfs.length > 0 && <FileText className="w-5 h-5 text-amber-500" />}
-              </div>
-            </div>
-          <div>
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Extra Documents (optional)</label>
-            <div className="flex items-center gap-3">
-              <input multiple type="file" accept="application/pdf,image/*" onChange={(e) => onFileExtra(e.target.files)} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" />
-            </div>
-          </div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="tw-card tw-card-hover p-8">
+                <h1 className="text-2xl font-black text-black mb-6">Submit New Student</h1>
+                <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Full name</label>
+                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Age</label>
+                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Country</label>
+                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Phone number</label>
+                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contact Email</label>
+                    <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Student Email</label>
+                    <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.studentEmail} onChange={(e) => setForm({ ...form, studentEmail: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Passport number</label>
+                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.passportNumber} onChange={(e) => setForm({ ...form, passportNumber: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Date of birth</label>
+                    <input type="date" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Nationality</label>
+                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Second nationality (optional)</label>
+                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.secondNationality} onChange={(e) => setForm({ ...form, secondNationality: e.target.value })} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Home address</label>
+                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.homeAddress} onChange={(e) => setForm({ ...form, homeAddress: e.target.value })} required />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">University to enroll</label>
+                    <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })} required>
+                      <option value="" disabled>Select university</option>
+                      {UNIVERSITY_OPTIONS.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Study Level</label>
+                    <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.studyLevel} onChange={(e) => setForm({ ...form, studyLevel: e.target.value })} required>
+                      <option value="" disabled>Select level</option>
+                      <option value="bachelor">Bachelor's</option>
+                      <option value="master">Master's</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Aviation Degree (if applicable)</label>
+                    <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.aviationDegree} onChange={(e) => setForm({ ...form, aviationDegree: e.target.value })}>
+                      <option value="">None / Not Aviation</option>
+                      <option value="pilot">Commercial Pilot License (CPL)</option>
+                      <option value="atpl">Airline Transport Pilot License (ATPL)</option>
+                      <option value="engineering">Aviation Engineering</option>
+                      <option value="management">Aviation Management</option>
+                    </select>
+                  </div>
 
-            <div className="md:col-span-2 flex justify-end">
-              <button type="submit" className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-2xl font-black hover:bg-amber-500 hover:text-black transition-all">
-                <Upload className="w-4 h-4" />
-                Submit Application
-              </button>
-            </div>
-          </form>
-        </motion.div>
-
-        <section className="mt-10">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-black text-black">My Students</h2>
-            <div className="px-4 py-2 bg-white rounded-xl border border-gray-100 shadow-sm text-xs font-bold text-gray-500">
-              Showing {applications.filter(a => a.agencyId === user?.id).length} results
-            </div>
-          </div>
-          <div className="grid gap-4">
-            {applications.filter(a => a.agencyId === user?.id).length > 0 ? (
-              applications.filter(a => a.agencyId === user?.id).map((app) => (
-                <div key={app.id} className="tw-card p-6 flex flex-wrap items-center justify-between gap-6 hover:border-amber-200 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center font-black text-gray-400">
-                      {app.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-black text-black">{app.name}</h3>
-                      <p className="text-xs font-medium text-gray-500">{app.studentEmail || app.email}</p>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload video (&gt;=40s)</label>
+                    <div className="flex items-center gap-3">
+                    <input type="file" accept="video/*" capture onChange={(e) => onFileVideo(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                      {videoUrl && <Video className="w-5 h-5 text-amber-500" />}
                     </div>
                   </div>
-                  <div className="flex gap-8">
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Program</p>
-                      <p className="text-sm font-bold text-black">{app.program}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</p>
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        app.status === 'approved' ? 'bg-green-100 text-green-600' :
-                        app.status === 'rejected' ? 'bg-red-100 text-red-600' :
-                        'bg-amber-100 text-amber-600'
-                      }`}>
-                        {app.status}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stage</p>
-                      <p className="text-sm font-bold text-black capitalize">{app.stage}</p>
-                    </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Passport Copy</label>
+                  <div className="flex items-center gap-3">
+                    <input type="file" accept="image/*,.pdf" onChange={(e) => onPassportCopy(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
                   </div>
-                  <button 
-                    onClick={() => setViewApp({ open: true, id: app.id })}
-                    className="px-6 py-2.5 bg-black text-white rounded-xl text-xs font-black hover:bg-amber-500 hover:text-black transition-all"
-                  >
-                    View Details
-                  </button>
                 </div>
-              ))
-            ) : (
-              <div className="tw-card p-12 text-center border-dashed">
-                <p className="text-gray-400 font-medium">No students found. Submit your first student above!</p>
+                <div>
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">High School Certificate</label>
+                  <div className="flex items-center gap-3">
+                    <input type="file" accept="image/*,.pdf" onChange={(e) => onHighSchool(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                  </div>
+                </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload PDFs</label>
+                    <div className="flex items-center gap-3">
+                      <input multiple type="file" accept="application/pdf" onChange={(e) => onFilePdf(e.target.files)} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                      {pdfs.length > 0 && <FileText className="w-5 h-5 text-amber-500" />}
+                    </div>
+                  </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Extra Documents (optional)</label>
+                  <div className="flex items-center gap-3">
+                    <input multiple type="file" accept="application/pdf,image/*" onChange={(e) => onFileExtra(e.target.files)} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                  </div>
+                </div>
+
+                  <div className="md:col-span-2 flex justify-end">
+                    <button type="submit" className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-2xl font-black hover:bg-amber-500 hover:text-black transition-all">
+                      <Upload className="w-4 h-4" />
+                      Submit Application
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+
+              <section className="mt-10">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-black text-black">My Students</h2>
+                  <div className="px-4 py-2 bg-white rounded-xl border border-gray-100 shadow-sm text-xs font-bold text-gray-500">
+                    Showing {applications.filter(a => a.agencyId === user?.id).length} results
+                  </div>
+                </div>
+                <div className="grid gap-4">
+                  {applications.filter(a => a.agencyId === user?.id).length > 0 ? (
+                    applications.filter(a => a.agencyId === user?.id).map((app) => (
+                      <div key={app.id} className="tw-card p-6 flex flex-wrap items-center justify-between gap-6 hover:border-amber-200 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center font-black text-gray-400">
+                            {app.name.charAt(0)}
+                          </div>
+                          <div>
+                            <h3 className="font-black text-black">{app.name}</h3>
+                            <p className="text-xs font-medium text-gray-500">{app.studentEmail || app.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-8">
+                          <div>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Program</p>
+                            <p className="text-sm font-bold text-black">{app.program}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</p>
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              app.status === 'approved' ? 'bg-green-100 text-green-600' :
+                              app.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                              'bg-amber-100 text-amber-600'
+                            }`}>
+                              {app.status}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stage</p>
+                            <p className="text-sm font-bold text-black capitalize">{app.stage}</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setViewApp({ open: true, id: app.id })}
+                          className="px-6 py-2.5 bg-black text-white rounded-xl text-xs font-black hover:bg-amber-500 hover:text-black transition-all"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="tw-card p-12 text-center border-dashed">
+                      <p className="text-gray-400 font-medium">No students found. Submit your first student above!</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="profile"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-8"
+            >
+              <div className="grid lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-8">
+                  <section className="tw-card p-8">
+                    <div className="flex items-center gap-6 mb-8">
+                      <div className="w-20 h-20 bg-black text-amber-500 rounded-[32px] flex items-center justify-center text-3xl font-black">
+                        {user?.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black text-black">{user?.name}</h2>
+                        <p className="text-sm font-medium text-gray-500">Official Partner Agency</p>
+                        <div className="flex items-center gap-4 mt-3">
+                          <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider">
+                            <Award className="w-3.5 h-3.5" />
+                            Tier 1 Partner
+                          </div>
+                          <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            Member since {new Date(user?.createdAt ?? '').getFullYear()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4 pt-8 border-t border-gray-50">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agency ID</p>
+                        <p className="font-bold text-black">{user?.id.slice(0, 8)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email Address</p>
+                        <p className="font-bold text-black">{user?.email}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Portal Username</p>
+                        <p className="font-bold text-black">@{user?.username}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Points</p>
+                        <p className="font-bold text-amber-600">{user?.points ?? 0} PTS</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="tw-card p-8">
+                    <h3 className="text-xl font-black text-black mb-6 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-amber-500" />
+                      Agency Performance
+                    </h3>
+                    <div className="space-y-6">
+                      {(() => {
+                        const myApps = applications.filter(a => a.agencyId === user?.id);
+                        const approved = myApps.filter(a => a.status === 'approved').length;
+                        const total = myApps.length;
+                        const rate = total > 0 ? Math.round((approved / total) * 100) : 0;
+                        return (
+                          <>
+                            <div className="grid sm:grid-cols-3 gap-6">
+                              <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Success Rate</p>
+                                <p className="text-2xl font-black text-black">{rate}%</p>
+                              </div>
+                              <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Students</p>
+                                <p className="text-2xl font-black text-black">{myApps.filter(a => a.status === 'approved' && a.stage !== 'enrolled').length}</p>
+                              </div>
+                              <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Earned</p>
+                                <p className="text-2xl font-black text-black">{user?.points ?? 0}</p>
+                              </div>
+                            </div>
+                            <div className="pt-4">
+                              <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Next Tier Progress</p>
+                              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min((user?.points ?? 0) / 10, 100)}%` }} />
+                              </div>
+                              <div className="flex justify-between mt-2">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tier 1</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tier 2 (1000 PTS)</p>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </section>
+                </div>
+
+                <div className="space-y-8">
+                  <section className="tw-card p-8">
+                    <h3 className="text-xl font-black text-black mb-6">Top Agencies</h3>
+                    <div className="space-y-4">
+                      {users
+                        .filter(u => u.role === 'agency')
+                        .sort((a, b) => (b.points ?? 0) - (a.points ?? 0))
+                        .slice(0, 5)
+                        .map((u, i) => (
+                          <div key={u.id} className={`flex items-center justify-between p-4 rounded-2xl border ${u.id === user?.id ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100'}`}>
+                            <div className="flex items-center gap-3">
+                              <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${i === 0 ? 'bg-amber-500 text-black' : 'bg-black text-white'}`}>
+                                {i + 1}
+                              </span>
+                              <div>
+                                <p className="text-sm font-black text-black">{u.name}</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{u.points ?? 0} PTS</p>
+                              </div>
+                            </div>
+                            {u.id === user?.id && <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />}
+                          </div>
+                        ))}
+                    </div>
+                  </section>
+
+                  <section className="tw-card p-8 bg-black text-white">
+                    <h3 className="text-lg font-black mb-4">Partner Support</h3>
+                    <p className="text-sm text-white/60 mb-6 font-medium">Need help with a student application or have a special request?</p>
+                    <a href="mailto:partners@theway.ge" className="flex items-center justify-between p-4 bg-white/10 rounded-2xl hover:bg-white hover:text-black transition-all group">
+                      <span className="text-sm font-black">Contact Manager</span>
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </a>
+                  </section>
+                </div>
               </div>
-            )}
-          </div>
-        </section>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
       {viewApp?.open && (() => {
         const a = applications.find(x => x.id === viewApp.id);
