@@ -141,7 +141,8 @@ export default async function handler(req, res) {
             };
         }
         else if (role === 'student') {
-            const allowedThread = (key) => key === `complaint-${userId}` ||
+            const allowedThread = (key) => key.startsWith(`${userId}|`) ||
+                key === `complaint-${userId}` ||
                 current.applications.some((a) => getString(asRecord(a), 'studentId') === userId && getString(asRecord(a), 'id') === key);
             const mergedReadAt = { ...current.chatThreadReadAt };
             Object.entries(incoming.chatThreadReadAt || {}).forEach(([k, v]) => {
@@ -155,7 +156,8 @@ export default async function handler(req, res) {
                 const r = asRecord(m);
                 if (!r)
                     return [];
-                if (getString(r, 'fromUserId') !== userId)
+                const sender = getString(r, 'fromUserId') || getString(r, 'userId');
+                if (sender !== userId)
                     return [];
                 const text = getString(r, 'text');
                 if (!text || text.length > 5000)
@@ -165,7 +167,7 @@ export default async function handler(req, res) {
                     return [];
                 return [{
                         id: `${userId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                        fromUserId: userId,
+                        userId,
                         toUserId: getString(r, 'toUserId'),
                         text,
                         applicationId: appId || undefined,
@@ -184,7 +186,8 @@ export default async function handler(req, res) {
                 const r = asRecord(m);
                 if (!r)
                     return [];
-                if (getString(r, 'fromUserId') !== userId)
+                const sender = getString(r, 'fromUserId') || getString(r, 'userId');
+                if (sender !== userId)
                     return [];
                 const text = getString(r, 'text');
                 if (!text || text.length > 5000)
@@ -194,7 +197,7 @@ export default async function handler(req, res) {
                     return [];
                 return [{
                         id: `${userId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                        fromUserId: userId,
+                        userId,
                         toUserId: getString(r, 'toUserId'),
                         text,
                         applicationId: appId || undefined,
@@ -241,7 +244,7 @@ export default async function handler(req, res) {
             });
             const mergedReadAt = { ...current.chatThreadReadAt };
             Object.entries(incoming.chatThreadReadAt || {}).forEach(([k, v]) => {
-                if (!allowedApp(k))
+                if (!k.startsWith(`${userId}|`) && !allowedApp(k))
                     return;
                 if (typeof v !== 'string')
                     return;

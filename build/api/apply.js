@@ -3,6 +3,60 @@ import os from 'node:os';
 import path from 'node:path';
 const asString = (v) => (typeof v === 'string' ? v : '');
 const clamp = (v, max) => (v.length > max ? v.slice(0, max) : v);
+const getBearer = (req) => {
+    const raw = req.headers?.authorization || req.headers?.Authorization;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (!value)
+        return '';
+    const m = value.match(/^Bearer\s+(.+)$/i);
+    return m?.[1] ?? '';
+};
+const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
+    if (!supabaseUrl || !serviceKey)
+        return 'Supabase is not configured';
+    if (!/^https?:\/\//i.test(supabaseUrl)) {
+        return 'SUPABASE_URL is invalid.';
+    }
+    if (serviceKey.startsWith('sb_publishable_')) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is wrong (publishable key).';
+    }
+    if (/^https?:\/\//i.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid (it looks like a URL).';
+    }
+    if (/\s/.test(serviceKey)) {
+        return 'SUPABASE_SERVICE_ROLE_KEY is invalid (contains whitespace).';
+    }
+    return '';
+};
+const fetchJson = async (url, init) => {
+    const resp = await fetch(url, init);
+    const text = await resp.text().catch(() => '');
+    const json = text ? (() => { try {
+        return JSON.parse(text);
+    }
+    catch {
+        return null;
+    } })() : null;
+    return { ok: resp.ok, status: resp.status, text, json };
+};
+const getRoleFromAuth = async (base, adminKey, token, userId) => {
+    const who = await fetchJson(`${base}/auth/v1/user`, {
+        method: 'GET',
+        headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
+    });
+    const appMeta = who.json && typeof who.json === 'object' && who.json.app_metadata && typeof who.json.app_metadata === 'object'
+        ? who.json.app_metadata
+        : null;
+    const metaRole = appMeta && typeof appMeta.role === 'string' ? appMeta.role : '';
+    if (metaRole)
+        return metaRole;
+    const profile = await fetchJson(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, {
+        method: 'GET',
+        headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+    });
+    const role = Array.isArray(profile.json) && profile.json[0] && typeof profile.json[0].role === 'string' ? profile.json[0].role : '';
+    return role;
+};
 const getIp = (req) => {
     const raw = req.headers?.['x-forwarded-for'];
     const value = Array.isArray(raw) ? raw[0] : raw;
@@ -66,6 +120,38 @@ export default async function handler(req, res) {
             res.status(429).json({ error: 'Too many requests' });
             return;
         }
+        let agencyId = null;
+        if (source === 'agency') {
+            const supabaseUrl = process.env.SUPABASE_URL;
+            const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+            const envErr = validateSupabaseEnv(supabaseUrl, serviceKey);
+            if (envErr) {
+                res.status(500).json({ error: envErr });
+                return;
+            }
+            const token = getBearer(req);
+            if (!token) {
+                res.status(401).json({ error: 'Missing token' });
+                return;
+            }
+            const base = supabaseUrl.replace(/\/$/, '');
+            const adminKey = serviceKey;
+            const who = await fetchJson(`${base}/auth/v1/user`, {
+                method: 'GET',
+                headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
+            });
+            if (!who.ok || !who.json || typeof who.json.id !== 'string') {
+                res.status(401).json({ error: 'Invalid token' });
+                return;
+            }
+            const userId = who.json.id;
+            const role = await getRoleFromAuth(base, adminKey, token, userId);
+            if (role !== 'agency' && role !== 'ceo') {
+                res.status(403).json({ error: 'Forbidden' });
+                return;
+            }
+            agencyId = userId;
+        }
         const app = {
             id: appId,
             studentId: null,
@@ -73,13 +159,16 @@ export default async function handler(req, res) {
             email: clamp(asString(body.email), 254),
             phone: clamp(asString(body.phone), 40),
             country: clamp(asString(body.country), 80),
+            dob: clamp(asString(body.dob), 40) || null,
             program: clamp(asString(body.program), 120),
+            aviationDegree: clamp(asString(body.aviationDegree), 120),
+            studyLevel: clamp(asString(body.studyLevel), 80),
             university: clamp(asString(body.university), 80) || null,
             status: 'submitted',
             stage: 'applied',
             createdAt: clamp(asString(body.createdAt), 40) || now,
-            internalNotes: body.internalNotes ?? null,
-            events: body.events ?? [{ id: `${appId}-submitted`, type: 'submitted', byId: null, byName: source === 'agency' ? 'Agency' : 'Website', time: now, details: source === 'agency' ? 'Agency submission' : 'Public submission' }],
+            internalNotes: null,
+            events: [{ id: `${appId}-submitted`, type: 'submitted', byId: agencyId, byName: source === 'agency' ? 'Agency' : 'Website', time: now, details: source === 'agency' ? 'Agency submission' : 'Public submission' }],
             hold: null,
             approvedBy: null,
             approvedAt: null,
@@ -87,7 +176,7 @@ export default async function handler(req, res) {
             salesOwnerId: null,
             assignedStaffId: null,
             source,
-            agencyId: null,
+            agencyId,
             contactEmail: clamp(asString(body.contactEmail), 254) || null,
             studentEmail: clamp(asString(body.studentEmail), 254) || null,
             intakeDetails: clamp(asString(body.intakeDetails), 20_000) || null,
@@ -95,6 +184,10 @@ export default async function handler(req, res) {
             intakeVideoUrl: clamp(asString(body.intakeVideoUrl), 2000) || null,
             intakePassportCopy: clamp(asString(body.intakePassportCopy), 2000) || null,
             intakeHighSchoolCertificate: clamp(asString(body.intakeHighSchoolCertificate), 2000) || null,
+            intakeHighSchoolMissingNote: clamp(asString(body.intakeHighSchoolMissingNote), 2000) || null,
+            intakeBirthCertificate: clamp(asString(body.intakeBirthCertificate), 2000) || null,
+            intakeMotherPassport: clamp(asString(body.intakeMotherPassport), 2000) || null,
+            intakeFatherPassport: clamp(asString(body.intakeFatherPassport), 2000) || null,
             intakeSLARewarded: Boolean(body.intakeSLARewarded),
             arrived: Boolean(body.arrived),
             intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,

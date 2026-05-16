@@ -78,6 +78,7 @@ export interface Application {
   email: string;
   phone: string;
   country: string;
+  dob?: string;
   program?: string;
   aviationDegree?: string;
   studyLevel?: string;
@@ -102,6 +103,10 @@ export interface Application {
   intakeVideoUrl?: string;
   intakePassportCopy?: string;
   intakeHighSchoolCertificate?: string;
+  intakeHighSchoolMissingNote?: string;
+  intakeBirthCertificate?: string;
+  intakeMotherPassport?: string;
+  intakeFatherPassport?: string;
   intakeSLARewarded?: boolean;
   arrived?: boolean;
   intakeExtraDocs?: string[];
@@ -176,11 +181,28 @@ export interface AppStoreState {
   loadBackendState: () => Promise<void>;
   saveBackendState: () => Promise<void>;
   addApplication: (application: Omit<Application, 'id'>) => Promise<void>;
+  setApplicationUniversity: (applicationId: string, universityId: string) => void;
+  setApplicationMeta: (
+    applicationId: string,
+    meta: Partial<Pick<Application, 'dob' | 'aviationDegree' | 'studyLevel' | 'program'>>
+  ) => void;
 
   salesApproveApplication: (applicationId: string) => Promise<{ username: string; password: string; emailSent?: boolean; warning?: string }>;
   salesRejectApplication: (applicationId: string) => void;
   salesAddIntakeDetails: (applicationId: string, details: string, attachments: string[]) => void;
-  salesSetIntakeMedia: (applicationId: string, media: { videoUrl?: string; passportCopy?: string; highSchoolCertificate?: string; pdfs?: string[] }) => void;
+  salesSetIntakeMedia: (
+    applicationId: string,
+    media: {
+      videoUrl?: string;
+      passportCopy?: string;
+      highSchoolCertificate?: string;
+      highSchoolMissingNote?: string;
+      birthCertificate?: string;
+      motherPassport?: string;
+      fatherPassport?: string;
+      pdfs?: string[];
+    }
+  ) => void;
   salesClaimLead: (applicationId: string) => void;
   salesAddExtraDocs: (applicationId: string, files: string[]) => void;
 
@@ -214,6 +236,25 @@ const ensureSignedIn = (user: User | null, authStatus: AuthStatus) => {
 
 const requireRole = (user: User, roles: UserRole[]) => {
   if (!roles.includes(user.role)) throw new Error('Forbidden');
+};
+
+const parseDate = (value: string) => {
+  const v = typeof value === 'string' ? value.trim() : '';
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+};
+
+const calculateAge = (dob: string) => {
+  const d = parseDate(dob);
+  if (!d) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1;
+  if (age < 0 || age > 125) return null;
+  return age;
 };
 
 const generateStudentCredentials = () => {
@@ -467,6 +508,48 @@ const useAppStore = create<AppStoreState>()(
         await get().loadBackendState();
       },
 
+      setApplicationUniversity: (applicationId: string, universityId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['sales', 'ops', 'ceo']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app) throw new Error('Application not found');
+        const source = app.source ?? 'public';
+        if (actor.role === 'sales' && source === 'agency') throw new Error('Forbidden');
+        if (actor.role === 'ops' && source !== 'agency') throw new Error('Forbidden');
+        set((state) => ({
+          applications: state.applications.map(a => a.id === applicationId ? {
+            ...a,
+            university: universityId,
+            events: [
+              ...(a.events ?? []),
+              { id: `${a.id}-uni-${Date.now()}`, type: 'university_set' as const, byId: actor.id, byName: actor.name, time: new Date().toISOString(), details: universityId },
+            ],
+          } : a),
+        }));
+        queueBackendSave(get);
+      },
+
+      setApplicationMeta: (applicationId: string, meta) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['sales', 'ops', 'ceo']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app) throw new Error('Application not found');
+        const source = app.source ?? 'public';
+        if (actor.role === 'sales' && source === 'agency') throw new Error('Forbidden');
+        if (actor.role === 'ops' && source !== 'agency') throw new Error('Forbidden');
+        set((state) => ({
+          applications: state.applications.map(a => a.id === applicationId ? {
+            ...a,
+            ...meta,
+            events: [
+              ...(a.events ?? []),
+              { id: `${a.id}-meta-${Date.now()}`, type: 'identity_updated' as const, byId: actor.id, byName: actor.name, time: new Date().toISOString() },
+            ],
+          } : a),
+        }));
+        queueBackendSave(get);
+      },
+
       salesApproveApplication: async (applicationId: string) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
 
@@ -478,6 +561,16 @@ const useAppStore = create<AppStoreState>()(
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
         if (source === 'public' && !app.intakeDetails) throw new Error('Fill intake before approval');
         if (source === 'agency' && !app.studentEmail) throw new Error('Student email is required');
+        const isAviation = ((app.program ?? '').toLowerCase().includes('aviation')) || Boolean(app.aviationDegree);
+        if (!isAviation && !app.university) throw new Error('Select a university before approval');
+        if (!app.dob) throw new Error('Date of birth is required (fill intake)');
+        const age = calculateAge(app.dob);
+        if (age == null) throw new Error('Invalid date of birth');
+        if (age < 18) {
+          if (!app.intakeBirthCertificate) throw new Error('Birth certificate is required for underage students');
+          if (!app.intakeMotherPassport) throw new Error("Mother's passport is required for underage students");
+          if (!app.intakeFatherPassport) throw new Error("Father's passport is required for underage students");
+        }
 
         const creds = generateStudentCredentials();
         const studentEmail = app.studentEmail ?? app.email;
@@ -625,7 +718,7 @@ const useAppStore = create<AppStoreState>()(
         queueBackendSave(get);
       },
       
-      salesSetIntakeMedia: (applicationId: string, media: { videoUrl?: string; passportCopy?: string; highSchoolCertificate?: string; pdfs?: string[] }) => {
+      salesSetIntakeMedia: (applicationId: string, media: { videoUrl?: string; passportCopy?: string; highSchoolCertificate?: string; highSchoolMissingNote?: string; birthCertificate?: string; motherPassport?: string; fatherPassport?: string; pdfs?: string[] }) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
@@ -638,6 +731,10 @@ const useAppStore = create<AppStoreState>()(
             intakeVideoUrl: media.videoUrl ?? a.intakeVideoUrl,
             intakePassportCopy: media.passportCopy ?? a.intakePassportCopy,
             intakeHighSchoolCertificate: media.highSchoolCertificate ?? a.intakeHighSchoolCertificate,
+            intakeHighSchoolMissingNote: media.highSchoolMissingNote ?? a.intakeHighSchoolMissingNote,
+            intakeBirthCertificate: media.birthCertificate ?? a.intakeBirthCertificate,
+            intakeMotherPassport: media.motherPassport ?? a.intakeMotherPassport,
+            intakeFatherPassport: media.fatherPassport ?? a.intakeFatherPassport,
             intakeAttachments: media.pdfs ? [ ...(a.intakeAttachments ?? []), ...media.pdfs ] : a.intakeAttachments,
           } : a)
         }));
@@ -727,6 +824,10 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['staff', 'ceo', 'agency_staff']);
 
         if (!get().users.some(u => u.id === doc.studentId && u.role === 'student')) throw new Error('Student not found');
+        const a = get().applications.find(x => x.studentId === doc.studentId);
+        if (doc.type === 'recognition-letter' && !a?.intakeHighSchoolCertificate) {
+          throw new Error('High school certificate must be uploaded before recognition');
+        }
 
         const newDoc: Omit<Document, 'id'> = {
           ...doc,
@@ -756,6 +857,9 @@ const useAppStore = create<AppStoreState>()(
         const doc = get().documents.find(d => d.id === documentId);
         if (!doc) throw new Error('Document not found');
         const app = get().applications.find(a => a.studentId === doc.studentId);
+        if (doc.type === 'recognition-letter' && !app?.intakeHighSchoolCertificate) {
+          throw new Error('High school certificate must be uploaded before recognition');
+        }
         const now = new Date().toISOString();
         set((state) => ({
           documents: state.documents.map(d => d.id === documentId ? { ...d, status: 'verified' } : d),

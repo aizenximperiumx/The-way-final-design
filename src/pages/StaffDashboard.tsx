@@ -46,7 +46,8 @@ const StaffDashboard: FC = () => {
   const approvedStudents = useMemo(() => {
     const base = applications.filter(app => app.status === 'approved');
     if (currentUser?.role === 'staff') {
-      return base.filter(app => app.assignedStaffId === currentUser.id);
+      const uni = currentUser.staffUniversities ?? [];
+      return base.filter(app => app.assignedStaffId === currentUser.id || (!app.assignedStaffId && !!app.university && uni.includes(app.university)));
     }
     if (currentUser?.role === 'agency_staff') {
       return base.filter(app => (app.source ?? 'public') === 'agency');

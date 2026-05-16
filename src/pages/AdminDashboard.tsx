@@ -35,6 +35,7 @@ const AdminDashboard: React.FC = () => {
   const [createdAgencyCreds, setCreatedAgencyCreds] = useState<{ username: string; password?: string } | null>(null);
   const [createdOpsCreds, setCreatedOpsCreds] = useState<{ username: string; password?: string } | null>(null);
   const [createdSalesCreds, setCreatedSalesCreds] = useState<{ username: string; password?: string } | null>(null);
+  const [createdStaffCreds, setCreatedStaffCreds] = useState<{ username: string; password?: string } | null>(null);
   const [showCredModal, setShowCredModal] = useState(false);
   const [credUserId, setCredUserId] = useState<string | null>(null);
   const [credUsername, setCredUsername] = useState('');
@@ -48,6 +49,9 @@ const AdminDashboard: React.FC = () => {
   const [showSalesModal, setShowSalesModal] = useState(false);
   const [salesName, setSalesName] = useState('');
   const [salesEmail, setSalesEmail] = useState('');
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffName, setStaffName] = useState('');
+  const [staffEmail, setStaffEmail] = useState('');
   const [showUniModal, setShowUniModal] = useState(false);
   const [uniUserId, setUniUserId] = useState<string | null>(null);
   const [uniSelection, setUniSelection] = useState<string[]>([]);
@@ -562,6 +566,12 @@ const AdminDashboard: React.FC = () => {
                   Create Sales User
                 </button>
                 <button
+                  onClick={() => setShowStaffModal(true)}
+                  className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-black hover:text-white transition-all"
+                >
+                  Create Staff User
+                </button>
+                <button
                   onClick={() => setShowAssignModal(true)}
                   className="flex items-center gap-2 bg-amber-500 text-black px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-black hover:text-white transition-all"
                 >
@@ -937,6 +947,63 @@ const AdminDashboard: React.FC = () => {
                           const created = await ceoCreateUser(user);
                           setCreatedSalesCreds({ username: created.username, ...(created.password ? { password: created.password } : {}) });
                           toast.success('Sales user created');
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Failed to create user');
+                        }
+                      }}
+                      className="px-6 py-3 rounded-2xl font-black text-sm bg-black text-white hover:bg-amber-500 hover:text-black transition-all"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {showStaffModal && (
+              <div className="fixed inset-0 z-[100] p-4 flex items-start justify-center overflow-y-auto">
+                <div className="absolute inset-0 bg-black/60" onClick={() => { setShowStaffModal(false); setCreatedStaffCreds(null); }} />
+                <div className="relative tw-card p-8 w-full max-w-lg my-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                  <h3 className="text-2xl font-black text-black mb-6">Create Staff User</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Name</label>
+                      <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={staffName} onChange={(e) => setStaffName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Email</label>
+                      <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} />
+                    </div>
+                    {createdStaffCreds && (
+                      <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                        <p className="text-sm font-bold text-amber-700">Account created</p>
+                        <p className="text-sm font-medium text-amber-700">Username: {createdStaffCreds.username}</p>
+                        {createdStaffCreds.password ? (
+                          <p className="text-sm font-medium text-amber-700">Password: {createdStaffCreds.password}</p>
+                        ) : (
+                          <p className="text-sm font-medium text-amber-700">Credentials were sent to the user email.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button onClick={() => { setShowStaffModal(false); setCreatedStaffCreds(null); }} className="px-4 py-2 rounded-xl font-bold text-sm bg-gray-100 text-gray-600">Cancel</button>
+                    <button
+                      onClick={async () => {
+                        const name = staffName.trim();
+                        const email = staffEmail.trim();
+                        if (!name || !email) {
+                          toast.error('Please enter name and email');
+                          return;
+                        }
+                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                          toast.error('Invalid email');
+                          return;
+                        }
+                        const u = { id: '', username: '', role: 'staff' as const, name, email, points: 0, createdAt: new Date().toISOString() };
+                        try {
+                          const created = await ceoCreateUser(u);
+                          setCreatedStaffCreds({ username: created.username, ...(created.password ? { password: created.password } : {}) });
+                          toast.success('Staff user created');
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : 'Failed to create user');
                         }

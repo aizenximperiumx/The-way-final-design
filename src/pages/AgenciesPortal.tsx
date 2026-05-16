@@ -16,6 +16,11 @@ export default function AgenciesPortal() {
   const [pdfs, setPdfs] = useState<string[]>([]);
   const [passportCopyUrl, setPassportCopyUrl] = useState<string>('');
   const [highSchoolUrl, setHighSchoolUrl] = useState<string>('');
+  const [noHighSchoolCertificate, setNoHighSchoolCertificate] = useState(false);
+  const [highSchoolMissingNote, setHighSchoolMissingNote] = useState('');
+  const [birthCertificateUrl, setBirthCertificateUrl] = useState<string>('');
+  const [motherPassportUrl, setMotherPassportUrl] = useState<string>('');
+  const [fatherPassportUrl, setFatherPassportUrl] = useState<string>('');
   const [extraDocs, setExtraDocs] = useState<string[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [form, setForm] = useState({
@@ -35,6 +40,17 @@ export default function AgenciesPortal() {
     studyLevel: '',
   });
   const [viewApp, setViewApp] = useState<{ open: boolean; id?: string }>({ open: false });
+
+  const calculateAge = (dob: string) => {
+    const d = new Date(dob);
+    if (Number.isNaN(d.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    const m = now.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1;
+    if (age < 0 || age > 125) return null;
+    return age;
+  };
 
   const uploadWebhook = (import.meta.env as { VITE_FILE_UPLOAD_WEBHOOK?: string }).VITE_FILE_UPLOAD_WEBHOOK || '/api/upload-file';
   const toBase64 = (file: File) =>
@@ -109,6 +125,39 @@ export default function AgenciesPortal() {
       }
     })();
   };
+  const onBirthCertificate = (f: File | undefined) => {
+    if (!f) return;
+    (async () => {
+      try {
+        const url = await uploadFile(f);
+        setBirthCertificateUrl(url);
+      } catch {
+        setBirthCertificateUrl(URL.createObjectURL(f));
+      }
+    })();
+  };
+  const onMotherPassport = (f: File | undefined) => {
+    if (!f) return;
+    (async () => {
+      try {
+        const url = await uploadFile(f);
+        setMotherPassportUrl(url);
+      } catch {
+        setMotherPassportUrl(URL.createObjectURL(f));
+      }
+    })();
+  };
+  const onFatherPassport = (f: File | undefined) => {
+    if (!f) return;
+    (async () => {
+      try {
+        const url = await uploadFile(f);
+        setFatherPassportUrl(url);
+      } catch {
+        setFatherPassportUrl(URL.createObjectURL(f));
+      }
+    })();
+  };
   const onFilePdf = (files: FileList | null) => {
     if (!files) return;
     (async () => {
@@ -146,8 +195,36 @@ export default function AgenciesPortal() {
       toast.error('Please upload a video (min 40 seconds)');
       return;
     }
+    const age = calculateAge(form.dob);
+    if (age == null) {
+      toast.error('Please enter a valid date of birth');
+      return;
+    }
+    const underage = age < 18;
+    if (underage) {
+      if (!birthCertificateUrl) {
+        toast.error('Birth certificate is required for underage students');
+        return;
+      }
+      if (!motherPassportUrl) {
+        toast.error("Mother's passport is required for underage students");
+        return;
+      }
+      if (!fatherPassportUrl) {
+        toast.error("Father's passport is required for underage students");
+        return;
+      }
+    }
+    if (!noHighSchoolCertificate && !highSchoolUrl) {
+      toast.error('Please upload the high school certificate (or mark it as not available)');
+      return;
+    }
+    if (noHighSchoolCertificate && !highSchoolMissingNote.trim()) {
+      toast.error('Please write a comment about missing high school certificate');
+      return;
+    }
     const details = `Full name: ${form.fullName}
-Age: ${form.age}
+Age: ${age}
 Country: ${form.country}
 Phone: ${form.phone}
 Contact email: ${form.contactEmail}
@@ -159,7 +236,9 @@ Second nationality: ${form.secondNationality}
 Home address: ${form.homeAddress}
 University: ${getUniversityName(form.university)}
 Aviation Degree: ${form.aviationDegree}
-Study Level: ${form.studyLevel}`;
+Study Level: ${form.studyLevel}
+High School Note: ${noHighSchoolCertificate ? highSchoolMissingNote : ''}
+Underage: ${underage ? 'Yes' : 'No'}`;
     const application = {
       name: form.fullName,
       email: form.studentEmail,
@@ -167,20 +246,25 @@ Study Level: ${form.studyLevel}`;
       studentEmail: form.studentEmail,
       phone: form.phone,
       country: form.country,
+      dob: form.dob,
       program: form.aviationDegree ? `Aviation: ${form.aviationDegree}` : 'General',
       university: form.university || undefined,
       status: 'submitted' as const,
       stage: 'applied' as const,
       createdAt: new Date().toISOString(),
       internalNotes: [
-        { id: Date.now().toString(), authorName: user.name, text: `Agency submission\nAge: ${form.age}\nPassport: ${form.passportNumber}\nDOB: ${form.dob}\nNationality: ${form.nationality}\nSecond: ${form.secondNationality}\nAddress: ${form.homeAddress}\nAviation: ${form.aviationDegree}\nLevel: ${form.studyLevel}\nVideo: ${videoUrl}\nPDFs: ${pdfs.join(', ')}`, createdAt: new Date().toISOString() }
+        { id: Date.now().toString(), authorName: user.name, text: `Agency submission\nAge: ${age}\nPassport: ${form.passportNumber}\nDOB: ${form.dob}\nNationality: ${form.nationality}\nSecond: ${form.secondNationality}\nAddress: ${form.homeAddress}\nAviation: ${form.aviationDegree}\nLevel: ${form.studyLevel}\nHigh School Note: ${noHighSchoolCertificate ? highSchoolMissingNote : ''}\nUnderage: ${underage ? 'Yes' : 'No'}\nVideo: ${videoUrl}\nPDFs: ${pdfs.join(', ')}`, createdAt: new Date().toISOString() }
       ],
       source: 'agency' as const,
       agencyId: user.id,
       intakeDetails: details,
       intakeVideoUrl: videoUrl,
       intakePassportCopy: passportCopyUrl || undefined,
-      intakeHighSchoolCertificate: highSchoolUrl || undefined,
+      intakeHighSchoolCertificate: (!noHighSchoolCertificate ? (highSchoolUrl || undefined) : undefined),
+      intakeHighSchoolMissingNote: (noHighSchoolCertificate ? highSchoolMissingNote.trim() : undefined),
+      intakeBirthCertificate: (underage ? birthCertificateUrl : undefined),
+      intakeMotherPassport: (underage ? motherPassportUrl : undefined),
+      intakeFatherPassport: (underage ? fatherPassportUrl : undefined),
       intakeAttachments: pdfs,
       intakeExtraDocs: extraDocs,
     };
@@ -198,6 +282,11 @@ Study Level: ${form.studyLevel}`;
     setPdfs([]);
     setPassportCopyUrl('');
     setHighSchoolUrl('');
+    setNoHighSchoolCertificate(false);
+    setHighSchoolMissingNote('');
+    setBirthCertificateUrl('');
+    setMotherPassportUrl('');
+    setFatherPassportUrl('');
     setExtraDocs([]);
   };
 
@@ -287,7 +376,11 @@ Study Level: ${form.studyLevel}`;
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Age</label>
-                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} required />
+                    <input
+                      className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-gray-500"
+                      value={form.dob ? (calculateAge(form.dob) == null ? '' : String(calculateAge(form.dob)!)) : ''}
+                      readOnly
+                    />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Country</label>
@@ -311,7 +404,13 @@ Study Level: ${form.studyLevel}`;
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Date of birth</label>
-                    <input type="date" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} required />
+                    <input
+                      type="date"
+                      className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black"
+                      value={form.dob}
+                      onChange={(e) => setForm({ ...form, dob: e.target.value })}
+                      required
+                    />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Nationality</label>
@@ -369,9 +468,58 @@ Study Level: ${form.studyLevel}`;
                 <div>
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">High School Certificate</label>
                   <div className="flex items-center gap-3">
-                    <input type="file" accept="image/*,.pdf" onChange={(e) => onHighSchool(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                    {!noHighSchoolCertificate ? (
+                      <input type="file" accept="image/*,.pdf" onChange={(e) => onHighSchool(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                    ) : null}
                   </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={noHighSchoolCertificate}
+                      onChange={(e) => {
+                        setNoHighSchoolCertificate(e.target.checked);
+                        if (!e.target.checked) setHighSchoolMissingNote('');
+                      }}
+                      className="h-4 w-4"
+                    />
+                    <p className="text-xs font-bold text-gray-600">Student does not have high school certificate</p>
+                  </div>
+                  {noHighSchoolCertificate ? (
+                    <textarea
+                      value={highSchoolMissingNote}
+                      onChange={(e) => setHighSchoolMissingNote(e.target.value)}
+                      className="w-full mt-2 px-5 py-3 bg-gray-50 rounded-2xl border-none text-black min-h-[100px] font-medium"
+                      placeholder="Write the reason / comment..."
+                    />
+                  ) : null}
                 </div>
+                {(() => {
+                  const age = form.dob ? calculateAge(form.dob) : null;
+                  const underage = age != null && age < 18;
+                  if (!underage) return null;
+                  return (
+                    <>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Birth Certificate</label>
+                        <div className="flex items-center gap-3">
+                          <input type="file" accept="image/*,.pdf" onChange={(e) => onBirthCertificate(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Mother's Passport</label>
+                        <div className="flex items-center gap-3">
+                          <input type="file" accept="image/*,.pdf" onChange={(e) => onMotherPassport(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Father's Passport</label>
+                        <div className="flex items-center gap-3">
+                          <input type="file" accept="image/*,.pdf" onChange={(e) => onFatherPassport(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
                   <div>
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload PDFs</label>
                     <div className="flex items-center gap-3">

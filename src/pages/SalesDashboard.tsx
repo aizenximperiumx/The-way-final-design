@@ -22,7 +22,7 @@ import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
 
 const SalesDashboard: React.FC = () => {
-  const { applications, users, salesApproveApplication, salesRejectApplication, assignUniversity, salesClaimLead, salesAddExtraDocs, salesAssignAdmin, requestMoreInfo } = useAppStore();
+  const { applications, users, salesApproveApplication, salesRejectApplication, assignUniversity, salesClaimLead, salesAddExtraDocs, salesAssignAdmin, requestMoreInfo, setApplicationUniversity, setApplicationMeta } = useAppStore();
   const { user } = useAuth();
   const location = useLocation();
   const mode: 'sales' | 'ops' = location.pathname.startsWith('/ops') ? 'ops' : 'sales';
@@ -52,6 +52,11 @@ const SalesDashboard: React.FC = () => {
     videoUrl: string;
     passportCopyUrl: string;
     highSchoolCertificateUrl: string;
+    noHighSchoolCertificate: boolean;
+    highSchoolMissingNote: string;
+    birthCertificateUrl: string;
+    motherPassportUrl: string;
+    fatherPassportUrl: string;
     pdfs: string[];
   };
   const [intake, setIntake] = useState<IntakeForm>({
@@ -71,20 +76,72 @@ const SalesDashboard: React.FC = () => {
     videoUrl: '',
     passportCopyUrl: '',
     highSchoolCertificateUrl: '',
+    noHighSchoolCertificate: false,
+    highSchoolMissingNote: '',
+    birthCertificateUrl: '',
+    motherPassportUrl: '',
+    fatherPassportUrl: '',
     pdfs: [] as string[],
   });
+
+  const calculateAge = (dob: string) => {
+    const d = new Date(dob);
+    if (Number.isNaN(d.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    const m = now.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1;
+    if (age < 0 || age > 125) return null;
+    return age;
+  };
+
+  const openIntake = (application: Application) => {
+    setIntake({
+      fullName: application.name ?? '',
+      age: application.dob ? String(calculateAge(application.dob) ?? '') : '',
+      country: application.country ?? '',
+      phone: application.phone ?? '',
+      email: application.studentEmail ?? application.email ?? '',
+      passportNumber: '',
+      dob: application.dob ?? '',
+      nationality: '',
+      secondNationality: '',
+      homeAddress: '',
+      university: application.university ?? '',
+      aviationDegree: application.aviationDegree ?? '',
+      studyLevel: application.studyLevel ?? '',
+      videoUrl: application.intakeVideoUrl ?? '',
+      passportCopyUrl: application.intakePassportCopy ?? '',
+      highSchoolCertificateUrl: application.intakeHighSchoolCertificate ?? '',
+      noHighSchoolCertificate: Boolean(application.intakeHighSchoolMissingNote) && !application.intakeHighSchoolCertificate,
+      highSchoolMissingNote: application.intakeHighSchoolMissingNote ?? '',
+      birthCertificateUrl: application.intakeBirthCertificate ?? '',
+      motherPassportUrl: application.intakeMotherPassport ?? '',
+      fatherPassportUrl: application.intakeFatherPassport ?? '',
+      pdfs: application.intakeAttachments ?? [],
+    });
+    setIntakeModal({ open: true, app: application });
+  };
 
   const pendingApplications = useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const weekAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
-    const hasOpsMissingDocs = (a: Application) =>
-      !a.studentEmail ||
-      !a.university ||
-      !a.intakeVideoUrl ||
-      !a.intakePassportCopy ||
-      !a.intakeHighSchoolCertificate ||
-      !((a.intakeAttachments?.length ?? 0) > 0);
+    const hasOpsMissingDocs = (a: Application) => {
+      const age = a.dob ? calculateAge(a.dob) : null;
+      const underage = age != null && age < 18;
+      const hsOk = Boolean(a.intakeHighSchoolCertificate || a.intakeHighSchoolMissingNote);
+      return (
+        !a.studentEmail ||
+        (!a.university && !a.intakeDetails?.includes('Aviation')) ||
+        !a.dob ||
+        !a.intakeVideoUrl ||
+        !a.intakePassportCopy ||
+        !hsOk ||
+        (underage && (!a.intakeBirthCertificate || !a.intakeMotherPassport || !a.intakeFatherPassport)) ||
+        !((a.intakeAttachments?.length ?? 0) > 0)
+      );
+    };
     return applications
       .filter(app => app.status === 'submitted' && (app.source ?? 'public') === allowedSource)
       .filter(app => {
@@ -165,9 +222,16 @@ const SalesDashboard: React.FC = () => {
     const missing: string[] = [];
     if (!application.studentEmail) missing.push('Student Email');
     if (!application.university && !application.intakeDetails?.includes('Aviation')) missing.push('University');
+    if (!application.dob) missing.push('DOB');
     if (!application.intakeVideoUrl) missing.push('Video');
     if (!application.intakePassportCopy) missing.push('Passport');
-    if (!application.intakeHighSchoolCertificate) missing.push('HS Certificate');
+    if (!(application.intakeHighSchoolCertificate || application.intakeHighSchoolMissingNote)) missing.push('HS Certificate / Note');
+    const age = application.dob ? calculateAge(application.dob) : null;
+    if (age != null && age < 18) {
+      if (!application.intakeBirthCertificate) missing.push('Birth Certificate');
+      if (!application.intakeMotherPassport) missing.push("Mother's Passport");
+      if (!application.intakeFatherPassport) missing.push("Father's Passport");
+    }
     if (!((application.intakeAttachments?.length ?? 0) > 0)) missing.push('PDFs');
     return missing;
   };
@@ -178,8 +242,8 @@ const SalesDashboard: React.FC = () => {
       try {
         const url = await uploadFile(f);
         setIntake((prev) => ({ ...prev, videoUrl: url }));
-      } catch {
-        setIntake((prev) => ({ ...prev, videoUrl: URL.createObjectURL(f) }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Video upload failed');
       }
     })();
   };
@@ -189,8 +253,8 @@ const SalesDashboard: React.FC = () => {
       try {
         const url = await uploadFile(f);
         setIntake((prev) => ({ ...prev, passportCopyUrl: url }));
-      } catch {
-        setIntake((prev) => ({ ...prev, passportCopyUrl: URL.createObjectURL(f) }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Passport upload failed');
       }
     })();
   };
@@ -200,8 +264,41 @@ const SalesDashboard: React.FC = () => {
       try {
         const url = await uploadFile(f);
         setIntake((prev) => ({ ...prev, highSchoolCertificateUrl: url }));
-      } catch {
-        setIntake((prev) => ({ ...prev, highSchoolCertificateUrl: URL.createObjectURL(f) }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'High school certificate upload failed');
+      }
+    })();
+  };
+  const onBirthCertificate = (f?: File) => {
+    if (!f) return;
+    (async () => {
+      try {
+        const url = await uploadFile(f);
+        setIntake((prev) => ({ ...prev, birthCertificateUrl: url }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Birth certificate upload failed');
+      }
+    })();
+  };
+  const onMotherPassport = (f?: File) => {
+    if (!f) return;
+    (async () => {
+      try {
+        const url = await uploadFile(f);
+        setIntake((prev) => ({ ...prev, motherPassportUrl: url }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Mother's passport upload failed");
+      }
+    })();
+  };
+  const onFatherPassport = (f?: File) => {
+    if (!f) return;
+    (async () => {
+      try {
+        const url = await uploadFile(f);
+        setIntake((prev) => ({ ...prev, fatherPassportUrl: url }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Father's passport upload failed");
       }
     })();
   };
@@ -211,10 +308,8 @@ const SalesDashboard: React.FC = () => {
       try {
         const urls = await Promise.all(Array.from(files).map(async (f) => uploadFile(f)));
         setIntake((prev) => ({ ...prev, pdfs: urls }));
-      } catch {
-        const urls: string[] = [];
-        Array.from(files).forEach((f) => urls.push(URL.createObjectURL(f)));
-        setIntake((prev) => ({ ...prev, pdfs: urls }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'PDF upload failed');
       }
     })();
   };
@@ -225,16 +320,29 @@ const SalesDashboard: React.FC = () => {
         const urls = await Promise.all(Array.from(files).map(async (f) => uploadFile(f)));
         if (intakeModal.app) salesAddExtraDocs(intakeModal.app.id, urls);
         toast.success('Extra documents added');
-      } catch {
-        const urls: string[] = [];
-        Array.from(files).forEach((f) => urls.push(URL.createObjectURL(f)));
-        if (intakeModal.app) salesAddExtraDocs(intakeModal.app.id, urls);
-        toast.success('Extra documents added');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Extra documents upload failed');
       }
     })();
   };
   const submitIntake = () => {
     if (!intakeModal.app) return;
+    if (intake.university) {
+      try {
+        setApplicationUniversity(intakeModal.app.id, intake.university);
+      } catch {
+        // ignored
+      }
+    }
+    try {
+      setApplicationMeta(intakeModal.app.id, {
+        dob: intake.dob || undefined,
+        aviationDegree: intake.aviationDegree || undefined,
+        studyLevel: intake.studyLevel || undefined,
+      });
+    } catch {
+      // ignored
+    }
     const details = `Full name: ${intake.fullName}
 Age: ${intake.age}
 Country: ${intake.country}
@@ -248,6 +356,7 @@ Address: ${intake.homeAddress}
 University: ${intake.university}
 Aviation Degree: ${intake.aviationDegree}
 Study Level: ${intake.studyLevel}
+High School Note: ${intake.noHighSchoolCertificate ? intake.highSchoolMissingNote : ''}
 Video: ${intake.videoUrl}`;
     try {
       // assign university if student is already created (optional)
@@ -258,12 +367,16 @@ Video: ${intake.videoUrl}`;
       useAppStore.getState().salesSetIntakeMedia(intakeModal.app.id, {
         videoUrl: intake.videoUrl,
         passportCopy: intake.passportCopyUrl,
-        highSchoolCertificate: intake.highSchoolCertificateUrl,
+        highSchoolCertificate: intake.noHighSchoolCertificate ? undefined : intake.highSchoolCertificateUrl,
+        highSchoolMissingNote: intake.noHighSchoolCertificate ? intake.highSchoolMissingNote : undefined,
+        birthCertificate: intake.birthCertificateUrl,
+        motherPassport: intake.motherPassportUrl,
+        fatherPassport: intake.fatherPassportUrl,
         pdfs: intake.pdfs,
       });
       toast.success('Intake details saved');
       setIntakeModal({ open: false });
-      setIntake({ fullName: '', age: '', country: '', phone: '', email: '', passportNumber: '', dob: '', nationality: '', secondNationality: '', homeAddress: '', university: '', aviationDegree: '', studyLevel: '', videoUrl: '', passportCopyUrl: '', highSchoolCertificateUrl: '', pdfs: [] });
+      setIntake({ fullName: '', age: '', country: '', phone: '', email: '', passportNumber: '', dob: '', nationality: '', secondNationality: '', homeAddress: '', university: '', aviationDegree: '', studyLevel: '', videoUrl: '', passportCopyUrl: '', highSchoolCertificateUrl: '', noHighSchoolCertificate: false, highSchoolMissingNote: '', birthCertificateUrl: '', motherPassportUrl: '', fatherPassportUrl: '', pdfs: [] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save intake');
     }
@@ -544,7 +657,7 @@ Video: ${intake.videoUrl}`;
                       )}
                       {mode === 'sales' && (
                         <button
-                          onClick={() => setIntakeModal({ open: true, app: application })}
+                          onClick={() => openIntake(application)}
                           className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white border border-gray-100 px-6 py-3 rounded-2xl font-black text-sm hover:bg-gray-50 transition-all"
                         >
                           Fill Intake
@@ -594,10 +707,16 @@ Video: ${intake.videoUrl}`;
                         Reject
                       </button>
                       <button
-                        onClick={() => handleApprove(application)}
-                        disabled={(mode === 'sales' && !application.intakeDetails) || (mode === 'ops' && opsChecklist(application).length > 0)}
+                        onClick={() => {
+                          if (mode === 'sales' && !application.intakeDetails) {
+                            openIntake(application);
+                            return;
+                          }
+                          handleApprove(application);
+                        }}
+                        disabled={(mode === 'ops' && opsChecklist(application).length > 0)}
                         className={`w-full sm:w-auto min-w-[220px] flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 rounded-2xl font-black text-sm transition-all shadow-lg shadow-black/5 ${
-                          (mode === 'sales' && !application.intakeDetails) || (mode === 'ops' && opsChecklist(application).length > 0)
+                          (mode === 'ops' && opsChecklist(application).length > 0)
                             ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                             : 'bg-black text-white hover:bg-amber-500 hover:text-black'
                         }`}
@@ -638,7 +757,7 @@ Video: ${intake.videoUrl}`;
                   { key: 'university', label: 'University to enroll' },
                   { key: 'aviationDegree', label: 'Aviation Degree (if applicable)' },
                   { key: 'studyLevel', label: 'Study Level' },
-                ] as Array<{ key: keyof IntakeForm; label: string }>
+                ] as Array<{ key: Exclude<keyof IntakeForm, 'pdfs' | 'noHighSchoolCertificate'>; label: string }>
               ).map((f, i) => (
                 <div key={i} className={f.key === 'homeAddress' || f.key === 'university' || f.key === 'aviationDegree' || f.key === 'studyLevel' ? 'md:col-span-2' : ''}>
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{f.label}</label>
@@ -675,6 +794,30 @@ Video: ${intake.videoUrl}`;
                           <option value="bachelor">Bachelor's</option>
                           <option value="master">Master's</option>
                         </select>
+                      ) : f.key === 'dob' ? (
+                        <input
+                          type="date"
+                          value={intake.dob || ''}
+                          onChange={(e) => {
+                            const dob = e.target.value;
+                            const computed = dob ? calculateAge(dob) : null;
+                            setIntake((prev) => ({
+                              ...prev,
+                              dob,
+                              age: computed == null ? '' : String(computed),
+                              ...(computed != null && computed >= 18
+                                ? { birthCertificateUrl: '', motherPassportUrl: '', fatherPassportUrl: '' }
+                                : {}),
+                            }));
+                          }}
+                          className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none"
+                        />
+                      ) : f.key === 'age' ? (
+                        <input
+                          value={(intake.dob && calculateAge(intake.dob) != null) ? String(calculateAge(intake.dob)!) : (intake.age || '')}
+                          readOnly
+                          className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none text-gray-500"
+                        />
                       ) : (
                         <input
                           value={intake[f.key] || ''}
@@ -696,8 +839,48 @@ Video: ${intake.videoUrl}`;
               </div>
               <div>
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">High School Certificate</label>
-                <input type="file" accept="image/*,.pdf" onChange={(e) => onHighSchool(e.target.files?.[0])} className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none" />
+                {!intake.noHighSchoolCertificate ? (
+                  <input type="file" accept="image/*,.pdf" onChange={(e) => onHighSchool(e.target.files?.[0])} className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none" />
+                ) : null}
+                <div className="mt-3 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={intake.noHighSchoolCertificate}
+                    onChange={(e) => setIntake((prev) => ({ ...prev, noHighSchoolCertificate: e.target.checked, ...(e.target.checked ? { highSchoolMissingNote: prev.highSchoolMissingNote } : { highSchoolMissingNote: '' }) }))}
+                    className="h-4 w-4"
+                  />
+                  <p className="text-xs font-bold text-gray-600">Student does not have high school certificate</p>
+                </div>
+                {intake.noHighSchoolCertificate ? (
+                  <textarea
+                    value={intake.highSchoolMissingNote}
+                    onChange={(e) => setIntake((prev) => ({ ...prev, highSchoolMissingNote: e.target.value }))}
+                    className="w-full mt-2 px-4 py-3 bg-gray-50 rounded-xl border-none min-h-[90px] font-medium"
+                    placeholder="Write the reason / note..."
+                  />
+                ) : null}
               </div>
+              {(() => {
+                const age = intake.dob ? calculateAge(intake.dob) : null;
+                const underage = age != null && age < 18;
+                if (!underage) return null;
+                return (
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Birth Certificate</label>
+                      <input type="file" accept="image/*,.pdf" onChange={(e) => onBirthCertificate(e.target.files?.[0])} className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Mother's Passport</label>
+                      <input type="file" accept="image/*,.pdf" onChange={(e) => onMotherPassport(e.target.files?.[0])} className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Father's Passport</label>
+                      <input type="file" accept="image/*,.pdf" onChange={(e) => onFatherPassport(e.target.files?.[0])} className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none" />
+                    </div>
+                  </div>
+                );
+              })()}
               <div>
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload PDFs</label>
                 <input multiple type="file" accept="application/pdf" onChange={(e) => onPdfs(e.target.files)} className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none" />
@@ -733,6 +916,20 @@ Video: ${intake.videoUrl}`;
                 )}
                 {previewModal.app.intakeHighSchoolCertificate && (
                   <a href={previewModal.app.intakeHighSchoolCertificate} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 text-sm font-bold border border-purple-100">High School Certificate</a>
+                )}
+                {previewModal.app.intakeHighSchoolMissingNote && !previewModal.app.intakeHighSchoolCertificate && (
+                  <div className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 text-sm font-bold border border-purple-100">
+                    HS Note: {previewModal.app.intakeHighSchoolMissingNote}
+                  </div>
+                )}
+                {previewModal.app.intakeBirthCertificate && (
+                  <a href={previewModal.app.intakeBirthCertificate} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Birth Certificate</a>
+                )}
+                {previewModal.app.intakeMotherPassport && (
+                  <a href={previewModal.app.intakeMotherPassport} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Mother Passport</a>
+                )}
+                {previewModal.app.intakeFatherPassport && (
+                  <a href={previewModal.app.intakeFatherPassport} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Father Passport</a>
                 )}
               </div>
               {previewModal.app.intakeAttachments && previewModal.app.intakeAttachments.length > 0 && (
