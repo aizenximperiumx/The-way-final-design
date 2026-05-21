@@ -73,7 +73,6 @@ const StaffDashboard: FC = () => {
       reader.readAsDataURL(file);
     });
   const uploadFile = async (file: File) => {
-    if (!uploadWebhook) return URL.createObjectURL(file);
     const dataBase64 = await toBase64(file);
     const supabase = getSupabase();
     const { data: sessionData } = await supabase.auth.getSession();
@@ -658,9 +657,19 @@ const StaffDashboard: FC = () => {
                               {new Date(doc.uploadedAt).toLocaleDateString()}
                             </td>
                             <td className="py-4 text-right">
-                              <button className="p-2 text-gray-400 hover:text-amber-500 transition-colors" title="Download">
-                                <Download className="w-4 h-4" />
-                              </button>
+                              {doc.file ? (
+                                <a
+                                  href={doc.file}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-amber-600 transition-colors"
+                                  title="Open file"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-gray-400">No file</span>
+                              )}
                               {doc.status !== 'verified' && (
                                 <button
                                   onClick={() => {
@@ -936,14 +945,19 @@ const StaffDashboard: FC = () => {
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Attach File</label>
                   <input
                     type="file"
+                    accept="application/pdf,image/*"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const url = URL.createObjectURL(file);
-                      setNewDocument({ ...newDocument, file: url, fileObject: file, title: newDocument.title || file.name });
+                      setNewDocument({ ...newDocument, fileObject: file, title: newDocument.title || file.name });
                     }}
                     className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-medium transition-all outline-none"
                   />
+                  {newDocument.fileObject ? (
+                    <p className="mt-2 text-sm text-gray-500">Selected file: <span className="font-bold text-gray-900">{newDocument.fileObject.name}</span></p>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-400">Accepted: PDF or image</p>
+                  )}
                 </div>
                 
                 <div className="pt-4">

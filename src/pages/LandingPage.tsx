@@ -17,7 +17,7 @@ import {
   Camera
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'react-hot-toast';
@@ -59,10 +59,10 @@ const LandingPage: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm<ApplicationFormValues>({
+  const { register, handleSubmit, formState: { errors }, reset, control } = useForm<ApplicationFormValues>({
     resolver: zodResolver(applicationSchema)
   });
-  const selectedProgram = watch('program');
+  const selectedProgram = useWatch({ control, name: 'program' });
 
   const onSubmit = async (data: ApplicationFormValues) => {
     try {
@@ -74,7 +74,7 @@ const LandingPage: React.FC = () => {
       });
       toast.success('Application submitted successfully!');
       reset();
-    } catch (error) {
+    } catch {
       toast.error('Failed to submit application. Please try again.');
     }
   };

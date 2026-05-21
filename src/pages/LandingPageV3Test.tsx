@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
@@ -72,10 +72,10 @@ export default function LandingPageV3Test() {
   const navigate = useNavigate();
   const { addApplication } = useApp();
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<ApplicationForm>({
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<ApplicationForm>({
     resolver: zodResolver(applicationSchema),
   });
-  const selectedProgram = watch('program');
+  const selectedProgram = useWatch({ control, name: 'program' });
 
   useEffect(() => {
     const onScroll = () => setNavSolid(window.scrollY > 24);

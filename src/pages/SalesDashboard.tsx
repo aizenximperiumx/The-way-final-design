@@ -194,7 +194,6 @@ const SalesDashboard: React.FC = () => {
       reader.readAsDataURL(file);
     });
   const uploadFile = async (file: File) => {
-    if (!uploadWebhook) return URL.createObjectURL(file);
     const dataBase64 = await toBase64(file);
     const supabase = getSupabase();
     const { data: sessionData } = await supabase.auth.getSession();

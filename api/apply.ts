@@ -45,8 +45,9 @@ const getRoleFromAuth = async (base: string, adminKey: string, token: string, us
     method: 'GET',
     headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
   });
-  const appMeta = who.json && typeof who.json === 'object' && (who.json as any).app_metadata && typeof (who.json as any).app_metadata === 'object'
-    ? ((who.json as any).app_metadata as Record<string, unknown>)
+  const whoJson = who.json && typeof who.json === 'object' ? who.json as Record<string, unknown> : null;
+  const appMeta = whoJson && whoJson.app_metadata && typeof whoJson.app_metadata === 'object'
+    ? whoJson.app_metadata as Record<string, unknown>
     : null;
   const metaRole = appMeta && typeof appMeta.role === 'string' ? appMeta.role : '';
   if (metaRole) return metaRole;
@@ -143,11 +144,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         method: 'GET',
         headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
       });
-      if (!who.ok || !who.json || typeof (who.json as any).id !== 'string') {
+      const whoJson2 = who.json && typeof who.json === 'object' ? who.json as Record<string, unknown> : null;
+      if (!who.ok || !whoJson2 || typeof whoJson2.id !== 'string') {
         res.status(401).json({ error: 'Invalid token' });
         return;
       }
-      const userId = (who.json as any).id as string;
+      const userId = whoJson2.id as string;
       const role = await getRoleFromAuth(base, adminKey, token, userId);
       if (role !== 'agency' && role !== 'ceo') {
         res.status(403).json({ error: 'Forbidden' });

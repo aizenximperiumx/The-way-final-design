@@ -248,12 +248,26 @@ const StudentDashboard: React.FC = () => {
                       <td className="py-4">
                         {new Date(doc.uploadedAt).toLocaleDateString()}
                       </td>
-                      <td className="py-4 text-right">
+                      <td className="py-4 text-right space-x-2">
                         {doc.file ? (
-                          <a href={doc.file} download className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-black text-white text-xs font-black hover:bg-amber-500 hover:text-black transition-all shadow-sm">
-                            <Download className="w-4 h-4" />
-                            Download
-                          </a>
+                          <>
+                            <a
+                              href={doc.file}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-black text-white text-xs font-black hover:bg-amber-500 hover:text-black transition-all shadow-sm"
+                            >
+                              <Download className="w-4 h-4" />
+                              Open
+                            </a>
+                            <a
+                              href={doc.file}
+                              download
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-700 text-xs font-black hover:bg-gray-200 transition-all"
+                            >
+                              Download
+                            </a>
+                          </>
                         ) : (
                           <span className="text-[10px] text-gray-400 font-bold">No file</span>
                         )}

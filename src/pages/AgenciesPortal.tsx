@@ -61,7 +61,6 @@ export default function AgenciesPortal() {
       reader.readAsDataURL(file);
     });
   const uploadFile = async (file: File) => {
-    if (!uploadWebhook) return URL.createObjectURL(file);
     const dataBase64 = await toBase64(file);
     const supabase = getSupabase();
     const { data: sessionData } = await supabase.auth.getSession();
@@ -94,12 +93,8 @@ export default function AgenciesPortal() {
       try {
         const url = await uploadFile(f);
         setVideoUrl(url);
-      } catch {
-        try {
-          setVideoUrl(URL.createObjectURL(f));
-        } catch {
-          toast.error('Unable to read video. Please copy it to a local folder (e.g., Downloads) and try again.');
-        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Video upload failed');
       }
     })();
   };
@@ -109,8 +104,8 @@ export default function AgenciesPortal() {
       try {
         const url = await uploadFile(f);
         setPassportCopyUrl(url);
-      } catch {
-        setPassportCopyUrl(URL.createObjectURL(f));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Passport copy upload failed');
       }
     })();
   };
@@ -120,8 +115,8 @@ export default function AgenciesPortal() {
       try {
         const url = await uploadFile(f);
         setHighSchoolUrl(url);
-      } catch {
-        setHighSchoolUrl(URL.createObjectURL(f));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'High school certificate upload failed');
       }
     })();
   };
@@ -131,8 +126,8 @@ export default function AgenciesPortal() {
       try {
         const url = await uploadFile(f);
         setBirthCertificateUrl(url);
-      } catch {
-        setBirthCertificateUrl(URL.createObjectURL(f));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Birth certificate upload failed');
       }
     })();
   };
@@ -142,8 +137,8 @@ export default function AgenciesPortal() {
       try {
         const url = await uploadFile(f);
         setMotherPassportUrl(url);
-      } catch {
-        setMotherPassportUrl(URL.createObjectURL(f));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Mother's passport upload failed");
       }
     })();
   };
@@ -153,8 +148,8 @@ export default function AgenciesPortal() {
       try {
         const url = await uploadFile(f);
         setFatherPassportUrl(url);
-      } catch {
-        setFatherPassportUrl(URL.createObjectURL(f));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Father's passport upload failed");
       }
     })();
   };
@@ -164,10 +159,8 @@ export default function AgenciesPortal() {
       try {
         const urls = await Promise.all(Array.from(files).map(async (f) => uploadFile(f)));
         setPdfs(urls);
-      } catch {
-        const urls: string[] = [];
-        Array.from(files).forEach((f) => urls.push(URL.createObjectURL(f)));
-        setPdfs(urls);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'PDF upload failed');
       }
     })();
   };
@@ -177,10 +170,8 @@ export default function AgenciesPortal() {
       try {
         const urls = await Promise.all(Array.from(files).map(async (f) => uploadFile(f)));
         setExtraDocs(urls);
-      } catch {
-        const urls: string[] = [];
-        Array.from(files).forEach((f) => urls.push(URL.createObjectURL(f)));
-        setExtraDocs(urls);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Extra document upload failed');
       }
     })();
   };
@@ -310,7 +301,7 @@ Underage: ${underage ? 'Yes' : 'No'}`;
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => setActiveTab(tab.id as 'dashboard' | 'profile')}
                   className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
                     activeTab === tab.id ? 'bg-amber-500 text-black' : 'text-white/40 hover:text-white'
                   }`}

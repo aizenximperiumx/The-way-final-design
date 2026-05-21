@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { sendMail } from '../lib/mailer';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
 
+
 export type UserRole = 'ceo' | 'sales' | 'ops' | 'staff' | 'agency_staff' | 'student' | 'agency';
 
 export interface User {
@@ -275,18 +276,19 @@ const queueBackendSave = (() => {
 
 const useAppStore = create<AppStoreState>()(
   persist(
-    (set, get) => ({
-      users: [],
-      currentUser: null,
-      authStatus: 'signed_out',
-      applications: [],
-      documents: [],
-      notifications: [],
-      chatMessages: [],
-      chatThreadReadAt: {},
-      appointments: [],
-      language: 'en',
-      backendHydrated: false,
+    (set, get) => {
+      return {
+        users: [],
+        currentUser: null,
+        authStatus: 'signed_out',
+        applications: [],
+        documents: [],
+        notifications: [],
+        chatMessages: [],
+        chatThreadReadAt: {},
+        appointments: [],
+        language: 'en',
+        backendHydrated: false,
 
       setLanguage: (language) => set({ language }),
       // Your actions here
@@ -299,10 +301,13 @@ const useAppStore = create<AppStoreState>()(
           const domain = s.slice(at + 1);
           return `${local[0]}***@${domain}`;
         };
-        const supabase = getSupabase();
+        const supabase = tryGetSupabase();
         const input = username.trim();
         const isEmail = input.includes('@');
         let email = input;
+        if (!supabase) {
+          throw new Error('Supabase is not configured or available');
+        }
         if (!isEmail) {
           const r = await fetch('/api/lookup-email', {
             method: 'POST',
@@ -434,7 +439,8 @@ const useAppStore = create<AppStoreState>()(
       loadBackendState: async () => {
         const { authStatus } = get();
         if (authStatus !== 'signed_in') return;
-        const supabase = getSupabase();
+        const supabase = tryGetSupabase();
+        if (!supabase) return;
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData.session?.access_token;
         if (!token) return;
@@ -457,7 +463,8 @@ const useAppStore = create<AppStoreState>()(
       saveBackendState: async () => {
         const { authStatus, backendHydrated } = get();
         if (authStatus !== 'signed_in' || !backendHydrated) return;
-        const supabase = getSupabase();
+        const supabase = tryGetSupabase();
+        if (!supabase) return;
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData.session?.access_token;
         if (!token) return;
@@ -606,6 +613,24 @@ const useAppStore = create<AppStoreState>()(
           throw new Error(details ? `${err}: ${details.slice(0, 240)}` : err);
         }
         const studentId = json.id;
+
+        // Add the newly created student to the local users list so client flows
+        // (messaging, lookups, UI) immediately recognize the student without
+        // relying on a backend users-list endpoint being available.
+        set((state) => ({
+          users: state.users.some(u => u.id === studentId) ? state.users : [
+            ...state.users,
+            {
+              id: studentId,
+              username: typeof json.username === 'string' ? json.username : creds.username,
+              role: 'student',
+              name: typeof json.name === 'string' ? json.name : (app.name || ''),
+              email: typeof json.email === 'string' ? json.email : (studentEmail || ''),
+              createdAt: new Date().toISOString(),
+              points: 0,
+            }
+          ],
+        }));
 
         set((state) => ({
           applications: state.applications.map(a => a.id === applicationId ? {
@@ -1263,7 +1288,8 @@ const useAppStore = create<AppStoreState>()(
         if (soon(current.visaExpiry)) push('Visa Expiry', `Your visa expires on ${current.visaExpiry}`);
         if (soon(current.residenceExpiry)) push('Residence Permit Expiry', `Your residence permit expires on ${current.residenceExpiry}`);
       },
-    }),
+    };
+    },
     {
       name: 'the-way-storage',
       storage: createJSONStorage(() => localStorage),

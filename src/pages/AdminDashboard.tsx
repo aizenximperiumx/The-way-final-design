@@ -20,7 +20,7 @@ import { PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Resp
 import { motion, AnimatePresence } from 'framer-motion';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import toast from 'react-hot-toast';
-import { getSupabase } from '../lib/supabase';
+import { tryGetSupabase } from '../lib/supabase';
 
 const AdminDashboard: React.FC = () => {
   useAuth();
@@ -109,9 +109,8 @@ const AdminDashboard: React.FC = () => {
 
   const runHealth = async () => {
     try {
-      const supabase = getSupabase();
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
+      const supabase = tryGetSupabase();
+      const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
       const resp = await fetch('/api/health', { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
       const json = (await resp.json()) as { ok?: unknown; checks?: unknown };
       const ok = typeof json.ok === 'boolean' ? json.ok : false;
@@ -125,9 +124,8 @@ const AdminDashboard: React.FC = () => {
   const runFlowAudit = async () => {
     setAudit((a) => ({ ...a, loading: true }));
     try {
-      const supabase = getSupabase();
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
+      const supabase = tryGetSupabase();
+      const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
       const resp = await fetch('/api/flow-audit', { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
       const json = (await resp.json()) as { ok?: unknown; issueCount?: unknown; issues?: unknown };
       const ok = typeof json.ok === 'boolean' ? json.ok : false;

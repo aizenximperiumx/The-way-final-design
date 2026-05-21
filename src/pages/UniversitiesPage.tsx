@@ -1223,7 +1223,7 @@ export default function UniversitiesPage() {
       ].join(' ').toLowerCase();
       return hay.includes(qLower);
     });
-  }, [query]);
+  }, [query, universities]);
 
   const backHref = user ? getHomePathForRole(user.role) : '/';
 

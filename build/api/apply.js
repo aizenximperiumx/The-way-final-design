@@ -44,8 +44,9 @@ const getRoleFromAuth = async (base, adminKey, token, userId) => {
         method: 'GET',
         headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
     });
-    const appMeta = who.json && typeof who.json === 'object' && who.json.app_metadata && typeof who.json.app_metadata === 'object'
-        ? who.json.app_metadata
+    const whoJson = who.json && typeof who.json === 'object' ? who.json : null;
+    const appMeta = whoJson && whoJson.app_metadata && typeof whoJson.app_metadata === 'object'
+        ? whoJson.app_metadata
         : null;
     const metaRole = appMeta && typeof appMeta.role === 'string' ? appMeta.role : '';
     if (metaRole)
@@ -140,11 +141,12 @@ export default async function handler(req, res) {
                 method: 'GET',
                 headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
             });
-            if (!who.ok || !who.json || typeof who.json.id !== 'string') {
+            const whoJson2 = who.json && typeof who.json === 'object' ? who.json : null;
+            if (!who.ok || !whoJson2 || typeof whoJson2.id !== 'string') {
                 res.status(401).json({ error: 'Invalid token' });
                 return;
             }
-            const userId = who.json.id;
+            const userId = whoJson2.id;
             const role = await getRoleFromAuth(base, adminKey, token, userId);
             if (role !== 'agency' && role !== 'ceo') {
                 res.status(403).json({ error: 'Forbidden' });
