@@ -338,7 +338,12 @@ const SalesDashboard: React.FC = () => {
         dob: intake.dob || undefined,
         aviationDegree: intake.aviationDegree || undefined,
         studyLevel: intake.studyLevel || undefined,
-      });
+        name: intake.fullName || undefined,
+        email: intake.email || undefined,
+        phone: intake.phone || undefined,
+        country: intake.country || undefined,
+        studentEmail: intake.email || undefined,
+      } as any);
     } catch {
       // ignored
     }

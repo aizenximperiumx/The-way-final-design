@@ -185,7 +185,7 @@ export interface AppStoreState {
   setApplicationUniversity: (applicationId: string, universityId: string) => void;
   setApplicationMeta: (
     applicationId: string,
-    meta: Partial<Pick<Application, 'dob' | 'aviationDegree' | 'studyLevel' | 'program'>>
+    meta: Partial<Pick<Application, 'dob' | 'aviationDegree' | 'studyLevel' | 'program' | 'name' | 'email' | 'phone' | 'country' | 'studentEmail'>>
   ) => void;
 
   salesApproveApplication: (applicationId: string) => Promise<{ username: string; password: string; emailSent?: boolean; warning?: string }>;
