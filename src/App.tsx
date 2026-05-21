@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 // Pages
 import LandingPage from './pages/LandingPageV3Test';
 import LoginPage from './pages/LoginPage';
+import HomePage from './pages/HomePage';
 const StudentDashboard = React.lazy(() => import('./pages/StudentDashboard'));
 const SalesDashboard = React.lazy(() => import('./pages/SalesDashboard'));
 const StaffDashboard = React.lazy(() => import('./pages/StaffDashboard'));
@@ -119,12 +120,34 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Home Route Component - shows HomePage for logged-in, LandingPage for logged-out
+const HomeRoute = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="text-center">
+          <img src={logoUrl} alt="The Way" className="mx-auto h-12 w-auto object-contain animate-bounce" />
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500 mx-auto mt-4"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (user) {
+    return <HomePage />;
+  }
+
+  return <LandingPage />;
+};
+
 function AppRoutes() {
   return (
     <Routes>
       <Route
         path="/"
-        element={<LandingPage />}
+        element={<HomeRoute />}
       />
       <Route
         path="/login"

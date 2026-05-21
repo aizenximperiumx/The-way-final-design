@@ -23,6 +23,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
+import { openStorageUrl } from '../lib/storage';
 
 const StaffDashboard: FC = () => {
   const { applications, documents, users, staffUploadDocument, staffAddInternalNote, staffUpdateStudentProfile, staffVerifyDocument, assignUniversity } = useAppStore();
@@ -48,7 +49,9 @@ const StaffDashboard: FC = () => {
     if (currentUser?.role === 'staff') {
       const uni = currentUser.staffUniversities ?? [];
       return base.filter((app) => {
-        if ((app.source ?? 'public') === 'agency') return false;
+        if ((app.source ?? 'public') === 'agency') {
+          return app.assignedStaffId === currentUser.id;
+        }
         if (app.assignedStaffId === currentUser.id) return true;
         if (!app.assignedStaffId) {
           if (uni.length === 0) return true;
@@ -157,6 +160,18 @@ const StaffDashboard: FC = () => {
       setNewDocument({ title: '', type: '' });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to upload document');
+    }
+  };
+
+  const openRemoteFile = async (fileUrl: string) => {
+    if (!fileUrl) {
+      toast.error('No file URL available');
+      return;
+    }
+    try {
+      await openStorageUrl(fileUrl);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Unable to open file');
     }
   };
 
@@ -535,23 +550,49 @@ const StaffDashboard: FC = () => {
                         </div>
                         <div className="grid sm:grid-cols-2 gap-3">
                           {selectedStudent.intakePassportCopy && (
-                            <a href={selectedStudent.intakePassportCopy} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-bold border border-blue-100">Passport Copy</a>
-                          )}
-                          {selectedStudent.intakeHighSchoolCertificate && (
-                            <a href={selectedStudent.intakeHighSchoolCertificate} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 text-sm font-bold border border-purple-100">High School Certificate</a>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => void openRemoteFile(selectedStudent.intakePassportCopy!)}
+                            className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-bold border border-blue-100"
+                          >
+                            Passport Copy
+                          </button>
+                        )}
+                        {selectedStudent.intakeHighSchoolCertificate && (
+                          <button
+                            type="button"
+                            onClick={() => void openRemoteFile(selectedStudent.intakeHighSchoolCertificate!)}
+                            className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 text-sm font-bold border border-purple-100"
+                          >
+                            High School Certificate
+                          </button>
+                        )}
                         </div>
                         {selectedStudent.intakeAttachments && selectedStudent.intakeAttachments.length > 0 && (
                           <div className="flex flex-wrap gap-2">
                             {selectedStudent.intakeAttachments.map((p, i) => (
-                              <a key={i} href={p} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-black">PDF {i + 1}</a>
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => void openRemoteFile(p)}
+                                className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-black"
+                              >
+                                PDF {i + 1}
+                              </button>
                             ))}
                           </div>
                         )}
                         {selectedStudent.intakeExtraDocs && selectedStudent.intakeExtraDocs.length > 0 && (
                           <div className="flex flex-wrap gap-2">
                             {selectedStudent.intakeExtraDocs.map((p, i) => (
-                              <a key={i} href={p} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-full bg-gray-50 text-gray-700 text-[10px] font-black">Extra {i + 1}</a>
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => void openRemoteFile(p)}
+                                className="px-3 py-1 rounded-full bg-gray-50 text-gray-700 text-[10px] font-black"
+                              >
+                                Extra {i + 1}
+                              </button>
                             ))}
                           </div>
                         )}
@@ -679,15 +720,14 @@ const StaffDashboard: FC = () => {
                             </td>
                             <td className="py-4 text-right">
                               {doc.file ? (
-                                <a
-                                  href={doc.file}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                <button
+                                  type="button"
+                                  onClick={() => doc.file && void openRemoteFile(doc.file)}
                                   className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-amber-600 transition-colors"
                                   title="Open file"
                                 >
                                   <Download className="w-4 h-4" />
-                                </a>
+                                </button>
                               ) : (
                                 <span className="text-[10px] text-gray-400">No file</span>
                               )}
@@ -728,7 +768,12 @@ const StaffDashboard: FC = () => {
                             <p className="text-xs font-bold text-gray-500 mt-2">{new Date(doc.uploadedAt).toLocaleDateString()}</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <button className="p-2 text-gray-500 hover:text-amber-600 transition-colors" title="Download">
+                            <button
+                              type="button"
+                              onClick={() => doc.file && void openRemoteFile(doc.file)}
+                              className="p-2 text-gray-500 hover:text-amber-600 transition-colors"
+                              title="Download"
+                            >
                               <Download className="w-5 h-5" />
                             </button>
                             {doc.status !== 'verified' && (

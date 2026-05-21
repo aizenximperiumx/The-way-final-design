@@ -674,6 +674,23 @@ const useAppStore = create<AppStoreState>()(
           }
         }
         await get().refreshUsersFromBackend();
+        // Ensure the newly created student remains in the client users list
+        if (!get().users.some(u => u.id === studentId)) {
+          set((state) => ({
+            users: [
+              ...state.users,
+              {
+                id: studentId,
+                username: creds.username,
+                role: 'student',
+                name: app.name || '',
+                email: studentEmail || '',
+                createdAt: new Date().toISOString(),
+                points: 0,
+              }
+            ]
+          }));
+        }
         queueBackendSave(get);
         return {
           ...creds,

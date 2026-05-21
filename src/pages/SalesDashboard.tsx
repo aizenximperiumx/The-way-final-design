@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
+import { openStorageUrl } from '../lib/storage';
 
 const SalesDashboard: React.FC = () => {
   const { applications, users, salesApproveApplication, salesRejectApplication, assignUniversity, salesClaimLead, salesAddExtraDocs, salesAssignAdmin, requestMoreInfo, setApplicationUniversity, setApplicationMeta } = useAppStore();
@@ -974,10 +975,10 @@ Video: ${intake.videoUrl}`;
               </pre>
               <div className="grid sm:grid-cols-2 gap-3">
                 {previewModal.app.intakePassportCopy && (
-                  <a href={previewModal.app.intakePassportCopy} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-bold border border-blue-100">Passport Copy</a>
+                  <button onClick={() => previewModal.app?.intakePassportCopy && openStorageUrl(previewModal.app.intakePassportCopy)} className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-bold border border-blue-100">Passport Copy</button>
                 )}
                 {previewModal.app.intakeHighSchoolCertificate && (
-                  <a href={previewModal.app.intakeHighSchoolCertificate} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 text-sm font-bold border border-purple-100">High School Certificate</a>
+                  <button onClick={() => previewModal.app?.intakeHighSchoolCertificate && openStorageUrl(previewModal.app.intakeHighSchoolCertificate)} className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 text-sm font-bold border border-purple-100">High School Certificate</button>
                 )}
                 {previewModal.app.intakeHighSchoolMissingNote && !previewModal.app.intakeHighSchoolCertificate && (
                   <div className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 text-sm font-bold border border-purple-100">
@@ -985,19 +986,19 @@ Video: ${intake.videoUrl}`;
                   </div>
                 )}
                 {previewModal.app.intakeBirthCertificate && (
-                  <a href={previewModal.app.intakeBirthCertificate} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Birth Certificate</a>
+                  <button onClick={() => previewModal.app?.intakeBirthCertificate && openStorageUrl(previewModal.app.intakeBirthCertificate)} className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Birth Certificate</button>
                 )}
                 {previewModal.app.intakeMotherPassport && (
-                  <a href={previewModal.app.intakeMotherPassport} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Mother Passport</a>
+                  <button onClick={() => previewModal.app?.intakeMotherPassport && openStorageUrl(previewModal.app.intakeMotherPassport)} className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Mother Passport</button>
                 )}
                 {previewModal.app.intakeFatherPassport && (
-                  <a href={previewModal.app.intakeFatherPassport} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Father Passport</a>
+                  <button onClick={() => previewModal.app?.intakeFatherPassport && openStorageUrl(previewModal.app.intakeFatherPassport)} className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-sm font-bold border border-amber-100">Father Passport</button>
                 )}
               </div>
               {previewModal.app.intakeAttachments && previewModal.app.intakeAttachments.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {previewModal.app.intakeAttachments.map((p, i) => (
-                    <a key={i} href={p} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-black">PDF {i + 1}</a>
+                    <button key={i} onClick={() => openStorageUrl(p)} className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-black">PDF {i + 1}</button>
                   ))}
                 </div>
               )}
