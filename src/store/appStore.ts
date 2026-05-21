@@ -622,10 +622,10 @@ const useAppStore = create<AppStoreState>()(
             ...state.users,
             {
               id: studentId,
-              username: typeof json.username === 'string' ? json.username : creds.username,
-              role: 'student',
-              name: typeof json.name === 'string' ? json.name : (app.name || ''),
-              email: typeof json.email === 'string' ? json.email : (studentEmail || ''),
+              username: creds.username,
+              role: 'student' as const,
+              name: app.name || '',
+              email: studentEmail || '',
               createdAt: new Date().toISOString(),
               points: 0,
             }
