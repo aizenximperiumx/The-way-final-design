@@ -330,6 +330,19 @@ Underage: ${underage ? 'Yes' : 'No'}`;
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <section className="mb-10 rounded-[36px] bg-white border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.18)] p-8">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Agency Portal</p>
+              <h1 className="text-3xl font-black text-black">Manage your applications and documents</h1>
+              <p className="mt-3 text-sm text-gray-500 max-w-2xl">Submit new student applications, track approvals, and manage the required document flow from one place.</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <span className="px-4 py-2 rounded-2xl bg-amber-50 text-amber-700 text-xs font-black uppercase tracking-widest">Agency: {user?.name}</span>
+              <span className="px-4 py-2 rounded-2xl bg-gray-50 text-gray-700 text-xs font-black uppercase tracking-widest">Points: {user?.points ?? 0}</span>
+            </div>
+          </div>
+        </section>
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' ? (
             <motion.div

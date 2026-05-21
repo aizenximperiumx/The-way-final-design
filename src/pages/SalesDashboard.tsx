@@ -156,6 +156,50 @@ const SalesDashboard: React.FC = () => {
         return true;
       });
   }, [applications, allowedSource, quickFilter]);
+  const quickFilterCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: 0,
+      today: 0,
+      week: 0,
+      unclaimed: 0,
+      needs_info: 0,
+      missing_email: 0,
+      missing_docs: 0,
+      missing_intake: 0,
+    };
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const weekAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+    const hasOpsMissingDocs = (a: Application) => {
+      const age = a.dob ? calculateAge(a.dob) : null;
+      const underage = age != null && age < 18;
+      const hsOk = Boolean(a.intakeHighSchoolCertificate || a.intakeHighSchoolMissingNote);
+      return (
+        !a.studentEmail ||
+        (!a.university && !a.intakeDetails?.includes('Aviation')) ||
+        !a.dob ||
+        !a.intakeVideoUrl ||
+        !a.intakePassportCopy ||
+        !hsOk ||
+        (underage && (!a.intakeBirthCertificate || !a.intakeMotherPassport || !a.intakeFatherPassport)) ||
+        !((a.intakeAttachments?.length ?? 0) > 0)
+      );
+    };
+    applications
+      .filter(app => app.status === 'submitted' && (app.source ?? 'public') === allowedSource)
+      .forEach(app => {
+        counts.all += 1;
+        const createdAt = new Date(app.createdAt).getTime();
+        if (createdAt >= startOfToday) counts.today += 1;
+        if (createdAt >= weekAgo) counts.week += 1;
+        if (!((app.ownerId ?? app.salesOwnerId) ?? '').trim()) counts.unclaimed += 1;
+        if (Boolean(app.hold)) counts.needs_info += 1;
+        if (!app.studentEmail) counts.missing_email += 1;
+        if (hasOpsMissingDocs(app)) counts.missing_docs += 1;
+        if (!app.intakeDetails) counts.missing_intake += 1;
+      });
+    return counts;
+  }, [applications, allowedSource]);
   
   const handleApprove = async (application: Application) => {
     try {
@@ -399,6 +443,9 @@ Video: ${intake.videoUrl}`;
         <div>
           <h1 className="text-3xl font-black text-black tracking-tight">{mode === 'ops' ? 'Agency Applications' : 'Application Pipeline'}</h1>
           <p className="text-gray-500 font-medium">Review and manage incoming student applications.</p>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+            {mode === 'ops' ? 'Agency Portal' : 'Sales Portal'}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-2 bg-white border border-gray-100 px-3 py-2.5 rounded-xl">
@@ -425,6 +472,7 @@ Video: ${intake.videoUrl}`;
                 }`}
               >
                 {f.label}
+                <span className="ml-1 text-[10px] font-bold text-gray-400">({quickFilterCounts[f.id] ?? 0})</span>
               </button>
             ))}
           </div>
@@ -745,6 +793,10 @@ Video: ${intake.videoUrl}`;
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Short form</p>
             </div>
             <div className="p-6 flex-1 overflow-y-auto custom-scrollbar space-y-6">
+              <div className="space-y-2">
+                <p className="text-sm font-black text-black">Intake sections</p>
+                <p className="text-xs text-gray-500">Complete the student profile first, then upload documents and save the intake details.</p>
+              </div>
               <div className="grid md:grid-cols-2 gap-4">
               {(
                 [
@@ -832,10 +884,16 @@ Video: ${intake.videoUrl}`;
                 </div>
               ))}
               </div>
-              <div>
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload video (≥40s)</label>
-                <input type="file" accept="video/*" capture onChange={(e) => onVideo(e.target.files?.[0])} className="w-full px-4 py-2.5 bg-gray-50 rounded-xl border-none" />
-                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2">Tip: If your video is in iCloud/OneDrive, mark it “Always keep on this device” or copy it to Downloads before uploading.</p>
+              <div className="rounded-3xl bg-gray-50 border border-gray-100 p-5 space-y-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Required documents</p>
+                  <p className="text-sm font-bold text-black">Upload the student’s intake media and supporting files here.</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload video (≥40s)</label>
+                  <input type="file" accept="video/*" capture onChange={(e) => onVideo(e.target.files?.[0])} className="w-full px-4 py-2.5 bg-white rounded-xl border border-gray-200" />
+                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2">Tip: If your video is in iCloud/OneDrive, mark it “Always keep on this device” or copy it to Downloads before uploading.</p>
+                </div>
               </div>
               <div>
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Passport Copy</label>

@@ -152,6 +152,9 @@ const AdminDashboard: React.FC = () => {
         <div>
           <h1 className="text-3xl font-black text-black tracking-tight">Executive Overview</h1>
           <p className="text-gray-500 font-medium">Global platform performance and user management.</p>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+            Admin Portal
+          </div>
         </div>
         <div className="tw-panel p-1 flex items-center gap-2">
           {tabs.map((tab) => (

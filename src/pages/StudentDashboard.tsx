@@ -66,6 +66,9 @@ const StudentDashboard: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/5"></div>
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
           <div>
+            <div className="inline-flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white/80 mb-4">
+              Student Portal
+            </div>
             <div className="inline-flex items-center gap-2 bg-amber-500 text-black px-4 py-1.5 rounded-full font-black text-xs uppercase tracking-widest mb-6">
               <TrendingUp className="w-3.5 h-3.5" />
               {myApplication ? 'Application Active' : 'No Application'}
@@ -135,6 +138,45 @@ const StudentDashboard: React.FC = () => {
               Contact Admin
             </button>
           </div>
+        </div>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="tw-card tw-card-hover p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Student checklist</p>
+              <h2 className="text-2xl font-black text-black mt-2">What to complete next</h2>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest">{completedCount}/{admissionSteps.length} done</span>
+          </div>
+          <div className="grid gap-3">
+            {admissionSteps.map((step) => {
+              const status = stepStatus(step.id);
+              return (
+                <div key={step.id} className="flex items-center justify-between gap-4 p-4 rounded-3xl border border-gray-100 bg-white">
+                  <div className="flex items-center gap-3">
+                    <step.icon className="w-5 h-5 text-amber-500" />
+                    <div>
+                      <p className="font-black text-black">{step.label}</p>
+                      <p className="text-xs text-gray-500">{status === 'verified' ? 'Completed' : status === 'pending' ? 'Pending verification' : status === 'rejected' ? 'Review required' : 'Upload required'}</p>
+                    </div>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                    status === 'verified' ? 'bg-green-100 text-green-700' : status === 'pending' ? 'bg-amber-100 text-amber-700' : status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="tw-card tw-card-hover p-6">
+          <h3 className="text-xl font-black text-black mb-4">Need help?</h3>
+          <p className="text-sm text-gray-500 font-medium">If a step appears missing or rejected, use chat to reach your admin and upload the missing file quickly.</p>
+          <button onClick={() => navigate('/messages')} className="mt-6 w-full bg-black text-white py-3 rounded-2xl font-black hover:bg-amber-500 hover:text-black transition-all">Open Chat</button>
         </div>
       </section>
 

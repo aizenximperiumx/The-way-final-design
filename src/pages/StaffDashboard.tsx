@@ -47,7 +47,15 @@ const StaffDashboard: FC = () => {
     const base = applications.filter(app => app.status === 'approved');
     if (currentUser?.role === 'staff') {
       const uni = currentUser.staffUniversities ?? [];
-      return base.filter(app => app.assignedStaffId === currentUser.id || (!app.assignedStaffId && !!app.university && uni.includes(app.university)));
+      return base.filter((app) => {
+        if ((app.source ?? 'public') === 'agency') return false;
+        if (app.assignedStaffId === currentUser.id) return true;
+        if (!app.assignedStaffId) {
+          if (uni.length === 0) return true;
+          return app.university ? uni.includes(app.university) : true;
+        }
+        return false;
+      });
     }
     if (currentUser?.role === 'agency_staff') {
       return base.filter(app => (app.source ?? 'public') === 'agency');
@@ -171,9 +179,10 @@ const StaffDashboard: FC = () => {
     const term = searchTerm.toLowerCase();
     const uniRaw = app.university ?? '';
     const uniName = getUniversityName(uniRaw);
+    const emailValue = (app.studentEmail ?? app.email ?? '').toLowerCase();
     const matchesText = (
       (app.name ?? '').toLowerCase().includes(term) ||
-      (app.email ?? '').toLowerCase().includes(term) ||
+      emailValue.includes(term) ||
       uniRaw.toLowerCase().includes(term) ||
       uniName.toLowerCase().includes(term)
     );
@@ -191,6 +200,12 @@ const StaffDashboard: FC = () => {
   const enrolledCount = approvedStudents.filter(a => isComplete(a.studentId)).length;
   const processingCount = approvedStudents.filter(a => !isComplete(a.studentId)).length;
   const closedCount = approvedStudents.filter(a => a.stage === 'enrolled' && a.arrived).length;
+  const filterCounts = {
+    all: approvedStudents.length,
+    processing: processingCount,
+    enrolled: enrolledCount,
+    closed: closedCount,
+  };
   const stats = [
     { label: 'Processing', value: processingCount, icon: Clock, color: 'text-purple-600', bg: 'bg-purple-50' },
     { label: 'Enrolled', value: enrolledCount, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50' },
@@ -204,6 +219,9 @@ const StaffDashboard: FC = () => {
         <div>
           <h1 className="text-3xl font-black text-black tracking-tight">Student Operations</h1>
           <p className="text-gray-500 font-medium">Manage student records, documents, and progress.</p>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+            Staff Portal
+          </div>
         </div>
       </section>
 
@@ -232,12 +250,14 @@ const StaffDashboard: FC = () => {
                   <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black">{currentUser.points ?? 0}</span>
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Filter:</span>
-                <button onClick={() => setFilter('all')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'all' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>All</button>
-                <button onClick={() => setFilter('processing')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'processing' ? 'bg-black text-white' : 'bg-purple-100 text-purple-700'}`}>Processing</button>
-                <button onClick={() => setFilter('enrolled')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'enrolled' ? 'bg-black text-white' : 'bg-green-100 text-green-700'}`}>Enrolled</button>
-                <button onClick={() => setFilter('closed')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'closed' ? 'bg-black text-white' : 'bg-blue-100 text-blue-700'}`}>Closed</button>
+              <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 -mx-6 px-6 py-4 border-b border-gray-100">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Filter:</span>
+                  <button onClick={() => setFilter('all')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'all' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>All ({filterCounts.all})</button>
+                  <button onClick={() => setFilter('processing')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'processing' ? 'bg-black text-white' : 'bg-purple-100 text-purple-700'}`}>Processing ({filterCounts.processing})</button>
+                  <button onClick={() => setFilter('enrolled')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'enrolled' ? 'bg-black text-white' : 'bg-green-100 text-green-700'}`}>Enrolled ({filterCounts.enrolled})</button>
+                  <button onClick={() => setFilter('closed')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'closed' ? 'bg-black text-white' : 'bg-blue-100 text-blue-700'}`}>Closed ({filterCounts.closed})</button>
+                </div>
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -314,7 +334,7 @@ const StaffDashboard: FC = () => {
                       setSelectedStudentId(app.id);
                       setMobileDetailsOpen(true);
                       setProfileName(app.name ?? '');
-                      setProfileEmail(app.email ?? '');
+                      setProfileEmail(app.studentEmail ?? app.email ?? '');
                       setProfilePhone(app.phone ?? '');
                       setProfileUniversity(app.university ?? '');
                       const stu = app.studentId ? users.find(u => u.id === app.studentId) : null;
@@ -322,6 +342,7 @@ const StaffDashboard: FC = () => {
                       setVisaExpiry(stu?.visaExpiry ?? '');
                       setResidenceExpiry(stu?.residenceExpiry ?? '');
                     }}
+
                     className="p-6 hover:bg-gray-50 cursor-pointer transition-all"
                   >
                     <div className="flex items-center gap-3">
