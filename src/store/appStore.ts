@@ -1294,8 +1294,17 @@ const useAppStore = create<AppStoreState>()(
       name: 'the-way-storage',
       storage: createJSONStorage(() => localStorage),
       version: 5,
-      partialize: (state) => ({ currentUser: state.currentUser, authStatus: state.authStatus }),
-      migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out' }, version: 5 } as unknown),
+      partialize: (state) => ({ 
+        currentUser: state.currentUser, 
+        authStatus: state.authStatus,
+        applications: state.applications,
+        documents: state.documents,
+        notifications: state.notifications,
+        appointments: state.appointments,
+        chatMessages: state.chatMessages,
+        chatThreadReadAt: state.chatThreadReadAt,
+      }),
+      migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out', applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} }, version: 5 } as unknown),
     }
   )
 );
