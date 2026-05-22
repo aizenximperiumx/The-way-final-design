@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useAppStore } from '../store/appStore';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, MessageSquare, Bell, LayoutDashboard, User, ChevronDown } from 'lucide-react';
+import { LogOut, MessageSquare, Bell, LayoutDashboard, ChevronDown } from 'lucide-react';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 
 const HomePage: React.FC = () => {
@@ -92,74 +92,6 @@ const HomePage: React.FC = () => {
                 )}
               </button>
             </div>
-
-            {/* Profile Dropdown */}
-            <div className="relative" ref={profileRef}>
-              <button
-                onClick={() => setProfileOpen(!profileOpen)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold transition-all border border-white/20"
-              >
-                <User className="w-4 h-4" />
-                <span className="hidden sm:inline truncate max-w-[120px]">{user.name}</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Dropdown Menu */}
-              {profileOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-gray-900 border border-white/20 rounded-2xl shadow-2xl overflow-hidden">
-                  {/* Profile Header */}
-                  <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 text-black">
-                    <p className="text-sm font-semibold">Logged in as</p>
-                    <p className="text-lg font-black">{user.name}</p>
-                    <p className="text-xs mt-1 opacity-70">{user.email}</p>
-                  </div>
-
-                  {/* Menu Items */}
-                  <div className="p-2 space-y-1">
-                    <button
-                      onClick={() => {
-                        navigate(getDashboardPath());
-                        setProfileOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors text-left"
-                    >
-                      <LayoutDashboard className="w-4 h-4 text-amber-500" />
-                      <div>
-                        <p className="font-semibold text-sm">Dashboard</p>
-                        <p className="text-xs text-gray-400">Go to your workspace</p>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        navigate('/messages');
-                        setProfileOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors text-left"
-                    >
-                      <MessageSquare className="w-4 h-4 text-amber-500" />
-                      <div>
-                        <p className="font-semibold text-sm">Messages</p>
-                        <p className="text-xs text-gray-400">Chat with team</p>
-                      </div>
-                    </button>
-
-                    <div className="border-t border-white/10 my-1"></div>
-
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-left"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <div>
-                        <p className="font-semibold text-sm">Logout</p>
-                        <p className="text-xs text-gray-400">Sign out of your account</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </nav>
@@ -193,8 +125,65 @@ const HomePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Stats */}
+          {/* Quick Sidebar */}
           <div className="space-y-4">
+            <div className="rounded-3xl bg-white/5 border border-white/10 p-5 backdrop-blur-xl hover:bg-white/10 transition-colors" ref={profileRef}>
+              <button
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-4 rounded-3xl bg-black/30 border border-white/10 text-left"
+              >
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-gray-400">Logged in as</p>
+                  <p className="text-white font-black text-lg truncate">{user.name}</p>
+                  <p className="text-xs text-gray-400 capitalize mt-1">{user.role}</p>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-white transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {profileOpen && (
+                <div className="mt-3 rounded-3xl bg-gray-950/95 border border-white/10 p-3 shadow-2xl">
+                  <button
+                    onClick={() => {
+                      navigate(getDashboardPath());
+                      setProfileOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 rounded-2xl transition-colors text-left"
+                  >
+                    <LayoutDashboard className="w-4 h-4 text-amber-500" />
+                    <div>
+                      <p className="font-semibold text-sm">Dashboard</p>
+                      <p className="text-xs text-gray-400">Open your workspace</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      navigate('/messages');
+                      setProfileOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 mt-2 text-white hover:bg-white/10 rounded-2xl transition-colors text-left"
+                  >
+                    <MessageSquare className="w-4 h-4 text-amber-500" />
+                    <div>
+                      <p className="font-semibold text-sm">Messages</p>
+                      <p className="text-xs text-gray-400">Go to chat</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-4 py-3 mt-2 text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors text-left"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <div>
+                      <p className="font-semibold text-sm">Logout</p>
+                      <p className="text-xs text-gray-400">Sign out</p>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-xl hover:bg-white/10 transition-colors">
               <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Account Status</p>
               <p className="text-white font-black text-2xl">Active</p>

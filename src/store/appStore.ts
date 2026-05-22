@@ -1314,6 +1314,7 @@ const useAppStore = create<AppStoreState>()(
       partialize: (state) => ({ 
         currentUser: state.currentUser, 
         authStatus: state.authStatus,
+        users: state.users,
         applications: state.applications,
         documents: state.documents,
         notifications: state.notifications,
@@ -1321,7 +1322,7 @@ const useAppStore = create<AppStoreState>()(
         chatMessages: state.chatMessages,
         chatThreadReadAt: state.chatThreadReadAt,
       }),
-      migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out', applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} }, version: 5 } as unknown),
+      migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out', users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} }, version: 5 } as unknown),
     }
   )
 );
