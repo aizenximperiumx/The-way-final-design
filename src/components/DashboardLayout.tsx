@@ -37,8 +37,8 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Agencies', icon: Building2, path: '/agencies', roles: ['agency', 'ceo'] },
   { label: 'Students', icon: Users, path: '/staff', roles: ['staff', 'agency_staff', 'ceo'] },
   { label: 'Analytics', icon: BarChart3, path: '/admin', roles: ['ceo'] },
-  { label: 'Appointments', icon: Calendar, path: '/appointments', roles: ['student', 'staff', 'agency_staff', 'ceo'] },
-  { label: 'Messages', icon: MessageSquare, path: '/messages', roles: ['student', 'staff', 'ceo'] },
+  { label: 'Appointments', icon: Calendar, path: '/appointments', roles: ['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo'] },
+  { label: 'Messages', icon: MessageSquare, path: '/messages', roles: ['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo'] },
 ];
 
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {

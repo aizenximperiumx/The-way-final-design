@@ -38,7 +38,7 @@ const authAdminHeaders = (adminKey: string): Record<string, string> => {
   return key ? { apikey: key, Authorization: `Bearer ${key}` } : {};
 };
 
-const postgrestHeaderCandidates = (adminKey: string) => {
+const postgrestHeaderCandidates = (adminKey: string): Array<Record<string, string>> => {
   const key = adminKey.trim();
   if (!key) return [{}];
   const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;

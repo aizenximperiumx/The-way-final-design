@@ -1,17 +1,8 @@
 export async function resolveStorageUrl(fileUrl: string, expiresIn = 3600): Promise<string> {
+  if (!fileUrl) return fileUrl;
   try {
-    const url = new URL(fileUrl);
-    const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
-    if (!supabaseUrl) return fileUrl;
-    const supabaseHost = new URL(supabaseUrl).host;
-    if (url.host !== supabaseHost) return fileUrl;
-
-    const segments = url.pathname.split('/').filter(Boolean);
-    const publicIndex = segments.indexOf('public');
-    if (segments[0] !== 'storage' || segments[1] !== 'v1' || segments[2] !== 'object' || publicIndex === -1 || publicIndex + 2 >= segments.length) {
-      return fileUrl;
-    }
-
+    // Always attempt server-side signing — the server knows whether the URL belongs
+    // to the configured Supabase project and will fall back gracefully if it doesn't.
     const resp = await fetch('/api/sign-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

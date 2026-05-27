@@ -3,15 +3,17 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { getUniversityName } from '../lib/universities';
-import { 
-  CheckCircle2, 
-  FileText, 
+import { openStorageUrl } from '../lib/storage';
+import {
+  CheckCircle2,
+  FileText,
   Building2,
   MapPin,
   ArrowRight,
   ShieldCheck,
   Home,
-  LogOut
+  LogOut,
+  Download
 } from 'lucide-react';
 
 const StudentDashboard: React.FC = () => {
@@ -212,6 +214,7 @@ const StudentDashboard: React.FC = () => {
                         <th className="text-left py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Uploaded By</th>
                         <th className="text-left py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
                         <th className="text-left py-3 px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                        <th className="py-3 px-4"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800">
@@ -239,6 +242,20 @@ const StudentDashboard: React.FC = () => {
                           </td>
                           <td className="py-4 px-4 text-gray-400 text-sm">
                             {new Date(doc.uploadedAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            {doc.file ? (
+                              <button
+                                type="button"
+                                onClick={() => void openStorageUrl(doc.file!)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 text-amber-400 rounded-lg text-xs font-bold hover:bg-amber-500/30 transition-colors"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                Download
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">Pending</span>
+                            )}
                           </td>
                         </tr>
                       ))}

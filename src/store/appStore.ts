@@ -375,7 +375,8 @@ const useAppStore = create<AppStoreState>()(
       logout: () => {
         const supabase = tryGetSupabase();
         if (supabase) void supabase.auth.signOut();
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false });
+        localStorage.removeItem('the-way-storage');
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} });
       },
 
       restoreSession: async () => {
@@ -726,6 +727,11 @@ const useAppStore = create<AppStoreState>()(
             users: state.users.map(u => u.id === actor.id ? { ...u, points: Math.max(0, (u.points ?? 0) - 1) } : u),
           }));
         }
+        const applicantEmail = app.studentEmail ?? app.email;
+        if (applicantEmail) {
+          const html = `<div style="font-family:Arial,sans-serif"><p>Dear <b>${app.name}</b>,</p><p>Unfortunately your application has not been approved at this time. Please contact us if you have any questions.</p></div>`;
+          sendMail({ to: applicantEmail, subject: 'Application Update — The Way Georgia', text: `Dear ${app.name}, unfortunately your application has not been approved at this time.`, html });
+        }
         queueBackendSave(get);
       },
 
@@ -829,10 +835,28 @@ const useAppStore = create<AppStoreState>()(
         if (!app) throw new Error('Application not found');
         if (app.status !== 'approved') throw new Error('Only approved students can be progressed');
 
+        const stageLabels: Record<ApplicationStage, string> = {
+          applied: 'Applied', contacted: 'Contacted', accepted: 'Accepted',
+          documents: 'Documents Stage', visa: 'Visa Stage', enrolled: 'Enrolled', rejected: 'Rejected',
+        };
+        const stageLabel = stageLabels[stage] ?? stage;
+
         set((state) => ({
           applications: state.applications.map(a => a.id === applicationId ? { ...a, stage } : a),
           users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
+          notifications: app.studentId ? [
+            ...state.notifications,
+            { id: `${applicationId}-stage-${Date.now()}`, userId: app.studentId, title: 'Application Updated', message: `Your application has moved to: ${stageLabel}`, type: 'info' as const, time: new Date().toISOString(), read: false },
+          ] : state.notifications,
         }));
+
+        if (app.studentId) {
+          const student = get().users.find(u => u.id === app.studentId);
+          if (student?.email) {
+            const html = `<div style="font-family:Arial,sans-serif"><p>Dear <b>${app.name}</b>,</p><p>Your application status has been updated to: <b>${stageLabel}</b>.</p><p>Log in to your portal to see more details.</p></div>`;
+            sendMail({ to: student.email, subject: `Application Update: ${stageLabel} — The Way Georgia`, text: `Your application is now at stage: ${stageLabel}`, html });
+          }
+        }
         queueBackendSave(get);
       },
 
@@ -1195,6 +1219,11 @@ const useAppStore = create<AppStoreState>()(
             { id: `${applicationId}-agency-needs-info`, userId: app.agencyId!, title: 'More info required', message, type: 'alert', time: now, read: false },
           ],
         }));
+        const agency = get().users.find(u => u.id === app.agencyId);
+        if (agency?.email) {
+          const html = `<div style="font-family:Arial,sans-serif"><p>Additional information is required for application <b>${app.name}</b>:</p><p>${message}</p><p>Please log in to your portal to respond.</p></div>`;
+          sendMail({ to: agency.email, subject: 'Action Required: More Info Needed — The Way Georgia', text: `More info required for ${app.name}: ${message}`, html });
+        }
       },
 
       agencyAddExtraDocs: (applicationId: string, files: string[]) => {
@@ -1261,7 +1290,10 @@ const useAppStore = create<AppStoreState>()(
             applicationId = applicationId ?? app.id;
           }
         } else if (actor.role === 'sales') {
-          throw new Error('Sales chat is disabled');
+          // Sales can message students (their approved apps), staff, ops, and CEO
+          if (toUser.role === 'student') {
+            applicationId = applicationId ?? get().applications.find(a => a.studentId === toUserId && (a.source ?? 'public') === 'public')?.id;
+          }
         } else if (actor.role === 'agency') {
           if (!applicationId) throw new Error('Thread required');
           const app = get().applications.find(a => a.id === applicationId);
@@ -1270,7 +1302,10 @@ const useAppStore = create<AppStoreState>()(
           if (!app.assignedStaffId || app.assignedStaffId !== toUserId) throw new Error('You can only message the assigned admin');
           if (toUser.role !== 'staff' && toUser.role !== 'agency_staff') throw new Error('Recipient must be an admin');
         } else if (actor.role === 'ops') {
-          throw new Error('Ops chat is disabled');
+          // Ops can message agencies, staff, sales, and CEO
+          if (toUser.role === 'student') {
+            applicationId = applicationId ?? get().applications.find(a => a.studentId === toUserId && a.source === 'agency')?.id;
+          }
         } else if (actor.role === 'ceo') {
           if (toUser.role === 'student') {
             applicationId = applicationId ?? `complaint-${toUserId}`;

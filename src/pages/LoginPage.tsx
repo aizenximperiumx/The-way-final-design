@@ -102,12 +102,11 @@ const LoginPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between px-1">
+                <div className="flex items-center px-1">
                   <label className="flex items-center gap-2 cursor-pointer group">
                     <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500/20" />
                     <span className="text-xs font-bold text-gray-400 group-hover:text-black transition-colors">Remember me</span>
                   </label>
-                  <a href="#" className="text-xs font-bold text-amber-600 hover:text-amber-700">Forgot Password?</a>
                 </div>
 
                 <button
@@ -130,10 +129,6 @@ const LoginPage: React.FC = () => {
         {/* Footer Links */}
         <div className="mt-10 flex items-center justify-center gap-8 relative z-10">
           <Link to="/" className="text-gray-500 hover:text-amber-500 font-bold text-xs uppercase tracking-widest transition-colors">Home</Link>
-          <div className="w-1 h-1 bg-gray-800 rounded-full"></div>
-          <a href="#" className="text-gray-500 hover:text-amber-500 font-bold text-xs uppercase tracking-widest transition-colors">Support</a>
-          <div className="w-1 h-1 bg-gray-800 rounded-full"></div>
-          <a href="#" className="text-gray-500 hover:text-amber-500 font-bold text-xs uppercase tracking-widest transition-colors">Privacy</a>
         </div>
       </motion.div>
     </div>

@@ -648,7 +648,16 @@ const AdminDashboard: React.FC = () => {
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
-                            <button className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                            <button
+                              onClick={() => {
+                                if (!window.confirm(`Lock ${u.name}'s account? This will reset their password to a random value, preventing login.`)) return;
+                                void useAppStore.getState().ceoResetCredentials(u.id, { password: `LOCKED-${Date.now()}` })
+                                  .then(() => toast.success(`${u.name}'s account locked`))
+                                  .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed'));
+                              }}
+                              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                              title="Lock account"
+                            >
                               <Ban className="w-4 h-4" />
                             </button>
                           </div>
@@ -1054,8 +1063,11 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <button className="w-full mt-8 py-3 bg-gray-50 text-gray-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition-all">
-                View Full Audit Trail
+              <button
+                onClick={() => setActiveTab('users')}
+                className="w-full mt-8 py-3 bg-gray-50 text-gray-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition-all"
+              >
+                View All Users
               </button>
             </div>
 

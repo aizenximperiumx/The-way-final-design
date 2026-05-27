@@ -1,34 +1,71 @@
-import { useMemo, useState } from 'react';
-import { 
+import { useMemo, useState, useRef, useEffect } from 'react';
+import {
   ArrowLeft,
-  Bell, 
-  MessageSquare, 
-  Search, 
-  MoreVertical, 
+  Bell,
+  MessageSquare,
+  Search,
   AlertCircle,
   UserCircle,
   Send,
-  Plus
+  Plus,
+  X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import { useAppStore } from '../store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 const pairKey = (a: string, b: string) => [a, b].sort().join('|');
-const threadKeyFromMessage = (m: { userId: string; toUserId: string; applicationId?: string }) => `${m.applicationId ?? 'direct'}|${pairKey(m.userId, m.toUserId)}`;
+const threadKeyFromMessage = (m: { userId: string; toUserId: string; applicationId?: string }) =>
+  `${m.applicationId ?? 'direct'}|${pairKey(m.userId, m.toUserId)}`;
+
+type ContactOption = { userId: string; name: string; applicationId?: string };
+type VirtualThread = { key: string; otherUserId: string; applicationId?: string; name: string };
 
 const Messages: React.FC = () => {
   const { user } = useAuth();
   const { notifications, users, applications, chatMessages, addChatMessage, chatThreadReadAt, markChatThreadRead } = useApp();
   const location = useLocation() as { state?: { openComplaint?: boolean; openThreadKey?: string } };
-  const [activeTab, setActiveTab] = useState<'notifications' | 'chat'>(() => (location.state?.openComplaint || location.state?.openThreadKey) ? 'chat' : 'notifications');
+  const [activeTab, setActiveTab] = useState<'notifications' | 'chat'>(() =>
+    location.state?.openComplaint || location.state?.openThreadKey ? 'chat' : 'notifications'
+  );
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
+  const [virtualThread, setVirtualThread] = useState<VirtualThread | null>(null);
   const [draft, setDraft] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [newChatSearch, setNewChatSearch] = useState('');
+  const newChatRef = useRef<HTMLDivElement>(null);
 
-  const myNotifications = notifications.filter(n => n.userId === user?.id || user?.role !== 'student');
+  useEffect(() => {
+    if (!showNewChat) return;
+    const handler = (e: MouseEvent) => {
+      if (newChatRef.current && !newChatRef.current.contains(e.target as Node)) {
+        setShowNewChat(false);
+        setNewChatSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showNewChat]);
+
+  // Only show the current user's own notifications
+  const myNotifications = notifications.filter(n => n.userId === user?.id);
+
+  const handleMarkAllRead = () => {
+    if (!user) return;
+    useAppStore.setState(state => ({
+      notifications: state.notifications.map(n => (n.userId === user.id ? { ...n, read: true } : n)),
+    }));
+  };
+
+  const handleDismissNotification = (id: string) => {
+    useAppStore.setState(state => ({
+      notifications: state.notifications.map(n => (n.id === id ? { ...n, read: true } : n)),
+    }));
+  };
 
   const threads = useMemo(() => {
     if (!user) return [];
@@ -42,11 +79,15 @@ const Messages: React.FC = () => {
       const otherUser = users.find(u => u.id === otherUserId);
       const app = m.applicationId && !m.applicationId.startsWith('complaint-') ? applications.find(a => a.id === m.applicationId) : undefined;
       const baseName = otherUser?.name ?? 'Unknown';
-      const name = app ? `${app.name} • ${baseName}` : (m.applicationId?.startsWith('complaint-') && user.role === 'student' ? 'CEO Support' : baseName);
+      const name = app
+        ? `${app.name} • ${baseName}`
+        : m.applicationId?.startsWith('complaint-') && user.role === 'student'
+        ? 'CEO Support'
+        : baseName;
 
       const readKey = `${user.id}|${key}`;
       const readAt = chatThreadReadAt?.[readKey] ?? '';
-      const unreadInc = (m.userId !== user.id && (!readAt || new Date(m.time).getTime() > new Date(readAt).getTime())) ? 1 : 0;
+      const unreadInc = m.userId !== user.id && (!readAt || new Date(m.time).getTime() > new Date(readAt).getTime()) ? 1 : 0;
 
       const prev = byKey.get(key);
       if (!prev || new Date(m.time).getTime() >= new Date(prev.time || 0).getTime()) {
@@ -56,6 +97,7 @@ const Messages: React.FC = () => {
       }
     });
 
+    // Pre-populate student threads
     if (user.role === 'student') {
       const app = applications.find(a => a.studentId === user.id) || null;
       const staffId = app?.assignedStaffId;
@@ -76,6 +118,7 @@ const Messages: React.FC = () => {
       }
     }
 
+    // Pre-populate staff/agency_staff threads
     if (user.role === 'staff' || user.role === 'agency_staff') {
       const assignedApps = applications.filter(a => a.status === 'approved' && a.assignedStaffId === user.id);
       assignedApps.forEach((app) => {
@@ -96,6 +139,7 @@ const Messages: React.FC = () => {
       });
     }
 
+    // Pre-populate CEO threads
     if (user.role === 'ceo') {
       users.filter(u => u.role === 'student').forEach((stu) => {
         const complaintId = `complaint-${stu.id}`;
@@ -106,10 +150,55 @@ const Messages: React.FC = () => {
       });
     }
 
+    // Pre-populate sales threads: approved public-source applications
+    if (user.role === 'sales') {
+      applications
+        .filter(a => a.status === 'approved' && (a.source ?? 'public') === 'public' && a.studentId)
+        .forEach((app) => {
+          const key = `${app.id}|${pairKey(user.id, app.studentId!)}`;
+          if (!byKey.has(key)) {
+            const stu = users.find(u => u.id === app.studentId);
+            byKey.set(key, { key, otherUserId: app.studentId!, applicationId: app.id, name: `${app.name} • ${stu?.name ?? 'Student'}`, lastMessage: '', time: '', unread: 0 });
+          }
+        });
+    }
+
+    // Pre-populate ops threads: approved agency applications
+    if (user.role === 'ops') {
+      applications
+        .filter(a => a.status === 'approved' && a.source === 'agency' && a.agencyId)
+        .forEach((app) => {
+          const key = `${app.id}|${pairKey(user.id, app.agencyId!)}`;
+          if (!byKey.has(key)) {
+            const ag = users.find(u => u.id === app.agencyId);
+            byKey.set(key, { key, otherUserId: app.agencyId!, applicationId: app.id, name: `${app.name} • ${ag?.name ?? 'Agency'}`, lastMessage: '', time: '', unread: 0 });
+          }
+        });
+    }
+
+    // Pre-populate agency threads: their applications with assigned staff
+    if (user.role === 'agency') {
+      applications
+        .filter(a => a.agencyId === user.id && a.assignedStaffId)
+        .forEach((app) => {
+          const key = `${app.id}|${pairKey(user.id, app.assignedStaffId!)}`;
+          if (!byKey.has(key)) {
+            const staff = users.find(u => u.id === app.assignedStaffId);
+            byKey.set(key, { key, otherUserId: app.assignedStaffId!, applicationId: app.id, name: `${app.name} • ${staff?.name ?? 'Admin'}`, lastMessage: '', time: '', unread: 0 });
+          }
+        });
+    }
+
     return Array.from(byKey.values())
       .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
       .sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime());
   }, [user, chatMessages, users, applications, searchTerm, chatThreadReadAt]);
+
+  // Include virtual (pending first message) thread in the displayed list
+  const displayThreads = useMemo(() => {
+    if (!virtualThread || threads.find(t => t.key === virtualThread.key)) return threads;
+    return [{ ...virtualThread, lastMessage: '', time: '', unread: 0 }, ...threads];
+  }, [threads, virtualThread]);
 
   const complaintThreadKey = useMemo(() => {
     if (!user || user.role !== 'student') return null;
@@ -122,25 +211,126 @@ const Messages: React.FC = () => {
 
   const effectiveSelectedThreadKey = selectedThreadKey ?? location.state?.openThreadKey ?? complaintThreadKey;
 
-  const selectedThread = useMemo(() => {
-    if (!effectiveSelectedThreadKey) return null;
-    return threads.find(t => t.key === effectiveSelectedThreadKey) ?? null;
-  }, [threads, effectiveSelectedThreadKey]);
+  const activeThread = useMemo(
+    () => (effectiveSelectedThreadKey ? displayThreads.find(t => t.key === effectiveSelectedThreadKey) ?? null : null),
+    [displayThreads, effectiveSelectedThreadKey]
+  );
 
   const currentThread = useMemo(() => {
-    if (!user || !selectedThread) return [];
+    if (!user || !activeThread) return [];
     return chatMessages
-      .filter(m => threadKeyFromMessage(m) === selectedThread.key)
+      .filter(m => threadKeyFromMessage(m) === activeThread.key)
       .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-  }, [user, selectedThread, chatMessages]);
+  }, [user, activeThread, chatMessages]);
+
+  // Contacts available for new chat based on role
+  const contactOptions = useMemo<ContactOption[]>(() => {
+    if (!user) return [];
+    const q = newChatSearch.toLowerCase();
+    const match = (name: string) => name.toLowerCase().includes(q);
+
+    if (user.role === 'ceo') {
+      return users
+        .filter(u => u.id !== user.id && match(u.name))
+        .map(u => ({
+          userId: u.id,
+          name: `${u.name} (${u.role})`,
+          applicationId: u.role === 'student' ? `complaint-${u.id}` : undefined,
+        }));
+    }
+    if (user.role === 'sales') {
+      return users
+        .filter(u => ['student', 'staff', 'agency_staff', 'ops', 'ceo'].includes(u.role) && u.id !== user.id && match(u.name))
+        .map(u => ({
+          userId: u.id,
+          name: `${u.name} (${u.role})`,
+          applicationId: u.role === 'student'
+            ? applications.find(a => a.studentId === u.id && (a.source ?? 'public') === 'public')?.id
+            : undefined,
+        }));
+    }
+    if (user.role === 'ops') {
+      return users
+        .filter(u => ['agency', 'staff', 'agency_staff', 'sales', 'ceo'].includes(u.role) && u.id !== user.id && match(u.name))
+        .map(u => ({
+          userId: u.id,
+          name: `${u.name} (${u.role})`,
+          applicationId: u.role === 'agency'
+            ? applications.find(a => a.agencyId === u.id && a.source === 'agency')?.id
+            : undefined,
+        }));
+    }
+    if (user.role === 'agency') {
+      return applications
+        .filter(a => a.agencyId === user.id && a.assignedStaffId)
+        .flatMap(a => {
+          const staff = users.find(u => u.id === a.assignedStaffId);
+          if (!staff || !match(staff.name)) return [];
+          return [{ userId: staff.id, name: `${a.name} • ${staff.name}`, applicationId: a.id }];
+        });
+    }
+    if (user.role === 'staff' || user.role === 'agency_staff') {
+      return applications
+        .filter(a => a.assignedStaffId === user.id && a.status === 'approved')
+        .flatMap(a => {
+          const results: ContactOption[] = [];
+          if (a.studentId) {
+            const stu = users.find(u => u.id === a.studentId);
+            if (stu && match(stu.name)) results.push({ userId: stu.id, name: `${a.name} • ${stu.name}`, applicationId: a.id });
+          }
+          if ((a.source ?? 'public') === 'agency' && a.agencyId) {
+            const ag = users.find(u => u.id === a.agencyId);
+            if (ag && match(ag.name)) results.push({ userId: ag.id, name: `${a.name} • ${ag.name}`, applicationId: a.id });
+          }
+          return results;
+        });
+    }
+    return [];
+  }, [user, users, applications, newChatSearch]);
+
+  const handleStartChat = (contact: ContactOption) => {
+    if (!user) return;
+    const appId = contact.applicationId ?? 'direct';
+    const key = `${appId}|${pairKey(user.id, contact.userId)}`;
+    const exists = threads.find(t => t.key === key);
+    if (exists) {
+      setSelectedThreadKey(key);
+      markChatThreadRead(key);
+      setVirtualThread(null);
+    } else {
+      setVirtualThread({ key, otherUserId: contact.userId, applicationId: contact.applicationId, name: contact.name });
+      setSelectedThreadKey(key);
+    }
+    setShowNewChat(false);
+    setNewChatSearch('');
+    setActiveTab('chat');
+  };
+
+  const handleSendMessage = () => {
+    if (!user || !draft.trim() || !activeThread) return;
+    try {
+      addChatMessage(activeThread.otherUserId, draft.trim(), activeThread.applicationId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Unable to send message');
+      return;
+    }
+    setDraft('');
+    if (virtualThread) setVirtualThread(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   const suggestedContacts = useMemo(() => {
     if (!user) return [];
     if (user.role === 'ceo') {
       const q = searchTerm.toLowerCase();
       return users
-        .filter(u => u.role === 'student' && u.id !== user.id)
-        .filter(u => u.name.toLowerCase().includes(q))
+        .filter(u => u.role === 'student' && u.id !== user.id && u.name.toLowerCase().includes(q))
         .map(u => ({ key: `complaint-${u.id}|${pairKey(user.id, u.id)}`, name: `${u.name} • Complaint` }));
     }
     return [];
@@ -157,19 +347,22 @@ const Messages: React.FC = () => {
           <button
             onClick={() => setActiveTab('notifications')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              activeTab === 'notifications' 
-                ? 'bg-black text-white shadow-lg' 
+              activeTab === 'notifications'
+                ? 'bg-black text-white shadow-lg'
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
             <Bell className="w-4 h-4" />
             Notifications
+            {myNotifications.filter(n => !n.read).length > 0 && (
+              <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('chat')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              activeTab === 'chat' 
-                ? 'bg-black text-white shadow-lg' 
+              activeTab === 'chat'
+                ? 'bg-black text-white shadow-lg'
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
@@ -190,11 +383,14 @@ const Messages: React.FC = () => {
           >
             <div className="p-8 border-b border-gray-50 flex items-center justify-between">
               <h2 className="text-xl font-black text-black">System Notifications</h2>
-              <button className="text-[10px] font-black text-amber-600 bg-amber-50 px-3 py-1 rounded-lg uppercase tracking-widest hover:bg-amber-100 transition-all">
+              <button
+                onClick={handleMarkAllRead}
+                className="text-[10px] font-black text-amber-600 bg-amber-50 px-3 py-1 rounded-lg uppercase tracking-widest hover:bg-amber-100 transition-all"
+              >
                 Mark all as read
               </button>
             </div>
-            
+
             <div className="divide-y divide-gray-50">
               {myNotifications.length === 0 ? (
                 <div className="p-20 text-center">
@@ -219,9 +415,15 @@ const Messages: React.FC = () => {
                       </div>
                       <p className="text-gray-500 font-medium leading-relaxed">{notif.message}</p>
                     </div>
-                    <button className="p-2 text-gray-200 hover:text-black transition-colors">
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
+                    {!notif.read && (
+                      <button
+                        onClick={() => handleDismissNotification(notif.id)}
+                        className="p-2 text-gray-300 hover:text-amber-600 transition-colors"
+                        title="Mark as read"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 ))
               )}
@@ -236,13 +438,54 @@ const Messages: React.FC = () => {
             className="lg:grid lg:grid-cols-3 gap-6 lg:gap-8 min-h-[60vh] lg:h-[700px]"
           >
             {/* Chat List */}
-            <div className={`lg:col-span-1 tw-card overflow-hidden flex flex-col ${selectedThread ? 'hidden lg:flex' : 'flex'}`}>
+            <div className={`lg:col-span-1 tw-card overflow-hidden flex flex-col ${activeThread ? 'hidden lg:flex' : 'flex'}`}>
               <div className="p-6 border-b border-gray-50 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-black text-black">Messages</h2>
-                  <button className="p-2 bg-amber-500 text-black rounded-xl hover:shadow-lg transition-all">
-                    <Plus className="w-4 h-4" />
-                  </button>
+                  <div className="relative" ref={newChatRef}>
+                    <button
+                      onClick={() => { setShowNewChat(v => !v); setNewChatSearch(''); }}
+                      className="p-2 bg-amber-500 text-black rounded-xl hover:shadow-lg transition-all"
+                      title="New conversation"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    {showNewChat && (
+                      <div className="absolute right-0 top-11 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 w-72 overflow-hidden">
+                        <div className="p-3 border-b border-gray-50">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="Search contacts..."
+                              value={newChatSearch}
+                              onChange={e => setNewChatSearch(e.target.value)}
+                              className="w-full pl-9 pr-4 py-2 bg-gray-50 rounded-xl text-sm font-medium outline-none border-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          {contactOptions.length === 0 ? (
+                            <div className="p-4 text-center text-gray-400 text-sm font-medium">No contacts found</div>
+                          ) : (
+                            contactOptions.map((c, i) => (
+                              <button
+                                key={i}
+                                onClick={() => handleStartChat(c)}
+                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                              >
+                                <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
+                                  <UserCircle className="w-5 h-5" />
+                                </div>
+                                <span className="text-sm font-bold text-black truncate">{c.name}</span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -255,13 +498,14 @@ const Messages: React.FC = () => {
                   />
                 </div>
               </div>
-              
+
               <div className="flex-1 overflow-y-auto divide-y divide-gray-50 custom-scrollbar">
-                {threads.map((chat) => (
+                {displayThreads.map((chat) => (
                   <div
                     key={chat.key}
                     onClick={() => {
                       setSelectedThreadKey(chat.key);
+                      if (chat.key !== virtualThread?.key) setVirtualThread(null);
                       if (user) markChatThreadRead(chat.key);
                       setActiveTab('chat');
                     }}
@@ -289,8 +533,16 @@ const Messages: React.FC = () => {
                     </div>
                   </div>
                 ))}
-                {threads.length === 0 && (
-                  <div className="p-8 text-center text-gray-400 font-medium">No conversations yet</div>
+                {displayThreads.length === 0 && (
+                  <div className="p-8 text-center text-gray-400 font-medium">
+                    No conversations yet.{' '}
+                    <span
+                      className="font-black text-amber-500 cursor-pointer hover:underline"
+                      onClick={() => setShowNewChat(true)}
+                    >
+                      Start one
+                    </span>.
+                  </div>
                 )}
               </div>
 
@@ -319,33 +571,26 @@ const Messages: React.FC = () => {
             </div>
 
             {/* Chat Window */}
-            <div className={`lg:col-span-2 tw-card overflow-hidden flex flex-col ${selectedThread ? 'flex' : 'hidden lg:flex'}`}>
-              {selectedThread ? (
+            <div className={`lg:col-span-2 tw-card overflow-hidden flex flex-col ${activeThread ? 'flex' : 'hidden lg:flex'}`}>
+              {activeThread ? (
                 <>
-                  <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => setSelectedThreadKey(null)}
-                        className="lg:hidden p-2 rounded-xl hover:bg-gray-100 text-gray-500"
-                        aria-label="Back"
-                      >
-                        <ArrowLeft className="w-5 h-5" />
-                      </button>
-                      <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
-                        <UserCircle className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-black text-black">
-                          {selectedThread.name}
-                        </h3>
-                        <p className="text-[10px] font-black text-green-500 uppercase tracking-widest">Active Now</p>
-                      </div>
-                    </div>
-                    <button className="p-2 text-gray-400 hover:text-black transition-colors">
-                      <MoreVertical className="w-5 h-5" />
+                  <div className="p-6 border-b border-gray-50 flex items-center gap-4">
+                    <button
+                      onClick={() => { setSelectedThreadKey(null); setVirtualThread(null); }}
+                      className="lg:hidden p-2 rounded-xl hover:bg-gray-100 text-gray-500"
+                      aria-label="Back"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
                     </button>
+                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+                      <UserCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-black">{activeThread.name}</h3>
+                      <p className="text-[10px] font-black text-green-500 uppercase tracking-widest">Active Now</p>
+                    </div>
                   </div>
-                  
+
                   <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 custom-scrollbar bg-gray-50/30">
                     {currentThread.length === 0 ? (
                       <div className="text-center text-gray-400 font-medium">No messages yet. Say hello!</div>
@@ -371,20 +616,11 @@ const Messages: React.FC = () => {
                         placeholder="Type a message..."
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={handleKeyDown}
                         className="w-full pl-6 pr-14 py-4 bg-gray-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
                       />
                       <button
-                        onClick={() => {
-                          if (!user || !selectedThread || !draft.trim()) return;
-                          try {
-                            addChatMessage(selectedThread.otherUserId, draft.trim(), selectedThread.applicationId);
-                          } catch (e) {
-                            const msg = e instanceof Error ? e.message : 'Unable to send message';
-                            toast.error(msg);
-                            return;
-                          }
-                          setDraft('');
-                        }}
+                        onClick={handleSendMessage}
                         className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all shadow-lg shadow-black/5"
                       >
                         <Send className="w-4 h-4" />
