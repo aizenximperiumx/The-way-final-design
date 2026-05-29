@@ -31,6 +31,7 @@ const SalesDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [quickFilter, setQuickFilter] = useState<string>('all');
   const [assigning, setAssigning] = useState<{ studentId: string; university: string } | null>(null);
+  const [assigningStaff, setAssigningStaff] = useState<{ studentId: string; staffId: string } | null>(null);
   const [intakeModal, setIntakeModal] = useState<{ open: boolean; app?: Application }>({ open: false });
   const [previewModal, setPreviewModal] = useState<{ open: boolean; app?: Application }>({ open: false });
   const [assignModal, setAssignModal] = useState<{ open: boolean; stuId?: string; staffId?: string }>({ open: false });
@@ -587,7 +588,7 @@ Video: ${intake.videoUrl}`;
                 <p className="font-black text-black">{a.name}</p>
                 <p className="text-gray-400 text-sm font-medium">{a.university ? `(${getUniversityName(a.university)})` : '(No university assigned)'}</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 {staff ? (
                   <div className="flex items-center gap-2 mr-2">
                     <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 font-bold">
@@ -601,7 +602,7 @@ Video: ${intake.videoUrl}`;
                 ) : null}
                 <select
                   className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium"
-                  value={assigning?.studentId === a.studentId ? (assigning?.university ?? '') : ''}
+                  value={assigning?.studentId === a.studentId ? (assigning?.university ?? '') : (a.university ?? '')}
                   onChange={(e) => setAssigning({ studentId: a.studentId!, university: e.target.value })}
                 >
                   <option value="" disabled>Select university</option>
@@ -622,7 +623,32 @@ Video: ${intake.videoUrl}`;
                   }}
                   className="px-4 py-2 bg-black text-white rounded-xl font-bold text-sm hover:bg-amber-500 hover:text-black transition-all"
                 >
-                  Save
+                  Set Uni
+                </button>
+                <select
+                  className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium"
+                  value={assigningStaff?.studentId === a.studentId ? (assigningStaff?.staffId ?? '') : (a.assignedStaffId ?? '')}
+                  onChange={(e) => setAssigningStaff({ studentId: a.studentId!, staffId: e.target.value })}
+                >
+                  <option value="" disabled>Assign staff</option>
+                  {users.filter(u => u.role === 'staff').map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    if (!assigningStaff || !assigningStaff.staffId || assigningStaff.studentId !== a.studentId) return;
+                    try {
+                      salesAssignAdmin(assigningStaff.studentId, assigningStaff.staffId);
+                      toast.success('Staff assigned');
+                      setAssigningStaff(null);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : 'Failed to assign staff');
+                    }
+                  }}
+                  className="px-4 py-2 bg-black text-white rounded-xl font-bold text-sm hover:bg-amber-500 hover:text-black transition-all"
+                >
+                  Set Staff
                 </button>
               </div>
             </div>
