@@ -8,7 +8,7 @@ interface AuthContextType {
   authStatus: AuthStatus;
   loading: boolean;
   login: (username: string, password: string) => Promise<User | null>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -74,7 +74,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      await saveBackendState().catch(() => {});
+    }
     storeLogout();
     toast.success('Logged out successfully');
   };

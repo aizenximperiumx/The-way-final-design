@@ -104,7 +104,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const signUrl = `${base}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
+    const signUrl = `${base}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${objectPath}`;
     const signed = await fetchJson(signUrl, {
       method: 'POST',
       headers: { ...adminHeaders, 'Content-Type': 'application/json' },

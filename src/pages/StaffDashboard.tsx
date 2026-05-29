@@ -46,20 +46,6 @@ const StaffDashboard: FC = () => {
   const [filter, setFilter] = useState<'all'|'processing'|'enrolled'|'closed'>('all');
   const approvedStudents = useMemo(() => {
     const base = applications.filter(app => app.status === 'approved');
-    if (currentUser?.role === 'staff') {
-      const uni = currentUser.staffUniversities ?? [];
-      return base.filter((app) => {
-        if ((app.source ?? 'public') === 'agency') {
-          return app.assignedStaffId === currentUser.id;
-        }
-        if (app.assignedStaffId === currentUser.id) return true;
-        if (!app.assignedStaffId) {
-          if (uni.length === 0) return true;
-          return app.university ? uni.includes(app.university) : true;
-        }
-        return false;
-      });
-    }
     if (currentUser?.role === 'agency_staff') {
       return base.filter(app => (app.source ?? 'public') === 'agency');
     }
@@ -324,8 +310,10 @@ const StaffDashboard: FC = () => {
                         <span className="text-[10px] font-bold text-gray-400">
                           {app.university ? `(${getUniversityName(app.university)})` : ''}
                         </span>
-                        {(app.source ?? 'public') === 'agency' && (
+                        {(app.source ?? 'public') === 'agency' ? (
                           <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-700">Agency</span>
+                        ) : (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-700">Direct</span>
                         )}
                       </div>
                     </div>
@@ -335,51 +323,6 @@ const StaffDashboard: FC = () => {
               ))}
             </div>
           </div>
-          {currentUser?.role === 'ceo' && (
-            <div className="bg-white rounded-[36px] border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)] overflow-hidden flex flex-col h-[500px]">
-              <div className="p-6 border-b border-gray-50">
-                <h2 className="text-xl font-black text-black">Agency Students</h2>
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Approved via /agencies</p>
-              </div>
-              <div className="flex-1 overflow-y-auto divide-y divide-gray-50 custom-scrollbar">
-                {applications.filter(a => (a.source ?? 'public') === 'agency' && a.status === 'approved').map((app) => (
-                  <div
-                    key={app.id}
-                    onClick={() => {
-                      setSelectedStudentId(app.id);
-                      setMobileDetailsOpen(true);
-                      setProfileName(app.name ?? '');
-                      setProfileEmail(app.studentEmail ?? app.email ?? '');
-                      setProfilePhone(app.phone ?? '');
-                      setProfileUniversity(app.university ?? '');
-                      const stu = app.studentId ? users.find(u => u.id === app.studentId) : null;
-                      setPassportExpiry(stu?.passportExpiry ?? '');
-                      setVisaExpiry(stu?.visaExpiry ?? '');
-                      setResidenceExpiry(stu?.residenceExpiry ?? '');
-                    }}
-
-                    className="p-6 hover:bg-gray-50 cursor-pointer transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 font-bold">
-                        {app.name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-black truncate">{app.name}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] font-bold text-gray-400">{app.university ? getUniversityName(app.university) : ''}</span>
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-700">Agency</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {applications.filter(a => (a.source ?? 'public') === 'agency' && a.status === 'approved').length === 0 && (
-                  <div className="p-6 text-sm font-medium text-gray-500">No agency students</div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right: Detailed View */}
@@ -395,63 +338,78 @@ const StaffDashboard: FC = () => {
               >
                 {/* Profile Header Card */}
                 <div className="bg-white rounded-[36px] p-8 border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)]">
-                  <div className="grid lg:grid-cols-3 gap-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-700 font-black text-2xl">
-                        {selectedStudent.name.charAt(0)}
+                  {/* Row 1: Avatar + Identity */}
+                  <div className="flex items-start gap-5 mb-6">
+                    <div className="w-16 h-16 shrink-0 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-700 font-black text-2xl">
+                      {selectedStudent.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 grid sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Full Name</label>
+                        <input disabled={currentUser?.role !== 'ceo'} value={profileName} onChange={(e) => setProfileName(e.target.value)} className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
                       </div>
-                      <div className="space-y-2">
-                        <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Student name</label>
-                          <input disabled={currentUser?.role !== 'ceo'} value={profileName} onChange={(e) => setProfileName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Email</label>
-                            <input disabled={currentUser?.role !== 'ceo'} value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Phone</label>
-                            <input disabled={currentUser?.role !== 'ceo'} value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
-                          </div>
-                        </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Email</label>
+                        <input disabled={currentUser?.role !== 'ceo'} value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Phone</label>
+                        <input disabled={currentUser?.role !== 'ceo'} value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
                       </div>
                     </div>
+                  </div>
+                  {/* Row 2: University + Source */}
+                  <div className="grid sm:grid-cols-2 gap-4 mb-6">
                     <div>
                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">University</label>
-                      <select value={profileUniversity} onChange={(e) => setProfileUniversity(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold outline-none focus:ring-2 focus:ring-amber-500/20">
+                      <select value={profileUniversity} onChange={(e) => setProfileUniversity(e.target.value)} className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/20">
                         <option value="">Select university</option>
                         {UNIVERSITY_OPTIONS.map((u) => (
                           <option key={u.id} value={u.id}>{u.name}</option>
                         ))}
                       </select>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Assigned by Sales/Staff</p>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <ShieldCheck className="w-4 h-4 text-amber-500" />
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Passport Expiry</p>
-                        </div>
-                        <input type="date" value={passportExpiry} onChange={(e) => setPassportExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-2 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
-                      </div>
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-4 h-4 text-amber-500" />
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Visa Expiry</p>
-                        </div>
-                        <input type="date" value={visaExpiry} onChange={(e) => setVisaExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-2 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
-                      </div>
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-4 h-4 text-amber-500" />
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Residence Permit</p>
-                        </div>
-                        <input type="date" value={residenceExpiry} onChange={(e) => setResidenceExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-2 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
+                    <div className="flex flex-col justify-end gap-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Source</p>
+                      <div className="flex items-center gap-2">
+                        {(selectedStudent.source ?? 'public') === 'agency' ? (
+                          <span className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-700 text-xs font-black uppercase tracking-widest">Agency Referral</span>
+                        ) : (
+                          <span className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-700 text-xs font-black uppercase tracking-widest">Direct Application</span>
+                        )}
+                        {selectedStudent.assignedStaffId && (
+                          <span className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-xs font-bold">
+                            Staff: {users.find(u => u.id === selectedStudent.assignedStaffId)?.name ?? 'Assigned'}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
-                  <div className="mt-6 flex flex-wrap gap-2">
+                  {/* Row 3: Expiry Dates */}
+                  <div className="grid sm:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Passport Expiry</p>
+                      </div>
+                      <input type="date" value={passportExpiry} onChange={(e) => setPassportExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
+                    </div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Visa Expiry</p>
+                      </div>
+                      <input type="date" value={visaExpiry} onChange={(e) => setVisaExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
+                    </div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Residence Permit</p>
+                      </div>
+                      <input type="date" value={residenceExpiry} onChange={(e) => setResidenceExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     <button onClick={handleSaveProfile} className="bg-black text-white px-6 py-2.5 rounded-2xl font-black text-sm hover:bg-amber-500 hover:text-black transition-all shadow-sm">Save Profile</button>
                     {selectedStudent.studentId && currentUser && (currentUser.role === 'staff' || currentUser.role === 'agency_staff') && (
                       <button
