@@ -136,6 +136,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         ? (profile.json[0].role as string)
         : '';
     }
+    if (!role) {
+      const bootstrapEmail = (process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').toLowerCase().trim();
+      const authEmail = typeof (who.json as Record<string, unknown>).email === 'string'
+        ? String((who.json as Record<string, unknown>).email).toLowerCase().trim() : '';
+      if (bootstrapEmail && authEmail && bootstrapEmail === authEmail) role = 'ceo';
+    }
 
     const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, unknown>) : {};
     const incoming = asState(body.state);

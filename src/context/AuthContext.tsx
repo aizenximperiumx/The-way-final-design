@@ -78,8 +78,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (saveTimer.current) {
       window.clearTimeout(saveTimer.current);
       saveTimer.current = null;
-      await saveBackendState().catch(() => {});
     }
+    await saveBackendState().catch(() => {});
     storeLogout();
     toast.success('Logged out successfully');
   };
