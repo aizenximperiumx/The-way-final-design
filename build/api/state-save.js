@@ -67,6 +67,7 @@ const asState = (value) => {
         appointments: Array.isArray(v.appointments) ? v.appointments : [],
         chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
         chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? v.chatThreadReadAt : {},
+        documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
     };
 };
 const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(role);
@@ -123,6 +124,13 @@ export default async function handler(req, res) {
                 ? profile.json[0].role
                 : '';
         }
+        if (!role) {
+            const bootstrapEmail = (process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').toLowerCase().trim();
+            const authEmail = typeof who.json.email === 'string'
+                ? String(who.json.email).toLowerCase().trim() : '';
+            if (bootstrapEmail && authEmail && bootstrapEmail === authEmail)
+                role = 'ceo';
+        }
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const incoming = asState(body.state);
         const stateResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, { method: 'GET' }, adminKey);
@@ -138,6 +146,7 @@ export default async function handler(req, res) {
                 appointments: incoming.appointments.slice(0, 50_000),
                 chatMessages: incoming.chatMessages.slice(0, 200_000),
                 chatThreadReadAt: incoming.chatThreadReadAt || {},
+                documentRequests: incoming.documentRequests.slice(0, 50_000),
             };
         }
         else if (role === 'student') {

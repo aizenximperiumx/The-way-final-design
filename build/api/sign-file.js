@@ -95,7 +95,7 @@ export default async function handler(req, res) {
             res.status(400).json({ error: 'Unable to parse fileUrl' });
             return;
         }
-        const signUrl = `${base}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
+        const signUrl = `${base}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${objectPath}`;
         const signed = await fetchJson(signUrl, {
             method: 'POST',
             headers: { ...adminHeaders, 'Content-Type': 'application/json' },
@@ -106,7 +106,12 @@ export default async function handler(req, res) {
             res.status(500).json({ error: 'Failed to sign file URL', details });
             return;
         }
-        res.status(200).json({ signedUrl: signed.json.signedURL });
+        // Supabase returns a relative path — make it absolute
+        const rawSigned = signed.json.signedURL;
+        const fullSignedUrl = rawSigned.startsWith('http')
+            ? rawSigned
+            : `${base}/storage/v1${rawSigned}`;
+        res.status(200).json({ signedUrl: fullSignedUrl });
     }
     catch (e) {
         const message = e instanceof Error ? e.message : 'Unknown error';

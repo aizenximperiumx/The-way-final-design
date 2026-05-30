@@ -5,7 +5,6 @@ import {
   MessageSquare,
   Search,
   AlertCircle,
-  UserCircle,
   Send,
   Plus,
   X,

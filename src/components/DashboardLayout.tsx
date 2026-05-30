@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, LogOut, Bell, Menu,
   Search, Calendar, MessageSquare, BarChart3, GraduationCap,
-  Building2, X as CloseIcon, Trophy, Star, TrendingUp,
+  Building2, X as CloseIcon, Trophy, Star,
   Award, ChevronRight, Mail, Zap
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';

@@ -127,7 +127,7 @@ export default async function handler(req, res) {
         }
         const random = Math.random().toString(16).slice(2);
         const objectPath = `${callerId}/${Date.now()}-${random}-${filename}`;
-        const putUrl = `${base}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
+        const putUrl = `${base}/storage/v1/object/${encodeURIComponent(bucket)}/${objectPath}`;
         const putResp = await fetch(putUrl, {
             method: 'POST',
             headers: {
@@ -142,7 +142,7 @@ export default async function handler(req, res) {
             res.status(500).json({ error: 'Failed to upload', details });
             return;
         }
-        const publicUrl = `${base}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath)}`;
+        const publicUrl = `${base}/storage/v1/object/public/${encodeURIComponent(bucket)}/${objectPath}`;
         res.status(200).json({ url: publicUrl });
     }
     catch (e) {

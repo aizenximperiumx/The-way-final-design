@@ -72,6 +72,7 @@ const asState = (value) => {
         appointments: Array.isArray(v.appointments) ? v.appointments : [],
         chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
         chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? v.chatThreadReadAt : {},
+        documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
     };
 };
 const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(role);
@@ -166,6 +167,26 @@ export default async function handler(req, res) {
             role = Array.isArray(profile.json) && profile.json[0] && typeof profile.json[0].role === 'string'
                 ? profile.json[0].role
                 : '';
+        }
+        // Fallback: if still no role, check if this user is the bootstrap CEO by email
+        if (!role) {
+            const bootstrapEmail = (process.env.AUTO_BOOTSTRAP_CEO_EMAIL || '').toLowerCase().trim();
+            const authEmail = typeof who.json.email === 'string'
+                ? String(who.json.email).toLowerCase().trim() : '';
+            if (bootstrapEmail && authEmail && bootstrapEmail === authEmail) {
+                role = 'ceo';
+                // Auto-upsert a profile row so future lookups work without this fallback
+                const userMeta = who.json.user_metadata;
+                const um = userMeta && typeof userMeta === 'object' ? userMeta : null;
+                const metaName = (appMeta && typeof appMeta.name === 'string' ? String(appMeta.name) : '')
+                    || (um && typeof um.name === 'string' ? String(um.name) : '') || authEmail;
+                const metaUsername = (appMeta && typeof appMeta.username === 'string' ? String(appMeta.username) : '') || authEmail;
+                await fetchJsonWithAdminHeaders(`${base}/rest/v1/profiles`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+                    body: JSON.stringify({ id: userId, username: metaUsername, role: 'ceo', name: metaName, email: authEmail }),
+                }, adminKey).catch(() => { });
+            }
         }
         const stateResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, { method: 'GET' }, adminKey);
         const rawState = Array.isArray(stateResp.json) && stateResp.json[0] ? stateResp.json[0].state : {};
