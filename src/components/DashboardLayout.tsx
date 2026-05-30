@@ -64,9 +64,11 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const filteredItems = sidebarItems.filter(item => user?.role && item.roles.includes(user.role));
 
   const handleLogout = () => {
-    logout();
+    void logout();
     navigate('/login');
   };
+
+  const unreadCount = notifications.filter(n => n.userId === user?.id && !n.read).length;
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex overflow-hidden tw-mobile-shell">
@@ -143,8 +145,10 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <div className="flex items-center gap-6">
             <button onClick={() => setShowNotifs((v) => !v)} className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-xl transition-all" aria-label="Notifications">
               <Bell className="w-5 h-5" />
-              {notifications.some(n => n.userId === user?.id && !n.read) && (
-                <span className="absolute top-2 right-2 w-2 h-2 bg-amber-500 rounded-full border-2 border-white"></span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 border-2 border-white leading-none">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
               )}
             </button>
             {showNotifs && (

@@ -44,6 +44,7 @@ const StaffDashboard: FC = () => {
   const [residenceExpiry, setResidenceExpiry] = useState('');
 
   const [filter, setFilter] = useState<'all'|'processing'|'enrolled'|'closed'>('all');
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const approvedStudents = useMemo(() => {
     const base = applications.filter(app => app.status === 'approved');
     if (currentUser?.role === 'agency_staff') {
@@ -55,6 +56,22 @@ const StaffDashboard: FC = () => {
   const isComplete = (studentId?: string) => {
     if (!studentId) return false;
     return stepIds.every(id => documents.some(d => d.studentId === studentId && d.type === id && d.status === 'verified'));
+  };
+
+  const studentDocStatus = (studentId?: string): 'complete' | 'rejected' | 'processing' | 'none' => {
+    if (!studentId) return 'none';
+    const docs = documents.filter(d => d.studentId === studentId);
+    if (docs.some(d => d.status === 'rejected')) return 'rejected';
+    if (isComplete(studentId)) return 'complete';
+    if (docs.length > 0) return 'processing';
+    return 'none';
+  };
+
+  const statusBarClass = (s: 'complete' | 'rejected' | 'processing' | 'none') => {
+    if (s === 'complete') return 'bg-green-500';
+    if (s === 'rejected') return 'bg-red-500';
+    if (s === 'processing') return 'bg-amber-500';
+    return 'bg-gray-200';
   };
   const selectedStudent = useMemo(
     () => approvedStudents.find(app => app.id === selectedStudentId) ?? null,
@@ -131,7 +148,7 @@ const StaffDashboard: FC = () => {
       toast.error('Please attach a file');
       return;
     }
-
+    setUploadingDoc(true);
     try {
       const fileUrl = await uploadFile(newDocument.fileObject);
       staffUploadDocument({
@@ -146,6 +163,8 @@ const StaffDashboard: FC = () => {
       setNewDocument({ title: '', type: '' });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to upload document');
+    } finally {
+      setUploadingDoc(false);
     }
   };
 
@@ -273,54 +292,65 @@ const StaffDashboard: FC = () => {
             </div>
             
             <div className="flex-1 overflow-y-auto divide-y divide-gray-50 custom-scrollbar">
-              {filteredStudents.map((app) => (
-                <div
-                  key={app.id}
-                  onClick={() => {
-                    setSelectedStudentId(app.id);
-                    setMobileDetailsOpen(true);
-                    setProfileName(app.name ?? '');
-                    setProfileEmail(app.email ?? '');
-                    setProfilePhone(app.phone ?? '');
-                    setProfileUniversity(app.university ?? '');
-                    const stu = app.studentId ? users.find(u => u.id === app.studentId) : null;
-                    setPassportExpiry(stu?.passportExpiry ?? '');
-                    setVisaExpiry(stu?.visaExpiry ?? '');
-                    setResidenceExpiry(stu?.residenceExpiry ?? '');
-                  }}
-                  className={`p-6 hover:bg-gray-50/70 cursor-pointer transition-all relative group ${
-                    selectedStudent?.id === app.id ? 'bg-amber-50/50' : ''
-                  }`}
-                >
-                  {selectedStudent?.id === app.id && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
-                  )}
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 font-bold group-hover:bg-amber-500 group-hover:text-black transition-colors">
-                      {app.name.charAt(0)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-black truncate">{app.name}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                          app.stage === 'enrolled' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {app.stage || 'Applied'}
-                        </span>
-                        <span className="text-[10px] font-bold text-gray-400">
-                          {app.university ? `(${getUniversityName(app.university)})` : ''}
-                        </span>
-                        {(app.source ?? 'public') === 'agency' ? (
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-700">Agency</span>
-                        ) : (
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-700">Direct</span>
+              {filteredStudents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                  <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Users className="w-7 h-7 text-gray-200" />
+                  </div>
+                  <p className="font-bold text-gray-500 text-sm">No students yet</p>
+                  <p className="text-xs text-gray-400 mt-1 max-w-[180px]">Approve an application from the Sales tab to see students here.</p>
+                </div>
+              ) : filteredStudents.map((app) => {
+                const docStatus = studentDocStatus(app.studentId);
+                return (
+                  <div
+                    key={app.id}
+                    onClick={() => {
+                      setSelectedStudentId(app.id);
+                      setMobileDetailsOpen(true);
+                      setProfileName(app.name ?? '');
+                      setProfileEmail(app.email ?? '');
+                      setProfilePhone(app.phone ?? '');
+                      setProfileUniversity(app.university ?? '');
+                      const stu = app.studentId ? users.find(u => u.id === app.studentId) : null;
+                      setPassportExpiry(stu?.passportExpiry ?? '');
+                      setVisaExpiry(stu?.visaExpiry ?? '');
+                      setResidenceExpiry(stu?.residenceExpiry ?? '');
+                    }}
+                    className={`p-5 hover:bg-gray-50/70 cursor-pointer transition-all relative group ${
+                      selectedStudent?.id === app.id ? 'bg-amber-50/50' : ''
+                    }`}
+                  >
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-r transition-all ${
+                      selectedStudent?.id === app.id ? 'bg-amber-500' : statusBarClass(docStatus)
+                    }`} />
+                    <div className="flex items-center gap-3 pl-1">
+                      <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-500 font-bold group-hover:bg-amber-500 group-hover:text-black transition-colors shrink-0">
+                        {app.name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-black truncate text-sm">{app.name}</h3>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                            app.stage === 'enrolled' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {app.stage || 'Applied'}
+                          </span>
+                          {(app.source ?? 'public') === 'agency' ? (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-700">Agency</span>
+                          ) : (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-gray-100 text-gray-500">Direct</span>
+                          )}
+                        </div>
+                        {app.university && (
+                          <p className="text-[10px] text-gray-400 font-medium mt-0.5 truncate">{getUniversityName(app.university)}</p>
                         )}
                       </div>
+                      <ChevronRight className={`w-4 h-4 shrink-0 text-gray-300 transition-transform ${selectedStudent?.id === app.id ? 'translate-x-0.5 text-amber-500' : ''}`} />
                     </div>
-                    <ChevronRight className={`w-4 h-4 text-gray-300 transition-transform ${selectedStudent?.id === app.id ? 'translate-x-1 text-amber-500' : ''}`} />
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -499,12 +529,32 @@ const StaffDashboard: FC = () => {
                         {selectedStudent.intakeVideoUrl && (
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Intro Video</p>
-                            <video controls className="w-full rounded-2xl border border-gray-100" src={selectedStudent.intakeVideoUrl} />
+                            <button
+                              type="button"
+                              onClick={() => void openRemoteFile(selectedStudent.intakeVideoUrl!)}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-sm text-gray-700 hover:bg-gray-100 transition-all"
+                            >
+                              ▶ Open Video
+                            </button>
                           </div>
                         )}
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Form Summary</p>
-                          <pre className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-medium whitespace-pre-wrap">{selectedStudent.intakeDetails}</pre>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Form Summary</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {selectedStudent.intakeDetails.split('\n').filter(Boolean).map((line, i) => {
+                              const colonIdx = line.indexOf(':');
+                              if (colonIdx === -1) return null;
+                              const key = line.slice(0, colonIdx).trim();
+                              const val = line.slice(colonIdx + 1).trim();
+                              if (!key) return null;
+                              return (
+                                <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">{key}</p>
+                                  <p className="text-sm font-bold text-black break-words">{val || '—'}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                         <div className="grid sm:grid-cols-2 gap-3">
                           {selectedStudent.intakePassportCopy && (
@@ -991,10 +1041,19 @@ const StaffDashboard: FC = () => {
                 
                 <div className="pt-4">
                   <button
-                    onClick={handleAddDocument}
-                    className="w-full bg-black text-white py-4 rounded-2xl font-black text-lg hover:bg-amber-500 hover:text-black transition-all shadow-xl shadow-black/5"
+                    onClick={() => void handleAddDocument()}
+                    disabled={uploadingDoc}
+                    className="w-full bg-black text-white py-4 rounded-2xl font-black text-lg hover:bg-amber-500 hover:text-black transition-all shadow-xl shadow-black/5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Upload Now
+                    {uploadingDoc ? (
+                      <>
+                        <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                        </svg>
+                        Uploading…
+                      </>
+                    ) : 'Upload Now'}
                   </button>
                 </div>
               </div>

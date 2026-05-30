@@ -432,10 +432,40 @@ Video: ${intake.videoUrl}`;
     }
   };
 
+  const thisWeekStart = new Date(); thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
   const stats = [
-    { label: 'Pending Reviews', value: pendingApplications.length, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50' },
-    { label: 'Total Applications', value: applications.filter(a => (a.source ?? 'public') === allowedSource).length, icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
-    { label: 'Successful Enrollments', value: applications.filter(a => a.status === 'approved' && (a.source ?? 'public') === allowedSource).length, icon: UserPlus, color: 'text-green-500', bg: 'bg-green-50' },
+    {
+      label: 'New This Week',
+      value: applications.filter(a => (a.source ?? 'public') === allowedSource && new Date(a.createdAt) >= thisWeekStart).length,
+      icon: Clock,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50',
+      border: 'border-amber-100',
+    },
+    {
+      label: 'Total Pipeline',
+      value: applications.filter(a => (a.source ?? 'public') === allowedSource).length,
+      icon: FileText,
+      color: 'text-blue-600',
+      bg: 'bg-blue-50',
+      border: 'border-blue-100',
+    },
+    {
+      label: 'Pending Review',
+      value: pendingApplications.length,
+      icon: Clock,
+      color: 'text-orange-600',
+      bg: 'bg-orange-50',
+      border: 'border-orange-100',
+    },
+    {
+      label: 'Approved',
+      value: applications.filter(a => a.status === 'approved' && (a.source ?? 'public') === allowedSource).length,
+      icon: UserPlus,
+      color: 'text-green-600',
+      bg: 'bg-green-50',
+      border: 'border-green-100',
+    },
   ];
 
   return (
@@ -449,6 +479,24 @@ Video: ${intake.videoUrl}`;
             {mode === 'ops' ? 'Agency Portal' : 'Sales Portal'}
           </div>
         </div>
+      </section>
+
+      {/* Quick Stats */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((s, i) => (
+          <div key={i} className={`bg-white rounded-2xl border ${s.border} p-5 flex items-center gap-4 shadow-sm`}>
+            <div className={`w-10 h-10 ${s.bg} ${s.color} rounded-xl flex items-center justify-center shrink-0`}>
+              <s.icon className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-black leading-none">{s.value}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">{s.label}</p>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="flex flex-col md:flex-row md:items-center justify-end gap-4">
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-2 bg-white border border-gray-100 px-3 py-2.5 rounded-xl">
             {[

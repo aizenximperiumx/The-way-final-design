@@ -116,7 +116,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    res.status(200).json({ signedUrl: signed.json.signedURL });
+    // Supabase returns a relative path — make it absolute
+    const rawSigned = signed.json.signedURL as string;
+    const fullSignedUrl = rawSigned.startsWith('http')
+      ? rawSigned
+      : `${base}/storage/v1${rawSigned}`;
+
+    res.status(200).json({ signedUrl: fullSignedUrl });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     res.status(500).json({ error: message });
