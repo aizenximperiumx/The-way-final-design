@@ -66,6 +66,7 @@ type AppState = {
   appointments: unknown[];
   chatMessages: unknown[];
   chatThreadReadAt: Record<string, string>;
+  documentRequests: unknown[];
 };
 
 const asRecord = (value: unknown) => (value && typeof value === 'object') ? (value as Record<string, unknown>) : null;
@@ -80,6 +81,7 @@ const asState = (value: unknown): AppState => {
     appointments: Array.isArray(v.appointments) ? v.appointments : [],
     chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
     chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? (v.chatThreadReadAt as Record<string, string>) : {},
+    documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
   };
 };
 

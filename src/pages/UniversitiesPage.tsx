@@ -1110,39 +1110,27 @@ const getHomePathForRole = (role: string) => {
 
 function SectionCard({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div
-      className="rounded-[28px] border p-6 sm:p-7"
-      style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'var(--v3-glass-border)' }}
-    >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          {icon ? (
-            <div
-              className="w-11 h-11 rounded-2xl flex items-center justify-center"
-              style={{ background: 'rgba(245,168,0,0.12)', color: 'var(--v3-yellow)' }}
-            >
-              {icon}
-            </div>
-          ) : null}
-          <h2 className="text-[18px] sm:text-[20px] font-bold tracking-tight" style={{ color: 'var(--v3-cream)' }}>
-            {title}
-          </h2>
-        </div>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+        {icon ? (
+          <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            {icon}
+          </div>
+        ) : null}
+        <h2 className="text-base font-bold text-gray-900">{title}</h2>
       </div>
-      <div className="mt-5">{children}</div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
 
 function BulletList({ items }: { items: string[] }) {
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-2.5">
       {items.map((t) => (
         <li key={t} className="flex items-start gap-3">
-          <span className="mt-2 w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--v3-yellow)' }} />
-          <span className="text-[15px] leading-relaxed" style={{ color: 'rgba(245,240,232,0.88)' }}>
-            {t}
-          </span>
+          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+          <span className="text-sm text-gray-600 leading-relaxed">{t}</span>
         </li>
       ))}
     </ul>
@@ -1152,31 +1140,31 @@ function BulletList({ items }: { items: string[] }) {
 function ProgramTable({ section }: { section: ProgramSection }) {
   const { language } = useAppStore();
   return (
-    <div className="overflow-hidden rounded-[22px] border" style={{ borderColor: 'rgba(245,168,0,0.18)' }}>
-      <div className="px-4 sm:px-5 py-3 border-b" style={{ borderColor: 'rgba(245,168,0,0.18)', background: 'rgba(245,168,0,0.10)' }}>
-        <p className="text-[12px] font-semibold" style={{ color: 'var(--v3-cream)' }}>{section.title}</p>
+    <div className="overflow-hidden rounded-xl border border-gray-100">
+      <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider">{section.title}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-right">
           <thead>
-            <tr className="border-b" style={{ borderColor: 'rgba(245,168,0,0.12)' }}>
-              <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>
-                 {language === 'ar' ? 'البرنامج' : 'Program'}
-               </th>
-               <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>
-                 {language === 'ar' ? 'المدة' : 'Duration'}
-               </th>
-               <th className="px-4 sm:px-5 py-3 text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.78)' }}>
-                 {language === 'ar' ? 'الرسوم' : 'Fee'}
-               </th>
+            <tr className="border-b border-gray-100 bg-gray-50/50">
+              <th className="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {language === 'ar' ? 'البرنامج' : 'Program'}
+              </th>
+              <th className="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {language === 'ar' ? 'المدة' : 'Duration'}
+              </th>
+              <th className="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {language === 'ar' ? 'الرسوم' : 'Fee'}
+              </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-50">
             {section.rows.map((r) => (
-              <tr key={`${section.title}-${r.program}`} className="border-b last:border-b-0" style={{ borderColor: 'rgba(245,168,0,0.08)' }}>
-                <td className="px-4 sm:px-5 py-3 text-[14px]" style={{ color: 'var(--v3-cream)' }}>{r.program}</td>
-                <td className="px-4 sm:px-5 py-3 text-[14px]" style={{ color: 'rgba(245,240,232,0.82)' }}>{r.duration ?? '-'}</td>
-                <td className="px-4 sm:px-5 py-3 text-[14px]" style={{ color: 'rgba(245,240,232,0.82)' }}>{r.fee ?? '-'}</td>
+              <tr key={`${section.title}-${r.program}`} className="hover:bg-gray-50 transition-colors">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900">{r.program}</td>
+                <td className="px-4 py-3 text-sm text-gray-500">{r.duration ?? '-'}</td>
+                <td className="px-4 py-3 text-sm text-gray-500">{r.fee ?? '-'}</td>
               </tr>
             ))}
           </tbody>
@@ -1228,89 +1216,64 @@ export default function UniversitiesPage() {
   const backHref = user ? getHomePathForRole(user.role) : '/';
 
   return (
-    <div className="v3 min-h-screen" dir={isRTL ? 'rtl' : 'ltr'} style={{ fontFamily: isRTL ? 'var(--font-arabic)' : 'var(--font-sans)' }}>
-      <header
-        className="sticky top-0 z-40 border-b"
-        style={{
-          borderColor: 'rgba(245,168,0,0.12)',
-          background: 'rgba(10,22,40,0.82)',
-          backdropFilter: 'blur(16px)',
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[74px] flex items-center justify-between">
+    <div className="min-h-screen bg-[#FAFAF9]" dir={isRTL ? 'rtl' : 'ltr'} style={{ fontFamily: isRTL ? 'var(--font-arabic)' : 'var(--font-sans)' }}>
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-3">
-              <img src={logoUrl} alt="The Way" className="h-11 w-auto object-contain" />
+            <Link to="/" className="flex items-center gap-2">
+              <img src={logoUrl} alt="The Way" className="h-9 w-auto object-contain" />
             </Link>
-            <div className="hidden sm:block">
-              <p className="text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.82)' }}>
+            <div className="hidden sm:block border-l border-gray-200 pl-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 {language === 'ar' ? 'الجامعات' : 'Universities'}
               </p>
-              <p className="text-[11px]" style={{ color: 'rgba(245,240,232,0.55)' }}>
+              <p className="text-xs text-gray-400">
                 {language === 'ar' ? 'اختر الجامعة المناسبة لك' : 'Choose the right university for you'}
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-4">
-            <Link
-              to={backHref}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[13px] font-semibold"
-              style={{ borderColor: 'rgba(245,168,0,0.18)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.03)' }}
-            >
-              {isRTL ? <ArrowLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-              {isRTL ? 'رجوع' : 'Back'}
-            </Link>
-          </div>
+          <Link
+            to={backHref}
+            className="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
+          >
+            {isRTL ? <ArrowLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            {isRTL ? 'رجوع' : 'Back'}
+          </Link>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10" id="universities-top">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8" id="universities-top">
         <AnimatePresence mode="wait">
           {!id ? (
-            <motion.div key="list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-7">
-              <div
-                className="rounded-[34px] border p-7 sm:p-9"
-                style={{
-                  borderColor: 'rgba(245,168,0,0.16)',
-                  background:
-                    'radial-gradient(circle at 20% -10%, rgba(245,168,0,0.18), transparent 55%), radial-gradient(circle at 80% 0%, rgba(245,168,0,0.10), transparent 52%), rgba(255,255,255,0.03)',
-                }}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
+            <motion.div key="list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+              {/* Page header + search */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
                   <div>
-                    <p className="text-[12px] font-semibold" style={{ color: 'rgba(245,240,232,0.72)' }}>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
                       {language === 'ar' ? 'دليل الجامعات' : 'University Guide'}
                     </p>
-                    <h1 className="mt-2 text-[28px] sm:text-[34px] font-bold tracking-tight v3-serif" style={{ color: 'var(--v3-cream)' }}>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                       {language === 'ar' ? 'جميع الجامعات' : 'All Universities'}
                     </h1>
-                    <p className="mt-2 text-[15px] leading-relaxed max-w-2xl" style={{ color: 'rgba(245,240,232,0.76)' }}>
-                      {language === 'ar' 
-                        ? 'ابحث بالاسم أو المدينة أو التخصص، ثم افتح صفحة الجامعة لرؤية التخصصات والرسوم وشروط القبول.' 
+                    <p className="mt-2 text-sm text-gray-500 max-w-xl">
+                      {language === 'ar'
+                        ? 'ابحث بالاسم أو المدينة أو التخصص، ثم افتح صفحة الجامعة لرؤية التخصصات والرسوم وشروط القبول.'
                         : 'Search by name, city or specialty, then open the university page to see specialties, fees and admission requirements.'}
                     </p>
                   </div>
-
-                  <div className="w-full sm:max-w-md">
-                    <div
-                      className="flex items-center gap-3 rounded-2xl border px-4 py-3"
-                      style={{ borderColor: 'rgba(245,168,0,0.18)', background: 'rgba(10,22,40,0.55)' }}
-                    >
-                      <Search className="w-4 h-4" style={{ color: 'rgba(245,240,232,0.72)' }} />
+                  <div className="w-full sm:max-w-xs">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder={language === 'ar' ? 'ابحث عن جامعة أو تخصص...' : 'Search for university or specialty...'}
-                        className="w-full bg-transparent outline-none text-[14px]"
-                        style={{ color: 'var(--v3-cream)' }}
+                        placeholder={language === 'ar' ? 'ابحث عن جامعة أو تخصص...' : 'Search universities...'}
+                        className="w-full pl-9 pr-9 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 outline-none bg-white"
                       />
                       {query ? (
-                        <button
-                          onClick={() => setQuery('')}
-                          className="w-8 h-8 rounded-xl border inline-flex items-center justify-center"
-                          style={{ borderColor: 'rgba(245,168,0,0.18)', color: 'rgba(245,240,232,0.82)', background: 'rgba(255,255,255,0.03)' }}
-                        >
+                        <button onClick={() => setQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                           <X className="w-4 h-4" />
                         </button>
                       ) : null}
@@ -1319,63 +1282,60 @@ export default function UniversitiesPage() {
                 </div>
               </div>
 
+              {/* University grid */}
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filtered.map((u) => (
                   <Link
                     key={u.id}
-                    className="text-right rounded-[28px] border p-6 transition-transform"
-                    style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(255,255,255,0.04)' }}
                     to={`/universities/${u.id}`}
+                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
                   >
                     {u.imageUrl ? (
-                      <div
-                        className="relative overflow-hidden rounded-[22px] border mb-5"
-                        style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(10,22,40,0.45)' }}
-                      >
-                        <img src={u.imageUrl} alt="" className="w-full h-[160px] object-cover" loading="lazy" />
-                        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,22,40,0.06) 0%, rgba(10,22,40,0.78) 100%)' }} />
-                      </div>
-                    ) : null}
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-[18px] font-bold leading-snug" style={{ color: 'var(--v3-cream)' }}>{u.name}</p>
+                      <div className="relative overflow-hidden h-44">
+                        <img src={u.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                         {u.city ? (
-                          <div className="mt-2 inline-flex items-center gap-2 text-[12px]" style={{ color: 'rgba(245,240,232,0.70)' }}>
-                            <MapPin className="w-4 h-4" />
-                            <span>{u.city}</span>
+                          <div className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-1 text-xs font-semibold text-gray-700">
+                            <MapPin className="w-3 h-3 text-amber-600" />
+                            {u.city}
                           </div>
                         ) : null}
                       </div>
-                      <div
-                        className="w-10 h-10 rounded-2xl flex items-center justify-center border"
-                        style={{ borderColor: 'rgba(245,168,0,0.18)', background: 'rgba(245,168,0,0.10)', color: 'var(--v3-yellow)' }}
-                      >
-                        <GraduationCap className="w-5 h-5" />
-                      </div>
-                    </div>
-
-                    {(u.specialties && u.specialties.length > 0) ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {u.specialties.slice(0, 4).map((s) => (
-                          <span
-                            key={`${u.id}-${s}`}
-                            className="px-3 py-1 rounded-full text-[12px] border"
-                            style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(10,22,40,0.40)', color: 'rgba(245,240,232,0.82)' }}
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
                     ) : null}
-
-                    <div className="mt-5 flex items-center justify-between">
-                      <span className="text-[12px]" style={{ color: 'rgba(245,240,232,0.62)' }}>
-                        {language === 'ar' ? 'اضغط لعرض التفاصيل' : 'Click to view details'}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold" style={{ color: 'var(--v3-yellow)' }}>
-                        {language === 'ar' ? <ChevronLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4 rotate-180" />}
-                        {language === 'ar' ? 'عرض' : 'View'}
-                      </span>
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <h2 className="font-bold text-gray-900 leading-snug text-[15px]">{u.name}</h2>
+                        <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center shrink-0 text-amber-600">
+                          <GraduationCap className="w-4 h-4" />
+                        </div>
+                      </div>
+                      {!u.imageUrl && u.city ? (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
+                          <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                          {u.city}
+                        </div>
+                      ) : null}
+                      {u.specialties && u.specialties.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 mb-4">
+                          {u.specialties.slice(0, 3).map((s) => (
+                            <span key={`${u.id}-${s}`} className="px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200">
+                              {s}
+                            </span>
+                          ))}
+                          {u.specialties.length > 3 ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400 border border-gray-200">
+                              +{u.specialties.length - 3}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                        <span className="text-xs text-gray-400">{language === 'ar' ? 'اضغط لعرض التفاصيل' : 'View details'}</span>
+                        <span className="text-xs font-semibold text-amber-600 flex items-center gap-1">
+                          {language === 'ar' ? 'عرض' : 'View'}
+                          <ChevronLeft className={`w-3.5 h-3.5 ${isRTL ? 'rotate-180' : ''}`} />
+                        </span>
+                      </div>
                     </div>
                   </Link>
                 ))}
@@ -1383,76 +1343,69 @@ export default function UniversitiesPage() {
             </motion.div>
           ) : active ? (
             <motion.div key={active.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-              <div
-                className="relative overflow-hidden rounded-[34px] border p-7 sm:p-9"
-                style={{
-                  borderColor: 'rgba(245,168,0,0.18)',
-                  background:
-                    'radial-gradient(circle at 15% 0%, rgba(245,168,0,0.18), transparent 55%), radial-gradient(circle at 88% 10%, rgba(245,168,0,0.10), transparent 52%), rgba(255,255,255,0.03)',
-                }}
-              >
+              {/* University hero card */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 {active.imageUrl ? (
-                  <>
-                    <img src={active.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" loading="lazy" />
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        backgroundImage:
-                          'repeating-linear-gradient(0deg, transparent, transparent 44px, rgba(245,168,0,0.04) 44px, rgba(245,168,0,0.04) 45px), repeating-linear-gradient(90deg, transparent, transparent 44px, rgba(245,168,0,0.04) 44px, rgba(245,168,0,0.04) 45px)',
-                      }}
-                    />
-                    <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,22,40,0.25) 0%, rgba(10,22,40,0.92) 100%)' }} />
-                  </>
+                  <div className="relative h-52 sm:h-64">
+                    <img src={active.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                    <div className="absolute bottom-5 left-6 right-6 flex items-end justify-between gap-4">
+                      <div>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">{active.name}</h1>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {active.city ? (
+                            <span className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-semibold text-white">
+                              <MapPin className="w-3.5 h-3.5" />
+                              {active.city}
+                            </span>
+                          ) : null}
+                          {active.website ? (
+                            <a
+                              href={active.website}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-semibold text-white hover:bg-white/30 transition-colors"
+                            >
+                              <Globe className="w-3.5 h-3.5" />
+                              {language === 'ar' ? 'الموقع الرسمي' : 'Official Website'}
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ) : null}
-                <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
+                <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
+                    {!active.imageUrl ? (
+                      <>
+                        <h1 className="text-2xl font-bold text-gray-900">{active.name}</h1>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {active.city ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                              <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                              {active.city}
+                            </span>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : null}
+                    {active.address ? (
+                      <p className="text-xs text-gray-500 mt-1">{active.address}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Link
                       to="/universities"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[13px] font-semibold"
-                      style={{ borderColor: 'rgba(245,168,0,0.18)', color: 'var(--v3-cream)', background: 'rgba(255,255,255,0.03)' }}
+                      className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors inline-flex items-center gap-2"
                     >
                       {isRTL ? <ChevronLeft className="w-4 h-4 rotate-180" /> : <ChevronLeft className="w-4 h-4" />}
                       {isRTL ? 'كل الجامعات' : 'All Universities'}
                     </Link>
-                    <h1 className="mt-4 text-[28px] sm:text-[36px] font-bold tracking-tight v3-serif" style={{ color: 'var(--v3-cream)' }}>
-                      {active.name}
-                    </h1>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {active.city ? (
-                        <span
-                          className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[12px] border"
-                          style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(10,22,40,0.40)', color: 'rgba(245,240,232,0.82)' }}
-                        >
-                          <MapPin className="w-4 h-4" />
-                          {active.city}
-                        </span>
-                      ) : null}
-                      {active.website ? (
-                        <a
-                          href={active.website}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[12px] border"
-                          style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(10,22,40,0.40)', color: 'rgba(245,240,232,0.82)' }}
-                        >
-                          <Globe className="w-4 h-4" />
-                          {language === 'ar' ? 'الموقع الرسمي' : 'Official Website'}
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      ) : null}
-                    </div>
-                    {active.address ? (
-                      <p className="mt-4 text-[14px] leading-relaxed" style={{ color: 'rgba(245,240,232,0.70)' }}>
-                        {active.address}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-col gap-2 w-full sm:w-auto">
                     <Link
                       to="/"
-                      className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-[14px] font-semibold"
-                      style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}
+                      className="bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors inline-flex items-center gap-2"
                     >
                       {language === 'ar' ? 'التقديم الآن' : 'Apply Now'}
                       <ExternalLink className="w-4 h-4" />
@@ -1461,20 +1414,18 @@ export default function UniversitiesPage() {
                 </div>
               </div>
 
-              <div className="grid lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-8 space-y-6">
-                  <SectionCard title={language === 'ar' ? "نبذة عن الجامعة" : "About University"} icon={<GraduationCap className="w-5 h-5" />}>
+              <div className="grid lg:grid-cols-12 gap-5">
+                <div className="lg:col-span-8 space-y-5">
+                  <SectionCard title={language === 'ar' ? "نبذة عن الجامعة" : "About University"} icon={<GraduationCap className="w-4 h-4" />}>
                     <div className="space-y-3">
                       {active.description.map((p) => (
-                        <p key={p} className="text-[15px] leading-relaxed" style={{ color: 'rgba(245,240,232,0.84)' }}>
-                          {p}
-                        </p>
+                        <p key={p} className="text-sm text-gray-600 leading-relaxed">{p}</p>
                       ))}
                     </div>
                   </SectionCard>
 
                   {active.programSections && active.programSections.length > 0 ? (
-                    <SectionCard title={language === 'ar' ? "البرامج الدراسية والرسوم" : "Programs & Fees"} icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "البرامج الدراسية والرسوم" : "Programs & Fees"} icon={<Globe className="w-4 h-4" />}>
                       <div className="space-y-4">
                         {active.programSections.map((s) => (
                           <ProgramTable key={`${active.id}-${s.title}`} section={s} />
@@ -1484,16 +1435,12 @@ export default function UniversitiesPage() {
                   ) : null}
 
                   {active.faq && active.faq.length > 0 ? (
-                    <SectionCard title={language === 'ar' ? "الأسئلة الشائعة" : "FAQ"} icon={<Globe className="w-5 h-5" />}>
-                      <div className="space-y-4">
+                    <SectionCard title={language === 'ar' ? "الأسئلة الشائعة" : "FAQ"} icon={<CheckCircle2 className="w-4 h-4" />}>
+                      <div className="space-y-3">
                         {active.faq.map((f) => (
-                          <div
-                            key={`${active.id}-${f.q}`}
-                            className="rounded-[22px] border p-5"
-                            style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(10,22,40,0.40)' }}
-                          >
-                            <p className="text-[14px] font-semibold" style={{ color: 'var(--v3-cream)' }}>{f.q}</p>
-                            <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'rgba(245,240,232,0.80)' }}>{f.a}</p>
+                          <div key={`${active.id}-${f.q}`} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <p className="text-sm font-semibold text-gray-900 mb-1">{f.q}</p>
+                            <p className="text-sm text-gray-600 leading-relaxed">{f.a}</p>
                           </div>
                         ))}
                       </div>
@@ -1501,16 +1448,12 @@ export default function UniversitiesPage() {
                   ) : null}
                 </div>
 
-                <div className="lg:col-span-4 space-y-6">
+                <div className="lg:col-span-4 space-y-5">
                   {active.specialties && active.specialties.length > 0 ? (
-                    <SectionCard title={language === 'ar' ? "التخصصات" : "Specialties"} icon={<GraduationCap className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "التخصصات" : "Specialties"} icon={<GraduationCap className="w-4 h-4" />}>
                       <div className="flex flex-wrap gap-2">
                         {active.specialties.map((s) => (
-                          <span
-                            key={`${active.id}-spec-${s}`}
-                            className="px-3 py-1 rounded-full text-[12px] border"
-                            style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(10,22,40,0.40)', color: 'rgba(245,240,232,0.86)' }}
-                          >
+                          <span key={`${active.id}-spec-${s}`} className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100">
                             {s}
                           </span>
                         ))}
@@ -1519,26 +1462,33 @@ export default function UniversitiesPage() {
                   ) : null}
 
                   {active.advantages && active.advantages.length > 0 ? (
-                    <SectionCard title={language === 'ar' ? "مميزات الدراسة" : "Study Advantages"} icon={<CheckCircle2 className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "مميزات الدراسة" : "Study Advantages"} icon={<CheckCircle2 className="w-4 h-4" />}>
                       <BulletList items={active.advantages} />
                     </SectionCard>
                   ) : null}
 
                   {active.admissionRequirements && active.admissionRequirements.length > 0 ? (
-                    <SectionCard title={language === 'ar' ? "شروط القبول" : "Admission Requirements"} icon={<CheckCircle2 className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "شروط القبول" : "Admission Requirements"} icon={<CheckCircle2 className="w-4 h-4" />}>
                       <BulletList items={active.admissionRequirements} />
                     </SectionCard>
                   ) : null}
 
                   {active.whyTheWay && active.whyTheWay.length > 0 ? (
-                    <SectionCard title={language === 'ar' ? "لماذا تختار The Way؟" : "Why Choose The Way?"} icon={<Globe className="w-5 h-5" />}>
+                    <SectionCard title={language === 'ar' ? "لماذا تختار The Way؟" : "Why Choose The Way?"} icon={<Globe className="w-4 h-4" />}>
                       <BulletList items={active.whyTheWay} />
                     </SectionCard>
                   ) : null}
 
                   {active.registrationSteps && active.registrationSteps.length > 0 ? (
-                    <SectionCard title={language === 'ar' ? "خطوات التسجيل" : "Registration Steps"} icon={<Globe className="w-5 h-5" />}>
-                      <BulletList items={active.registrationSteps} />
+                    <SectionCard title={language === 'ar' ? "خطوات التسجيل" : "Registration Steps"} icon={<Globe className="w-4 h-4" />}>
+                      <ol className="space-y-2.5">
+                        {active.registrationSteps.map((s, i) => (
+                          <li key={s} className="flex items-start gap-3">
+                            <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                            <span className="text-sm text-gray-600 leading-relaxed">{s}</span>
+                          </li>
+                        ))}
+                      </ol>
                     </SectionCard>
                   ) : null}
                 </div>
@@ -1546,21 +1496,17 @@ export default function UniversitiesPage() {
             </motion.div>
           ) : (
             <motion.div key="missing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <div
-                className="rounded-[34px] border p-8"
-                style={{ borderColor: 'rgba(245,168,0,0.16)', background: 'rgba(255,255,255,0.04)' }}
-              >
-                <p className="text-[16px] font-semibold" style={{ color: 'var(--v3-cream)' }}>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+                <p className="text-base font-semibold text-gray-900">
                   {language === 'ar' ? 'هذه الجامعة غير موجودة.' : 'This university does not exist.'}
                 </p>
-                <p className="mt-2 text-[14px]" style={{ color: 'rgba(245,240,232,0.72)' }}>
+                <p className="mt-2 text-sm text-gray-500">
                   {language === 'ar' ? 'الرجاء الرجوع إلى صفحة جميع الجامعات.' : 'Please return to the All Universities page.'}
                 </p>
                 <div className="mt-6">
                   <Link
                     to="/universities"
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-[14px] font-semibold"
-                    style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}
+                    className="inline-flex items-center gap-2 bg-amber-600 text-white rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-amber-700 transition-colors"
                   >
                     العودة لجميع الجامعات
                     <ChevronLeft className="w-4 h-4" />

@@ -62,6 +62,7 @@ type AppState = {
   appointments: unknown[];
   chatMessages: unknown[];
   chatThreadReadAt: Record<string, string>;
+  documentRequests: unknown[];
 };
 
 const asState = (value: unknown): AppState => {
@@ -73,6 +74,7 @@ const asState = (value: unknown): AppState => {
     appointments: Array.isArray(v.appointments) ? v.appointments : [],
     chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
     chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? (v.chatThreadReadAt as Record<string, string>) : {},
+    documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
   };
 };
 
@@ -161,6 +163,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         appointments: incoming.appointments.slice(0, 50_000),
         chatMessages: incoming.chatMessages.slice(0, 200_000),
         chatThreadReadAt: incoming.chatThreadReadAt || {},
+        documentRequests: incoming.documentRequests.slice(0, 50_000),
       };
     } else if (role === 'student') {
       const allowedThread = (key: string) =>

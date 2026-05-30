@@ -8,7 +8,9 @@ import {
   UserCircle,
   Send,
   Plus,
-  X
+  X,
+  CheckCircle2,
+  Info
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
@@ -336,38 +338,56 @@ const Messages: React.FC = () => {
     return [];
   }, [user, users, searchTerm]);
 
+  const getNotifIcon = (type: string) => {
+    if (type === 'alert') return <AlertCircle className="w-5 h-5" />;
+    if (type === 'success') return <CheckCircle2 className="w-5 h-5" />;
+    return <Info className="w-5 h-5" />;
+  };
+
+  const getNotifIconClass = (type: string) => {
+    if (type === 'alert') return 'bg-red-50 text-red-500';
+    if (type === 'success') return 'bg-green-50 text-green-500';
+    return 'bg-blue-50 text-blue-500';
+  };
+
+  const getInitials = (name: string) =>
+    name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+
   return (
-    <div className="space-y-6 sm:space-y-8 pb-12">
-      <section className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div className="space-y-6 pb-12 bg-[#FAFAF9] min-h-screen">
+      {/* Header */}
+      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-black tracking-tight">Communication Hub</h1>
-          <p className="text-gray-500 font-medium">Manage notifications and direct messages.</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Communication Hub</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Manage notifications and direct messages.</p>
         </div>
-        <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-gray-100 shadow-sm">
+
+        {/* Tab Bar */}
+        <div className="flex items-center gap-1 bg-white border border-gray-100 rounded-xl p-1 shadow-sm w-fit">
           <button
             onClick={() => setActiveTab('notifications')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
               activeTab === 'notifications'
-                ? 'bg-black text-white shadow-lg'
+                ? 'bg-amber-600 text-white shadow-sm'
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
             <Bell className="w-4 h-4" />
             Notifications
             {myNotifications.filter(n => !n.read).length > 0 && (
-              <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+              <span className="w-2 h-2 bg-amber-400 rounded-full inline-block" />
             )}
           </button>
           <button
             onClick={() => setActiveTab('chat')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
               activeTab === 'chat'
-                ? 'bg-black text-white shadow-lg'
+                ? 'bg-amber-600 text-white shadow-sm'
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            Direct Chat
+            Chat
           </button>
         </div>
       </section>
@@ -376,16 +396,17 @@ const Messages: React.FC = () => {
         {activeTab === 'notifications' ? (
           <motion.div
             key="notifications"
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="tw-card overflow-hidden"
+            exit={{ opacity: 0, y: -16 }}
+            className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden"
           >
-            <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-              <h2 className="text-xl font-black text-black">System Notifications</h2>
+            {/* Notifications Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">System Notifications</h2>
               <button
                 onClick={handleMarkAllRead}
-                className="text-[10px] font-black text-amber-600 bg-amber-50 px-3 py-1 rounded-lg uppercase tracking-widest hover:bg-amber-100 transition-all"
+                className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors"
               >
                 Mark all as read
               </button>
@@ -393,32 +414,35 @@ const Messages: React.FC = () => {
 
             <div className="divide-y divide-gray-50">
               {myNotifications.length === 0 ? (
-                <div className="p-20 text-center">
-                  <div className="w-20 h-20 bg-gray-50 rounded-[32px] flex items-center justify-center mx-auto mb-6 text-gray-200">
-                    <Bell className="w-10 h-10" />
+                <div className="py-20 text-center">
+                  <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Bell className="w-7 h-7 text-gray-300" />
                   </div>
-                  <h3 className="text-xl font-black text-black mb-2">Inbox is empty</h3>
-                  <p className="text-gray-400 font-medium">You're all caught up! New updates will appear here.</p>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Inbox is empty</h3>
+                  <p className="text-sm text-gray-400">You're all caught up. New updates will appear here.</p>
                 </div>
               ) : (
                 myNotifications.map((notif, idx) => (
-                  <div key={idx} className={`p-8 hover:bg-gray-50/50 transition-colors group flex items-start gap-6 ${!notif.read ? 'bg-amber-50/20' : ''}`}>
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                      notif.type === 'alert' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
-                      {notif.type === 'alert' ? <AlertCircle className="w-6 h-6" /> : <Bell className="w-6 h-6" />}
+                  <div
+                    key={idx}
+                    className={`flex items-start gap-4 px-6 py-4 hover:bg-gray-50 transition-colors ${
+                      !notif.read ? 'border-l-2 border-amber-400 bg-amber-50/30' : ''
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${getNotifIconClass(notif.type)}`}>
+                      {getNotifIcon(notif.type)}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="text-lg font-black text-black">{notif.title}</h3>
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{notif.time}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <h3 className="text-sm font-semibold text-gray-900 truncate">{notif.title}</h3>
+                        <span className="text-xs text-gray-400 shrink-0">{notif.time}</span>
                       </div>
-                      <p className="text-gray-500 font-medium leading-relaxed">{notif.message}</p>
+                      <p className="text-sm text-gray-500 leading-relaxed">{notif.message}</p>
                     </div>
                     {!notif.read && (
                       <button
                         onClick={() => handleDismissNotification(notif.id)}
-                        className="p-2 text-gray-300 hover:text-amber-600 transition-colors"
+                        className="p-1.5 text-gray-300 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100 shrink-0"
                         title="Mark as read"
                       >
                         <X className="w-4 h-4" />
@@ -432,53 +456,58 @@ const Messages: React.FC = () => {
         ) : (
           <motion.div
             key="chat"
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="lg:grid lg:grid-cols-3 gap-6 lg:gap-8 min-h-[60vh] lg:h-[700px]"
+            exit={{ opacity: 0, y: -16 }}
+            className="flex gap-0 min-h-[60vh] lg:h-[700px] bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden"
           >
-            {/* Chat List */}
-            <div className={`lg:col-span-1 tw-card overflow-hidden flex flex-col ${activeThread ? 'hidden lg:flex' : 'flex'}`}>
-              <div className="p-6 border-b border-gray-50 space-y-4">
+            {/* Thread List — 280px left panel */}
+            <div
+              className={`w-full lg:w-[280px] lg:min-w-[280px] border-r border-gray-100 flex flex-col bg-white ${
+                activeThread ? 'hidden lg:flex' : 'flex'
+              }`}
+            >
+              {/* Panel Header */}
+              <div className="px-4 py-3 border-b border-gray-100 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-black text-black">Messages</h2>
+                  <h2 className="text-sm font-semibold text-gray-900">Messages</h2>
                   <div className="relative" ref={newChatRef}>
                     <button
                       onClick={() => { setShowNewChat(v => !v); setNewChatSearch(''); }}
-                      className="p-2 bg-amber-500 text-black rounded-xl hover:shadow-lg transition-all"
+                      className="w-7 h-7 bg-amber-600 text-white rounded-lg flex items-center justify-center hover:bg-amber-700 transition-colors"
                       title="New conversation"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus className="w-3.5 h-3.5" />
                     </button>
                     {showNewChat && (
-                      <div className="absolute right-0 top-11 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 w-72 overflow-hidden">
-                        <div className="p-3 border-b border-gray-50">
+                      <div className="absolute right-0 top-9 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 w-72 overflow-hidden">
+                        <div className="p-3 border-b border-gray-100">
                           <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                             <input
                               autoFocus
                               type="text"
                               placeholder="Search contacts..."
                               value={newChatSearch}
                               onChange={e => setNewChatSearch(e.target.value)}
-                              className="w-full pl-9 pr-4 py-2 bg-gray-50 rounded-xl text-sm font-medium outline-none border-none"
+                              className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                             />
                           </div>
                         </div>
-                        <div className="max-h-64 overflow-y-auto">
+                        <div className="max-h-60 overflow-y-auto">
                           {contactOptions.length === 0 ? (
-                            <div className="p-4 text-center text-gray-400 text-sm font-medium">No contacts found</div>
+                            <div className="px-4 py-6 text-center text-sm text-gray-400">No contacts found</div>
                           ) : (
                             contactOptions.map((c, i) => (
                               <button
                                 key={i}
                                 onClick={() => handleStartChat(c)}
-                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors text-left"
                               >
-                                <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
-                                  <UserCircle className="w-5 h-5" />
+                                <div className="w-8 h-8 bg-gray-100 text-gray-600 rounded-xl flex items-center justify-center text-xs font-semibold shrink-0">
+                                  {c.name.substring(0, 2).toUpperCase()}
                                 </div>
-                                <span className="text-sm font-bold text-black truncate">{c.name}</span>
+                                <span className="text-sm font-medium text-gray-700 truncate">{c.name}</span>
                               </button>
                             ))
                           )}
@@ -488,68 +517,77 @@ const Messages: React.FC = () => {
                   </div>
                 </div>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder={user?.role === 'staff' ? 'Search students by name...' : 'Search conversations...'}
+                    placeholder={user?.role === 'staff' ? 'Search students...' : 'Search conversations...'}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
+                    className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                   />
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto divide-y divide-gray-50 custom-scrollbar">
-                {displayThreads.map((chat) => (
-                  <div
-                    key={chat.key}
-                    onClick={() => {
-                      setSelectedThreadKey(chat.key);
-                      if (chat.key !== virtualThread?.key) setVirtualThread(null);
-                      if (user) markChatThreadRead(chat.key);
-                      setActiveTab('chat');
-                    }}
-                    className={`p-6 hover:bg-gray-50 cursor-pointer transition-all relative group ${
-                      effectiveSelectedThreadKey === chat.key ? 'bg-amber-50/50' : ''
-                    }`}
-                  >
-                    {effectiveSelectedThreadKey === chat.key && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
-                    )}
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-amber-500 group-hover:text-black transition-colors">
-                        <UserCircle className="w-7 h-7" />
+              {/* Thread List */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {displayThreads.map((chat) => {
+                  const isActive = effectiveSelectedThreadKey === chat.key;
+                  return (
+                    <div
+                      key={chat.key}
+                      onClick={() => {
+                        setSelectedThreadKey(chat.key);
+                        if (chat.key !== virtualThread?.key) setVirtualThread(null);
+                        if (user) markChatThreadRead(chat.key);
+                        setActiveTab('chat');
+                      }}
+                      className={`py-3 px-4 cursor-pointer transition-colors relative flex items-center gap-3 ${
+                        isActive
+                          ? 'bg-amber-50 border-l-2 border-amber-500'
+                          : 'hover:bg-gray-50 border-l-2 border-transparent'
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-600 font-semibold flex items-center justify-center text-sm shrink-0">
+                        {getInitials(chat.name)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <h3 className="font-bold text-black truncate">{chat.name}</h3>
-                          <span className="text-[10px] text-gray-400 font-bold">{chat.time ? new Date(chat.time).toLocaleString() : ''}</span>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className={`text-sm font-semibold truncate ${isActive ? 'text-amber-800' : 'text-gray-900'}`}>
+                            {chat.name}
+                          </span>
+                          <span className="text-[11px] text-gray-400 shrink-0 ml-1">
+                            {chat.time ? new Date(chat.time).toLocaleDateString() : ''}
+                          </span>
                         </div>
-                        <p className="text-xs text-gray-400 font-medium truncate">{chat.lastMessage}</p>
+                        <p className="text-xs text-gray-400 truncate">{chat.lastMessage || 'No messages yet'}</p>
                       </div>
                       {chat.unread > 0 && (
-                        <span className="w-2 h-2 bg-amber-500 rounded-full shadow-lg shadow-amber-500/20"></span>
+                        <span className="w-2 h-2 bg-amber-500 rounded-full shrink-0" />
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {displayThreads.length === 0 && (
-                  <div className="p-8 text-center text-gray-400 font-medium">
-                    No conversations yet.{' '}
-                    <span
-                      className="font-black text-amber-500 cursor-pointer hover:underline"
-                      onClick={() => setShowNewChat(true)}
-                    >
-                      Start one
-                    </span>.
+                  <div className="px-4 py-10 text-center">
+                    <p className="text-sm text-gray-400">
+                      No conversations yet.{' '}
+                      <span
+                        className="font-semibold text-amber-600 cursor-pointer hover:underline"
+                        onClick={() => setShowNewChat(true)}
+                      >
+                        Start one
+                      </span>.
+                    </p>
                   </div>
                 )}
               </div>
 
-              {user?.role === 'ceo' && (
-                <div className="p-6 border-t border-gray-50">
-                  <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">Suggested Contacts</p>
-                  <div className="grid grid-cols-2 gap-3">
+              {/* CEO Suggested Contacts */}
+              {user?.role === 'ceo' && suggestedContacts.length > 0 && (
+                <div className="px-4 py-3 border-t border-gray-100">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Suggested</p>
+                  <div className="space-y-1">
                     {suggestedContacts.map(c => (
                       <button
                         key={c.key}
@@ -558,8 +596,10 @@ const Messages: React.FC = () => {
                           if (user) markChatThreadRead(c.key);
                           setActiveTab('chat');
                         }}
-                        className={`px-3 py-2 rounded-xl text-sm font-bold border ${
-                          effectiveSelectedThreadKey === c.key ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-white border-gray-100 text-gray-600 hover:bg-gray-50'
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                          effectiveSelectedThreadKey === c.key
+                            ? 'bg-amber-50 border-amber-200 text-amber-700'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                         }`}
                       >
                         {c.name}
@@ -570,38 +610,51 @@ const Messages: React.FC = () => {
               )}
             </div>
 
-            {/* Chat Window */}
-            <div className={`lg:col-span-2 tw-card overflow-hidden flex flex-col ${activeThread ? 'flex' : 'hidden lg:flex'}`}>
+            {/* Chat Window — right panel */}
+            <div className={`flex-1 flex flex-col bg-[#FAFAF9] ${activeThread ? 'flex' : 'hidden lg:flex'}`}>
               {activeThread ? (
                 <>
-                  <div className="p-6 border-b border-gray-50 flex items-center gap-4">
+                  {/* Chat Header */}
+                  <div className="px-5 py-3 border-b border-gray-100 bg-white flex items-center gap-3">
                     <button
                       onClick={() => { setSelectedThreadKey(null); setVirtualThread(null); }}
-                      className="lg:hidden p-2 rounded-xl hover:bg-gray-100 text-gray-500"
+                      className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
                       aria-label="Back"
                     >
-                      <ArrowLeft className="w-5 h-5" />
+                      <ArrowLeft className="w-4 h-4" />
                     </button>
-                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
-                      <UserCircle className="w-6 h-6" />
+                    <div className="w-9 h-9 bg-gray-100 text-gray-600 rounded-xl flex items-center justify-center text-sm font-semibold">
+                      {getInitials(activeThread.name)}
                     </div>
                     <div>
-                      <h3 className="font-black text-black">{activeThread.name}</h3>
-                      <p className="text-[10px] font-black text-green-500 uppercase tracking-widest">Active Now</p>
+                      <h3 className="text-sm font-semibold text-gray-900">{activeThread.name}</h3>
+                      <p className="text-xs text-green-500 font-medium">Active Now</p>
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 custom-scrollbar bg-gray-50/30">
+                  {/* Messages Area */}
+                  <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 custom-scrollbar">
                     {currentThread.length === 0 ? (
-                      <div className="text-center text-gray-400 font-medium">No messages yet. Say hello!</div>
+                      <div className="text-center py-16">
+                        <MessageSquare className="w-8 h-8 text-gray-200 mx-auto mb-3" />
+                        <p className="text-sm text-gray-400">No messages yet. Say hello!</p>
+                      </div>
                     ) : (
                       currentThread.map((m) => {
                         const isMine = m.userId === user?.id;
                         return (
                           <div key={m.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`${isMine ? 'bg-black text-white rounded-2xl rounded-tr-none' : 'bg-white border border-gray-100 rounded-2xl rounded-tl-none'} p-4 max-w-[80%] shadow-sm`}>
-                              <p className={`text-sm font-medium ${isMine ? '' : 'text-gray-700'} leading-relaxed`}>{m.text}</p>
-                              <p className={`text-[10px] font-bold mt-2 ${isMine ? 'text-white/40' : 'text-gray-400'}`}>{new Date(m.time).toLocaleString()}</p>
+                            <div
+                              className={`px-4 py-3 max-w-[75%] shadow-sm ${
+                                isMine
+                                  ? 'bg-amber-600 text-white rounded-2xl rounded-br-sm'
+                                  : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm'
+                              }`}
+                            >
+                              <p className="text-sm leading-relaxed">{m.text}</p>
+                              <p className={`text-[11px] mt-1.5 ${isMine ? 'text-amber-200' : 'text-gray-400'}`}>
+                                {new Date(m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
                             </div>
                           </div>
                         );
@@ -609,19 +662,20 @@ const Messages: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="p-4 sm:p-6 bg-white border-t border-gray-50 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                    <div className="relative">
+                  {/* Message Input */}
+                  <div className="px-5 py-4 bg-white border-t border-gray-100 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                    <div className="flex items-center gap-2">
                       <input
                         type="text"
                         placeholder="Type a message..."
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        className="w-full pl-6 pr-14 py-4 bg-gray-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
+                        className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                       />
                       <button
                         onClick={handleSendMessage}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all shadow-lg shadow-black/5"
+                        className="w-10 h-10 bg-amber-600 text-white rounded-lg flex items-center justify-center hover:bg-amber-700 transition-colors shrink-0"
                       >
                         <Send className="w-4 h-4" />
                       </button>
@@ -629,13 +683,13 @@ const Messages: React.FC = () => {
                   </div>
                 </>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-12">
-                  <div className="w-24 h-24 bg-gray-50 rounded-[40px] flex items-center justify-center mb-8 text-gray-200">
-                    <MessageSquare className="w-12 h-12" />
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+                  <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
+                    <MessageSquare className="w-7 h-7 text-gray-300" />
                   </div>
-                  <h3 className="text-2xl font-black text-black mb-4">Start a conversation</h3>
-                  <p className="text-gray-400 font-medium max-w-xs mx-auto">
-                    Choose a contact on the left to begin chatting with our team.
+                  <h3 className="text-base font-semibold text-gray-900 mb-1">Select a conversation</h3>
+                  <p className="text-sm text-gray-400 max-w-xs">
+                    Choose a thread from the left to start chatting.
                   </p>
                 </div>
               )}

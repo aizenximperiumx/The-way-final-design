@@ -26,7 +26,7 @@ import { getSupabase } from '../lib/supabase';
 import { openStorageUrl } from '../lib/storage';
 
 const StaffDashboard: FC = () => {
-  const { applications, documents, users, staffUploadDocument, staffAddInternalNote, staffUpdateStudentProfile, staffVerifyDocument, assignUniversity } = useAppStore();
+  const { applications, documents, users, staffUploadDocument, staffAddInternalNote, staffUpdateStudentProfile, staffVerifyDocument, assignUniversity, staffRequestDocument } = useAppStore();
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,6 +34,8 @@ const StaffDashboard: FC = () => {
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [newDocument, setNewDocument] = useState<{ title: string; type: string; file?: string; fileObject?: File }>({ title: '', type: '' });
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestDoc, setRequestDoc] = useState({ title: '', description: '' });
   const [noteText, setNoteText] = useState('');
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
@@ -233,75 +235,90 @@ const StaffDashboard: FC = () => {
   ];
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 pb-12 bg-[#FAFAF9]">
       {/* Header */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-black tracking-tight">Student Operations</h1>
-          <p className="text-gray-500 font-medium">Manage student records, documents, and progress.</p>
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
-            Staff Portal
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Student Operations</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Manage student records, documents, and progress.</p>
         </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 self-start md:self-auto">
+          Staff Portal
+        </span>
       </section>
 
       {/* Stats Grid */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <section className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {stats.map((stat, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm">
-            <div className={`w-10 h-10 ${stat.bg} ${stat.color} rounded-xl flex items-center justify-center mb-4`}>
-              <stat.icon className="w-5 h-5" />
+          <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+            <div className={`w-9 h-9 ${stat.bg} ${stat.color} rounded-lg flex items-center justify-center mb-3`}>
+              <stat.icon className="w-4 h-4" />
             </div>
-            <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">{stat.label}</p>
-            <p className="text-2xl font-black text-black">{stat.value}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-0.5">{stat.label}</p>
+            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
           </div>
         ))}
       </section>
 
-      <div className="grid lg:grid-cols-3 gap-8">
+      <div className="grid lg:grid-cols-3 gap-6">
         {/* Left: Student List */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white rounded-[36px] border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)] overflow-hidden flex flex-col h-[60vh] lg:h-[700px]">
-            <div className="p-6 border-b border-gray-50 space-y-4">
-              <h2 className="text-xl font-black text-black">Students</h2>
-              {(currentUser?.role === 'staff' || currentUser?.role === 'agency_staff') && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">My Points</span>
-                  <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black">{currentUser.points ?? 0}</span>
-                </div>
-              )}
-              <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 -mx-6 px-6 py-4 border-b border-gray-100">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Filter:</span>
-                  <button onClick={() => setFilter('all')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'all' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>All ({filterCounts.all})</button>
-                  <button onClick={() => setFilter('processing')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'processing' ? 'bg-black text-white' : 'bg-purple-100 text-purple-700'}`}>Processing ({filterCounts.processing})</button>
-                  <button onClick={() => setFilter('enrolled')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'enrolled' ? 'bg-black text-white' : 'bg-green-100 text-green-700'}`}>Enrolled ({filterCounts.enrolled})</button>
-                  <button onClick={() => setFilter('closed')} className={`px-3 py-1 rounded-xl text-xs font-bold ${filter === 'closed' ? 'bg-black text-white' : 'bg-blue-100 text-blue-700'}`}>Closed ({filterCounts.closed})</button>
-                </div>
+        <div className="lg:col-span-1">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[60vh] lg:h-[720px]">
+            {/* List header */}
+            <div className="px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-gray-900">Students</h2>
+                {(currentUser?.role === 'staff' || currentUser?.role === 'agency_staff') && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500 font-semibold">Points:</span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">{currentUser.points ?? 0}</span>
+                  </div>
+                )}
               </div>
+              {/* Filter tabs */}
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {(['all', 'processing', 'enrolled', 'closed'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                      filter === f
+                        ? 'bg-amber-600 text-white'
+                        : f === 'processing' ? 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                        : f === 'enrolled' ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                        : f === 'closed' ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {f.charAt(0).toUpperCase() + f.slice(1)} ({filterCounts[f]})
+                  </button>
+                ))}
+              </div>
+              {/* Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search students..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
+                  className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                 />
               </div>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto divide-y divide-gray-50 custom-scrollbar">
               {filteredStudents.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-                  <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Users className="w-7 h-7 text-gray-200" />
+                  <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Users className="w-6 h-6 text-gray-300" />
                   </div>
-                  <p className="font-bold text-gray-500 text-sm">No students yet</p>
+                  <p className="font-semibold text-gray-500 text-sm">No students yet</p>
                   <p className="text-xs text-gray-400 mt-1 max-w-[180px]">Approve an application from the Sales tab to see students here.</p>
                 </div>
               ) : filteredStudents.map((app) => {
                 const docStatus = studentDocStatus(app.studentId);
+                const isSelected = selectedStudent?.id === app.id;
                 return (
                   <div
                     key={app.id}
@@ -317,36 +334,31 @@ const StaffDashboard: FC = () => {
                       setVisaExpiry(stu?.visaExpiry ?? '');
                       setResidenceExpiry(stu?.residenceExpiry ?? '');
                     }}
-                    className={`p-5 hover:bg-gray-50/70 cursor-pointer transition-all relative group ${
-                      selectedStudent?.id === app.id ? 'bg-amber-50/50' : ''
-                    }`}
+                    className={`px-4 py-3 cursor-pointer transition-colors relative ${isSelected ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
                   >
-                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-r transition-all ${
-                      selectedStudent?.id === app.id ? 'bg-amber-500' : statusBarClass(docStatus)
-                    }`} />
+                    {/* Left color bar */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${isSelected ? 'bg-amber-500' : statusBarClass(docStatus)}`} />
                     <div className="flex items-center gap-3 pl-1">
-                      <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-500 font-bold group-hover:bg-amber-500 group-hover:text-black transition-colors shrink-0">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${isSelected ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
                         {app.name.charAt(0)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-black truncate text-sm">{app.name}</h3>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                            app.stage === 'enrolled' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                          }`}>
+                        <p className="font-semibold text-gray-900 truncate text-sm">{app.name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${app.stage === 'enrolled' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                             {app.stage || 'Applied'}
                           </span>
                           {(app.source ?? 'public') === 'agency' ? (
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-700">Agency</span>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Agency</span>
                           ) : (
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-gray-100 text-gray-500">Direct</span>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Direct</span>
                           )}
                         </div>
                         {app.university && (
-                          <p className="text-[10px] text-gray-400 font-medium mt-0.5 truncate">{getUniversityName(app.university)}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">{getUniversityName(app.university)}</p>
                         )}
                       </div>
-                      <ChevronRight className={`w-4 h-4 shrink-0 text-gray-300 transition-transform ${selectedStudent?.id === app.id ? 'translate-x-0.5 text-amber-500' : ''}`} />
+                      <ChevronRight className={`w-4 h-4 shrink-0 transition-colors ${isSelected ? 'text-amber-500' : 'text-gray-300'}`} />
                     </div>
                   </div>
                 );
@@ -356,132 +368,143 @@ const StaffDashboard: FC = () => {
         </div>
 
         {/* Right: Detailed View */}
-        <div className="lg:col-span-2 space-y-6 hidden lg:block">
+        <div className="lg:col-span-2 space-y-5 hidden lg:block">
           <AnimatePresence mode="wait">
             {selectedStudent ? (
               <motion.div
                 key={selectedStudent.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="space-y-6"
+                exit={{ opacity: 0, y: -16 }}
+                className="space-y-5"
               >
                 {/* Profile Header Card */}
-                <div className="bg-white rounded-[36px] p-8 border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)]">
-                  {/* Row 1: Avatar + Identity */}
-                  <div className="flex items-start gap-5 mb-6">
-                    <div className="w-16 h-16 shrink-0 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-700 font-black text-2xl">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100 text-base font-bold text-gray-900 flex items-center gap-3">
+                    <div className="w-10 h-10 shrink-0 bg-amber-100 rounded-lg flex items-center justify-center text-amber-700 font-bold text-lg">
                       {selectedStudent.name.charAt(0)}
                     </div>
-                    <div className="flex-1 grid sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Full Name</label>
-                        <input disabled={currentUser?.role !== 'ceo'} value={profileName} onChange={(e) => setProfileName(e.target.value)} className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Email</label>
-                        <input disabled={currentUser?.role !== 'ceo'} value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Phone</label>
-                        <input disabled={currentUser?.role !== 'ceo'} value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
-                      </div>
-                    </div>
-                  </div>
-                  {/* Row 2: University + Source */}
-                  <div className="grid sm:grid-cols-2 gap-4 mb-6">
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">University</label>
-                      <select value={profileUniversity} onChange={(e) => setProfileUniversity(e.target.value)} className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/20">
-                        <option value="">Select university</option>
-                        {UNIVERSITY_OPTIONS.map((u) => (
-                          <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex flex-col justify-end gap-1">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Source</p>
-                      <div className="flex items-center gap-2">
-                        {(selectedStudent.source ?? 'public') === 'agency' ? (
-                          <span className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-700 text-xs font-black uppercase tracking-widest">Agency Referral</span>
-                        ) : (
-                          <span className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-700 text-xs font-black uppercase tracking-widest">Direct Application</span>
-                        )}
-                        {selectedStudent.assignedStaffId && (
-                          <span className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-xs font-bold">
-                            Staff: {users.find(u => u.id === selectedStudent.assignedStaffId)?.name ?? 'Assigned'}
-                          </span>
-                        )}
-                      </div>
+                      <p className="font-bold text-gray-900">{selectedStudent.name}</p>
+                      <p className="text-xs text-gray-500 font-normal">{selectedStudent.email}</p>
                     </div>
                   </div>
-                  {/* Row 3: Expiry Dates */}
-                  <div className="grid sm:grid-cols-3 gap-4 mb-6">
-                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Passport Expiry</p>
+                  <div className="p-5 space-y-5">
+                    {/* Identity row */}
+                    <div className="grid sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">Full Name</label>
+                        <input disabled={currentUser?.role !== 'ceo'} value={profileName} onChange={(e) => setProfileName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none disabled:opacity-60 disabled:cursor-not-allowed" />
                       </div>
-                      <input type="date" value={passportExpiry} onChange={(e) => setPassportExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Visa Expiry</p>
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">Email</label>
+                        <input disabled={currentUser?.role !== 'ceo'} value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none disabled:opacity-60 disabled:cursor-not-allowed" />
                       </div>
-                      <input type="date" value={visaExpiry} onChange={(e) => setVisaExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Residence Permit</p>
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">Phone</label>
+                        <input disabled={currentUser?.role !== 'ceo'} value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none disabled:opacity-60 disabled:cursor-not-allowed" />
                       </div>
-                      <input type="date" value={residenceExpiry} onChange={(e) => setResidenceExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={handleSaveProfile} className="bg-black text-white px-6 py-2.5 rounded-2xl font-black text-sm hover:bg-amber-500 hover:text-black transition-all shadow-sm">Save Profile</button>
-                    {selectedStudent.studentId && currentUser && (currentUser.role === 'staff' || currentUser.role === 'agency_staff') && (
+                    {/* University + Source row */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">University</label>
+                        <select value={profileUniversity} onChange={(e) => setProfileUniversity(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none">
+                          <option value="">Select university</option>
+                          {UNIVERSITY_OPTIONS.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">Source</label>
+                        <div className="flex items-center gap-2 pt-1">
+                          {(selectedStudent.source ?? 'public') === 'agency' ? (
+                            <span className="rounded-full text-xs font-semibold px-2.5 py-0.5 bg-amber-100 text-amber-700">Agency Referral</span>
+                          ) : (
+                            <span className="rounded-full text-xs font-semibold px-2.5 py-0.5 bg-blue-100 text-blue-700">Direct Application</span>
+                          )}
+                          {selectedStudent.assignedStaffId && (
+                            <span className="rounded-full text-xs font-semibold px-2.5 py-0.5 bg-gray-100 text-gray-600">
+                              {users.find(u => u.id === selectedStudent.assignedStaffId)?.name ?? 'Assigned'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Expiry dates */}
+                    <div className="grid sm:grid-cols-3 gap-3">
+                      <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <ShieldCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Passport Expiry</p>
+                        </div>
+                        <input type="date" value={passportExpiry} onChange={(e) => setPassportExpiry(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none bg-white" />
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Visa Expiry</p>
+                        </div>
+                        <input type="date" value={visaExpiry} onChange={(e) => setVisaExpiry(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none bg-white" />
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Residence Permit</p>
+                        </div>
+                        <input type="date" value={residenceExpiry} onChange={(e) => setResidenceExpiry(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none bg-white" />
+                      </div>
+                    </div>
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button onClick={handleSaveProfile} className="bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors">Save Profile</button>
+                      {selectedStudent.studentId && currentUser && (currentUser.role === 'staff' || currentUser.role === 'agency_staff') && (
+                        <button
+                          onClick={() => navigate('/messages', { state: { openThreadKey: `${selectedStudent.id}|${[currentUser.id, selectedStudent.studentId].sort().join('|')}` } })}
+                          className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                        >
+                          Student Chat
+                        </button>
+                      )}
+                      {selectedStudent.agencyId && currentUser && (currentUser.role === 'staff' || currentUser.role === 'agency_staff') && (
+                        <button
+                          onClick={() => navigate('/messages', { state: { openThreadKey: `${selectedStudent.id}|${[currentUser.id, selectedStudent.agencyId!].sort().join('|')}` } })}
+                          className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                        >
+                          Agency Chat
+                        </button>
+                      )}
                       <button
-                        onClick={() => navigate('/messages', { state: { openThreadKey: `${selectedStudent.id}|${[currentUser.id, selectedStudent.studentId].sort().join('|')}` } })}
-                        className="bg-white border border-gray-200 text-black px-6 py-2.5 rounded-2xl font-black text-sm hover:bg-gray-50 transition-all"
+                        onClick={() => {
+                          if (!selectedStudent) return;
+                          useAppStore.getState().setArrivalStatus(selectedStudent.id, !selectedStudent.arrived);
+                          toast.success(!selectedStudent.arrived ? 'Marked as Arrived' : 'Marked as Not Arrived');
+                        }}
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${selectedStudent.arrived ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                       >
-                        Open Student Chat
+                        {selectedStudent.arrived ? 'Unmark Arrived' : 'Mark Arrived'}
                       </button>
-                    )}
-                    {selectedStudent.agencyId && currentUser && (currentUser.role === 'staff' || currentUser.role === 'agency_staff') && (
-                      <button
-                        onClick={() => navigate('/messages', { state: { openThreadKey: `${selectedStudent.id}|${[currentUser.id, selectedStudent.agencyId!].sort().join('|')}` } })}
-                        className="bg-white border border-gray-200 text-black px-6 py-2.5 rounded-2xl font-black text-sm hover:bg-gray-50 transition-all"
-                      >
-                        Open Agency Chat
+                      <button onClick={() => setShowDocumentModal(true)} className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors flex items-center gap-2">
+                        <Upload className="w-4 h-4" />
+                        Upload Doc
                       </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (!selectedStudent) return;
-                        useAppStore.getState().setArrivalStatus(selectedStudent.id, !selectedStudent.arrived);
-                        toast.success(!selectedStudent.arrived ? 'Marked as Arrived' : 'Marked as Not Arrived');
-                      }}
-                      className={`px-6 py-2.5 rounded-2xl font-black text-sm ${selectedStudent.arrived ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'} hover:bg-blue-200 transition-all`}
-                    >
-                      {selectedStudent.arrived ? 'Unmark Arrived' : 'Mark Arrived'}
-                    </button>
-                    <button onClick={() => setShowDocumentModal(true)} className="bg-white border border-gray-200 text-black px-6 py-2.5 rounded-2xl font-bold text-sm hover:bg-amber-50 transition-all flex items-center gap-2 shadow-sm">
-                      <Upload className="w-4 h-4" />
-                      Upload Document
-                    </button>
+                      <button onClick={() => setShowRequestModal(true)} className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors flex items-center gap-2">
+                        <Plus className="w-4 h-4" />
+                        Request Doc
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-6">
-                  {/* Progress Control replaced with Admission Steps */}
-                  <div className="bg-white rounded-[36px] p-8 border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)]">
-                    <h3 className="text-xl font-black text-black mb-2">Student Admission Steps</h3>
-                    <p className="text-gray-500 font-medium mb-6">
-                      Upload the required document for each step to mark it complete for the student.
-                    </p>
-                    <div className="space-y-3">
+                <div className="grid md:grid-cols-2 gap-5">
+                  {/* Admission Steps */}
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100">
+                      <p className="text-base font-bold text-gray-900">Admission Steps</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Upload a document to complete each step.</p>
+                    </div>
+                    <div className="p-4 space-y-2">
                       {[
                         { id: 'translation', label: 'Documents translation' },
                         { id: 'university-approval', label: 'University initial approval' },
@@ -493,17 +516,14 @@ const StaffDashboard: FC = () => {
                         return (
                           <div
                             key={step.id}
-                            className={`flex items-center justify-between px-5 py-4 rounded-2xl border ${
-                              has ? 'bg-green-50 border-green-100' : 'bg-amber-50 border-amber-100'
-                            }`}
+                            className={`flex items-center justify-between px-4 py-3 rounded-xl border ${has ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-100'}`}
                           >
-                            <p className="font-bold text-black">{step.label}</p>
-                            <div className="flex items-center gap-3">
-                              <span
-                                className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                  has ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'
-                                }`}
-                              >
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${has ? 'bg-green-500' : 'bg-amber-400'}`} />
+                              <p className="text-sm font-medium text-gray-800">{step.label}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded-full text-xs font-semibold px-2.5 py-0.5 ${has ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {has ? 'Uploaded' : 'Missing'}
                               </span>
                               <button
@@ -511,7 +531,7 @@ const StaffDashboard: FC = () => {
                                   setNewDocument({ title: step.label, type: step.id });
                                   setShowDocumentModal(true);
                                 }}
-                                className="px-4 py-2 rounded-xl font-bold text-sm bg-white border border-gray-100 hover:bg-amber-100 transition-all"
+                                className="bg-white border border-gray-200 text-gray-700 rounded-lg px-3 py-1 text-xs font-semibold hover:bg-gray-50 transition-colors"
                               >
                                 Upload
                               </button>
@@ -522,24 +542,32 @@ const StaffDashboard: FC = () => {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-[36px] p-8 border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)]">
-                    <h3 className="text-xl font-black text-black mb-2">Sales Intake</h3>
+                  {/* Sales Intake */}
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100">
+                      <p className="text-base font-bold text-gray-900">Sales Intake</p>
+                    </div>
+                    <div className="p-5">
                     {selectedStudent.intakeDetails ? (
-                      <div className="space-y-6">
-                        {selectedStudent.intakeVideoUrl && (
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Intro Video</p>
-                            <button
-                              type="button"
-                              onClick={() => void openRemoteFile(selectedStudent.intakeVideoUrl!)}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-sm text-gray-700 hover:bg-gray-100 transition-all"
-                            >
-                              ▶ Open Video
-                            </button>
-                          </div>
-                        )}
+                      <div className="space-y-4">
+                        {(() => {
+                          const videoUrl = selectedStudent.intakeVideoUrl ||
+                            (selectedStudent.intakeDetails?.match(/Video:\s*(https?:\/\/\S+)/i)?.[1] ?? '');
+                          return videoUrl ? (
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1.5">Intro Video</p>
+                              <button
+                                type="button"
+                                onClick={() => void openRemoteFile(videoUrl)}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                              >
+                                ▶ Open Video
+                              </button>
+                            </div>
+                          ) : null;
+                        })()}
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Form Summary</p>
+                          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">Form Summary</p>
                           <div className="grid grid-cols-2 gap-2">
                             {selectedStudent.intakeDetails.split('\n').filter(Boolean).map((line, i) => {
                               const colonIdx = line.indexOf(':');
@@ -548,73 +576,53 @@ const StaffDashboard: FC = () => {
                               const val = line.slice(colonIdx + 1).trim();
                               if (!key) return null;
                               return (
-                                <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-3">
-                                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">{key}</p>
-                                  <p className="text-sm font-bold text-black break-words">{val || '—'}</p>
+                                <div key={i} className="bg-gray-50 border border-gray-100 rounded-lg p-2.5">
+                                  <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-0.5">{key}</p>
+                                  <p className="text-sm font-semibold text-gray-900 break-words">{val || '—'}</p>
                                 </div>
                               );
                             })}
                           </div>
                         </div>
-                        <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="flex flex-wrap gap-2">
                           {selectedStudent.intakePassportCopy && (
-                          <button
-                            type="button"
-                            onClick={() => void openRemoteFile(selectedStudent.intakePassportCopy!)}
-                            className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-bold border border-blue-100"
-                          >
-                            Passport Copy
-                          </button>
-                        )}
-                        {selectedStudent.intakeHighSchoolCertificate && (
-                          <button
-                            type="button"
-                            onClick={() => void openRemoteFile(selectedStudent.intakeHighSchoolCertificate!)}
-                            className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 text-sm font-bold border border-purple-100"
-                          >
-                            High School Certificate
-                          </button>
-                        )}
+                            <button type="button" onClick={() => void openRemoteFile(selectedStudent.intakePassportCopy!)} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-100 hover:bg-blue-100 transition-colors">
+                              Passport Copy
+                            </button>
+                          )}
+                          {selectedStudent.intakeHighSchoolCertificate && (
+                            <button type="button" onClick={() => void openRemoteFile(selectedStudent.intakeHighSchoolCertificate!)} className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 text-xs font-semibold border border-purple-100 hover:bg-purple-100 transition-colors">
+                              High School Certificate
+                            </button>
+                          )}
+                          {selectedStudent.intakeAttachments?.map((p, i) => (
+                            <button key={i} type="button" onClick={() => void openRemoteFile(p)} className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-100 hover:bg-amber-100 transition-colors">
+                              PDF {i + 1}
+                            </button>
+                          ))}
+                          {selectedStudent.intakeExtraDocs?.map((p, i) => (
+                            <button key={i} type="button" onClick={() => void openRemoteFile(p)} className="px-3 py-1.5 rounded-lg bg-gray-50 text-gray-700 text-xs font-semibold border border-gray-200 hover:bg-gray-100 transition-colors">
+                              Extra {i + 1}
+                            </button>
+                          ))}
                         </div>
-                        {selectedStudent.intakeAttachments && selectedStudent.intakeAttachments.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {selectedStudent.intakeAttachments.map((p, i) => (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => void openRemoteFile(p)}
-                                className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-black"
-                              >
-                                PDF {i + 1}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {selectedStudent.intakeExtraDocs && selectedStudent.intakeExtraDocs.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {selectedStudent.intakeExtraDocs.map((p, i) => (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => void openRemoteFile(p)}
-                                className="px-3 py-1 rounded-full bg-gray-50 text-gray-700 text-[10px] font-black"
-                              >
-                                Extra {i + 1}
-                              </button>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     ) : (
-                      <p className="text-gray-500 font-medium">No intake details submitted yet.</p>
+                      <p className="text-sm text-gray-400">No intake details submitted yet.</p>
                     )}
+                    </div>
                   </div>
-                  <div className="bg-white rounded-[36px] p-8 border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)]">
-                    <h3 className="text-xl font-black text-black mb-6">Activity Timeline</h3>
+
+                  {/* Activity Timeline */}
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100">
+                      <p className="text-base font-bold text-gray-900">Activity Timeline</p>
+                    </div>
+                    <div className="p-4">
                     {(selectedStudent.events ?? []).length === 0 ? (
-                      <p className="text-gray-500 font-medium">No activity yet.</p>
+                      <p className="text-sm text-gray-400 py-4 text-center">No activity yet.</p>
                     ) : (
-                      <div className="space-y-3 max-h-[480px] overflow-y-auto custom-scrollbar pr-2">
+                      <div className="space-y-2.5 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
                         {(selectedStudent.events ?? [])
                           .slice()
                           .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
@@ -634,168 +642,164 @@ const StaffDashboard: FC = () => {
                               'Document Verified';
                             const details = ev.type === 'university_set' ? getUniversityName(ev.details) : ev.details;
                             return (
-                              <div key={ev.id} className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <p className="text-sm font-black text-black">{label}</p>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">{ev.byName}</p>
-                                  </div>
-                                  <p className="text-[10px] font-bold text-gray-400">{new Date(ev.time).toLocaleString()}</p>
+                              <div key={ev.id} className="flex gap-3">
+                                <div className="flex flex-col items-center">
+                                  <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                                  <div className="w-px flex-1 bg-gray-100 mt-1" />
                                 </div>
-                                {details && <p className="text-sm font-medium text-gray-600 mt-2 whitespace-pre-wrap">{details}</p>}
+                                <div className="pb-3 min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="text-sm font-semibold text-gray-900">{label}</p>
+                                    <p className="text-xs text-gray-400 shrink-0">{new Date(ev.time).toLocaleDateString()}</p>
+                                  </div>
+                                  <p className="text-xs text-gray-500 mt-0.5">{ev.byName}</p>
+                                  {details && <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{details}</p>}
+                                </div>
                               </div>
                             );
                           })}
                       </div>
                     )}
+                    </div>
                   </div>
+
                   {/* Internal Notes */}
-                  <div className="bg-white rounded-[36px] p-8 border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.22)] flex flex-col h-[360px] sm:h-[480px]">
-                    <h3 className="text-xl font-black text-black mb-6 flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-amber-500" />
-                      Internal Notes
-                    </h3>
-                    <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2 custom-scrollbar">
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[340px] sm:h-[400px]">
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-amber-500" />
+                      <p className="text-base font-bold text-gray-900">Internal Notes</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                       {(selectedStudent.internalNotes ?? []).length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 text-center">
-                          <MessageSquare className="w-8 h-8 mb-2 opacity-20" />
-                          <p className="text-xs font-bold uppercase tracking-widest">No notes yet</p>
+                          <MessageSquare className="w-7 h-7 mb-2 opacity-20" />
+                          <p className="text-xs font-semibold text-gray-400">No notes yet</p>
                         </div>
                       ) : (
                         (selectedStudent.internalNotes ?? []).map((note, idx) => (
-                          <div key={idx} className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                            <div className="flex justify-between items-start mb-2">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">{note.authorName}</p>
-                              <p className="text-[10px] text-gray-400 font-medium">{new Date(note.createdAt).toLocaleDateString()}</p>
+                          <div key={idx} className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                            <div className="flex justify-between items-center mb-1.5">
+                              <p className="text-xs font-bold text-amber-700">{note.authorName}</p>
+                              <p className="text-xs text-gray-400">{new Date(note.createdAt).toLocaleDateString()}</p>
                             </div>
-                            <p className="text-sm font-medium text-gray-700 leading-relaxed">{note.text}</p>
+                            <p className="text-sm text-gray-700 leading-relaxed">{note.text}</p>
                           </div>
                         ))
                       )}
                     </div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={noteText}
-                        onChange={(e) => setNoteText(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && addNote()}
-                        placeholder="Type an internal note..."
-                        className="w-full pl-4 pr-12 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
-                      />
-                      <button 
-                        onClick={() => addNote()}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-amber-600 hover:bg-amber-100 rounded-xl transition-all"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
+                    <div className="p-3 border-t border-gray-100">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && addNote()}
+                          placeholder="Type an internal note..."
+                          className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
+                        />
+                        <button
+                          onClick={() => addNote()}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-amber-600 hover:bg-amber-100 rounded-md transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Documents Table */}
-                <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
-                  <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-xl font-black text-black flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-amber-500" />
-                      Student Documents
-                    </h3>
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-amber-500" />
+                    <p className="text-base font-bold text-gray-900">Student Documents</p>
                   </div>
                   <div className="overflow-x-auto hidden sm:block">
                     <table className="w-full">
                       <thead>
-                        <tr className="text-left border-b border-gray-100">
-                          <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Title</th>
-                          <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
-                          <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Action</th>
+                        <tr className="border-b border-gray-100 bg-gray-50/50">
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Document</th>
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                          <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {selectedDocs.map((doc, idx) => (
-                          <tr key={idx} className="group">
-                            <td className="py-4">
+                          <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-5 py-3.5">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-                                  <FileText className="w-5 h-5" />
+                                <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
+                                  <FileText className="w-4 h-4" />
                                 </div>
                                 <div>
-                                  <p className="font-bold text-black text-sm">{doc.title}</p>
-                                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{doc.type}</p>
+                                  <p className="font-semibold text-gray-900 text-sm">{doc.title}</p>
+                                  <p className="text-xs text-gray-400 uppercase tracking-wider">{doc.type}</p>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-4 text-sm font-bold text-gray-500">
+                            <td className="px-5 py-3.5 text-sm text-gray-500">
                               {new Date(doc.uploadedAt).toLocaleDateString()}
                             </td>
-                            <td className="py-4 text-right">
-                              {doc.file ? (
-                                <button
-                                  type="button"
-                                  onClick={() => doc.file && void openRemoteFile(doc.file)}
-                                  className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-amber-600 transition-colors"
-                                  title="Open file"
-                                >
-                                  <Download className="w-4 h-4" />
-                                </button>
-                              ) : (
-                                <span className="text-[10px] text-gray-400">No file</span>
-                              )}
-                              {doc.status !== 'verified' && (
-                                <button
-                                  onClick={() => {
-                                    try {
-                                      staffVerifyDocument(doc.id);
-                                      toast.success('Document verified');
-                                    } catch (e) {
-                                      toast.error(e instanceof Error ? e.message : 'Failed to verify');
-                                    }
-                                  }}
-                                  className="ml-2 px-3 py-2 bg-green-100 text-green-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-200 transition-all"
-                                >
-                                  Verify
-                                </button>
-                              )}
+                            <td className="px-5 py-3.5 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {doc.file ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => doc.file && void openRemoteFile(doc.file)}
+                                    className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                    title="Open file"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-gray-400">No file</span>
+                                )}
+                                {doc.status !== 'verified' && (
+                                  <button
+                                    onClick={() => {
+                                      try {
+                                        staffVerifyDocument(doc.id);
+                                        toast.success('Document verified');
+                                      } catch (e) {
+                                        toast.error(e instanceof Error ? e.message : 'Failed to verify');
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200 transition-colors"
+                                  >
+                                    Verify
+                                  </button>
+                                )}
+                                {doc.status === 'verified' && (
+                                  <span className="rounded-full text-xs font-semibold px-2.5 py-0.5 bg-green-100 text-green-700">Verified</span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     {selectedDocs.length === 0 && (
-                      <div className="py-12 text-center text-gray-400">
-                        <FileText className="w-12 h-12 mx-auto mb-4 opacity-10" />
-                        <p className="text-sm font-bold uppercase tracking-widest">No documents uploaded yet</p>
+                      <div className="py-10 text-center text-gray-400">
+                        <FileText className="w-10 h-10 mx-auto mb-3 opacity-10" />
+                        <p className="text-sm font-semibold text-gray-400">No documents uploaded yet</p>
                       </div>
                     )}
                   </div>
-                  <div className="sm:hidden space-y-3">
+                  <div className="sm:hidden p-4 space-y-3">
                     {selectedDocs.map((doc, idx) => (
-                      <div key={idx} className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                      <div key={idx} className="bg-gray-50 border border-gray-100 rounded-xl p-3.5">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="font-black text-black truncate">{doc.title}</p>
-                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">{doc.type}</p>
-                            <p className="text-xs font-bold text-gray-500 mt-2">{new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                            <p className="font-semibold text-gray-900 truncate text-sm">{doc.title}</p>
+                            <p className="text-xs text-gray-400 uppercase tracking-wider mt-0.5">{doc.type}</p>
+                            <p className="text-xs text-gray-500 mt-1">{new Date(doc.uploadedAt).toLocaleDateString()}</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => doc.file && void openRemoteFile(doc.file)}
-                              className="p-2 text-gray-500 hover:text-amber-600 transition-colors"
-                              title="Download"
-                            >
-                              <Download className="w-5 h-5" />
+                            <button type="button" onClick={() => doc.file && void openRemoteFile(doc.file)} className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg">
+                              <Download className="w-4 h-4" />
                             </button>
                             {doc.status !== 'verified' && (
-                              <button
-                                onClick={() => {
-                                  try {
-                                    staffVerifyDocument(doc.id);
-                                    toast.success('Document verified');
-                                  } catch (e) {
-                                    toast.error(e instanceof Error ? e.message : 'Failed to verify');
-                                  }
-                                }}
-                                className="px-3 py-2 bg-green-100 text-green-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-200 transition-all"
-                              >
+                              <button onClick={() => { try { staffVerifyDocument(doc.id); toast.success('Document verified'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to verify'); } }} className="px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200">
                                 Verify
                               </button>
                             )}
@@ -804,21 +808,21 @@ const StaffDashboard: FC = () => {
                       </div>
                     ))}
                     {selectedDocs.length === 0 && (
-                      <div className="py-8 text-center text-gray-400">
-                        <FileText className="w-10 h-10 mx-auto mb-3 opacity-10" />
-                        <p className="text-sm font-bold uppercase tracking-widest">No documents uploaded yet</p>
+                      <div className="py-8 text-center">
+                        <FileText className="w-8 h-8 mx-auto mb-2 text-gray-200" />
+                        <p className="text-sm text-gray-400">No documents uploaded yet</p>
                       </div>
                     )}
                   </div>
                 </div>
               </motion.div>
             ) : (
-              <div className="h-[700px] flex flex-col items-center justify-center bg-white rounded-[32px] border border-gray-100 shadow-sm text-center p-12">
-                <div className="w-24 h-24 bg-gray-50 rounded-[40px] flex items-center justify-center mb-8 text-gray-200">
-                  <UserCircle className="w-12 h-12" />
+              <div className="h-[600px] flex flex-col items-center justify-center bg-white rounded-2xl border border-gray-100 shadow-sm text-center p-12">
+                <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-5">
+                  <UserCircle className="w-8 h-8 text-gray-300" />
                 </div>
-                <h3 className="text-2xl font-black text-black mb-4">Select a student</h3>
-                <p className="text-gray-400 font-medium max-w-xs mx-auto">
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Select a student</h3>
+                <p className="text-sm text-gray-400 max-w-xs mx-auto">
                   Select a student from the list to view their profile, manage documents, and update application progress.
                 </p>
               </div>
@@ -827,123 +831,99 @@ const StaffDashboard: FC = () => {
         </div>
       </div>
 
+      {/* Mobile details modal */}
       <AnimatePresence>
         {mobileDetailsOpen && selectedStudent && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] p-4 flex items-start justify-center overflow-y-auto lg:hidden">
-            <div className="absolute inset-0 bg-black/60" onClick={() => setMobileDetailsOpen(false)} />
-            <motion.div initial={{ y: 12, opacity: 0.98 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 12, opacity: 0.98 }} className="relative tw-card w-full max-w-2xl my-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
-              <div className="p-6 border-b border-gray-50 flex items-center justify-between">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setMobileDetailsOpen(false)} />
+            <motion.div initial={{ y: 12, opacity: 0.98 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 12, opacity: 0.98 }} className="relative bg-white rounded-2xl border border-gray-100 shadow-lg w-full max-w-2xl my-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Student</p>
-                  <p className="text-xl font-black text-black truncate">{selectedStudent.name}</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Student</p>
+                  <p className="text-lg font-bold text-gray-900 truncate">{selectedStudent.name}</p>
                 </div>
-                <button onClick={() => setMobileDetailsOpen(false)} className="p-2 rounded-xl hover:bg-gray-50" aria-label="Close">
-                  <X className="w-6 h-6 text-gray-500" />
+                <button onClick={() => setMobileDetailsOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Close">
+                  <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
-              <div className="p-6 space-y-6">
-                <div className="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm">
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Student name</label>
-                        <input disabled={currentUser?.role !== 'ceo'} value={profileName} onChange={(e) => setProfileName(e.target.value)} className="mt-2 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Phone</label>
-                        <input disabled={currentUser?.role !== 'ceo'} value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="mt-2 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
-                      </div>
+              <div className="p-5 space-y-5">
+                <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">Full Name</label>
+                      <input disabled={currentUser?.role !== 'ceo'} value={profileName} onChange={(e) => setProfileName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none disabled:opacity-60" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Email</label>
-                      <input disabled={currentUser?.role !== 'ceo'} value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="mt-2 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed" />
+                      <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">Phone</label>
+                      <input disabled={currentUser?.role !== 'ceo'} value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none disabled:opacity-60" />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">University</label>
-                      <select value={profileUniversity} onChange={(e) => setProfileUniversity(e.target.value)} className="mt-2 w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-amber-500/20 appearance-none">
-                        <option value="">Select university</option>
-                        {UNIVERSITY_OPTIONS.map((u) => (
-                          <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <ShieldCheck className="w-4 h-4 text-amber-500" />
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Passport Expiry</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">Email</label>
+                    <input disabled={currentUser?.role !== 'ceo'} value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none disabled:opacity-60" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">University</label>
+                    <select value={profileUniversity} onChange={(e) => setProfileUniversity(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none">
+                      <option value="">Select university</option>
+                      {UNIVERSITY_OPTIONS.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    {[
+                      { icon: ShieldCheck, label: 'Passport Expiry', value: passportExpiry, setter: setPassportExpiry },
+                      { icon: Calendar, label: 'Visa Expiry', value: visaExpiry, setter: setVisaExpiry },
+                      { icon: Calendar, label: 'Residence Permit', value: residenceExpiry, setter: setResidenceExpiry },
+                    ].map(({ icon: Icon, label, value, setter }) => (
+                      <div key={label} className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Icon className="w-3.5 h-3.5 text-amber-500" />
+                          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">{label}</p>
                         </div>
-                        <input type="date" value={passportExpiry} onChange={(e) => setPassportExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
+                        <input type="date" value={value} onChange={(e) => setter(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none bg-white" />
                       </div>
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-4 h-4 text-amber-500" />
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Visa Expiry</p>
-                        </div>
-                        <input type="date" value={visaExpiry} onChange={(e) => setVisaExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
-                      </div>
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-4 h-4 text-amber-500" />
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Residence Permit</p>
-                        </div>
-                        <input type="date" value={residenceExpiry} onChange={(e) => setResidenceExpiry(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500/20" />
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button onClick={handleSaveProfile} className="bg-black text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-amber-500 hover:text-black transition-all">Save Profile</button>
-                      <button onClick={() => setShowDocumentModal(true)} className="bg-white border border-gray-200 text-black px-6 py-3 rounded-2xl font-black text-sm hover:bg-amber-50 transition-all flex items-center justify-center gap-2">
-                        <Upload className="w-4 h-4" />
-                        Upload Document
-                      </button>
-                      <button
-                        onClick={() => {
-                          useAppStore.getState().setArrivalStatus(selectedStudent.id, !selectedStudent.arrived);
-                          toast.success(!selectedStudent.arrived ? 'Marked as Arrived' : 'Marked as Not Arrived');
-                        }}
-                        className={`px-6 py-3 rounded-2xl font-black text-sm ${selectedStudent.arrived ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'} hover:bg-blue-200 transition-all`}
-                      >
-                        {selectedStudent.arrived ? 'Unmark Arrived' : 'Mark Arrived'}
-                      </button>
-                    </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handleSaveProfile} className="bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors">Save Profile</button>
+                    <button onClick={() => setShowDocumentModal(true)} className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 flex items-center gap-2">
+                      <Upload className="w-4 h-4" />
+                      Upload Doc
+                    </button>
+                    <button
+                      onClick={() => {
+                        useAppStore.getState().setArrivalStatus(selectedStudent.id, !selectedStudent.arrived);
+                        toast.success(!selectedStudent.arrived ? 'Marked as Arrived' : 'Marked as Not Arrived');
+                      }}
+                      className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${selectedStudent.arrived ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {selectedStudent.arrived ? 'Unmark Arrived' : 'Mark Arrived'}
+                    </button>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm">
-                  <h3 className="text-lg font-black text-black flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-amber-500" />
-                    Student Documents
-                  </h3>
-                  <div className="mt-4 space-y-3">
+                <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-amber-500" />
+                    <p className="text-sm font-bold text-gray-900">Student Documents</p>
+                  </div>
+                  <div className="p-3 space-y-2">
                     {selectedDocs.map((doc, idx) => (
-                      <div key={idx} className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                      <div key={idx} className="bg-gray-50 border border-gray-100 rounded-lg p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="font-black text-black truncate">{doc.title}</p>
-                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">{doc.type}</p>
-                            <p className="text-xs font-bold text-gray-500 mt-2">{new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                            <p className="font-semibold text-gray-900 truncate text-sm">{doc.title}</p>
+                            <p className="text-xs text-gray-400 uppercase tracking-wider mt-0.5">{doc.type}</p>
+                            <p className="text-xs text-gray-500 mt-1">{new Date(doc.uploadedAt).toLocaleDateString()}</p>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => doc.file && void openRemoteFile(doc.file)}
-                              className="p-2 text-gray-500 hover:text-amber-600 transition-colors"
-                              title="Download"
-                            >
-                              <Download className="w-5 h-5" />
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onClick={() => doc.file && void openRemoteFile(doc.file)} className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg">
+                              <Download className="w-4 h-4" />
                             </button>
                             {doc.status !== 'verified' && (
-                              <button
-                                onClick={() => {
-                                  try {
-                                    staffVerifyDocument(doc.id);
-                                    toast.success('Document verified');
-                                  } catch (e) {
-                                    toast.error(e instanceof Error ? e.message : 'Failed to verify');
-                                  }
-                                }}
-                                className="px-3 py-2 bg-green-100 text-green-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-200 transition-all"
-                              >
+                              <button onClick={() => { try { staffVerifyDocument(doc.id); toast.success('Document verified'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to verify'); } }} className="px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-200">
                                 Verify
                               </button>
                             )}
@@ -952,9 +932,9 @@ const StaffDashboard: FC = () => {
                       </div>
                     ))}
                     {selectedDocs.length === 0 && (
-                      <div className="py-8 text-center text-gray-400">
-                        <FileText className="w-10 h-10 mx-auto mb-3 opacity-10" />
-                        <p className="text-sm font-bold uppercase tracking-widest">No documents uploaded yet</p>
+                      <div className="py-6 text-center">
+                        <FileText className="w-8 h-8 mx-auto mb-2 text-gray-200" />
+                        <p className="text-xs text-gray-400 font-semibold">No documents uploaded yet</p>
                       </div>
                     )}
                   </div>
@@ -965,52 +945,52 @@ const StaffDashboard: FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Document Modal */}
+      {/* Upload Document Modal */}
       <AnimatePresence>
         {showDocumentModal && (
           <div className="fixed inset-0 flex items-start justify-center overflow-y-auto z-[100] p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowDocumentModal(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white rounded-[40px] p-10 max-w-md w-full shadow-2xl my-10 max-h-[90vh] overflow-y-auto custom-scrollbar"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white rounded-2xl border border-gray-100 shadow-xl max-w-md w-full my-10 overflow-hidden"
             >
-              <button 
-                onClick={() => setShowDocumentModal(false)}
-                className="absolute top-6 right-6 p-2 text-gray-400 hover:bg-gray-100 rounded-xl transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <h3 className="text-2xl font-black text-black mb-8 flex items-center gap-3">
-                <Upload className="w-6 h-6 text-amber-500" />
-                Upload Document
-              </h3>
-              
-              <div className="space-y-6">
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-base font-bold text-gray-900">Upload Document</h3>
+                </div>
+                <button onClick={() => setShowDocumentModal(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Document Title</label>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1.5">Document Title</label>
                   <input
                     type="text"
                     value={newDocument.title}
                     onChange={(e) => setNewDocument({ ...newDocument, title: e.target.value })}
                     placeholder="e.g. Acceptance Letter"
-                    className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Document Type</label>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1.5">Document Type</label>
                   <select
                     value={newDocument.type}
                     onChange={(e) => setNewDocument({ ...newDocument, type: e.target.value })}
-                    className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all outline-none appearance-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                   >
                     <option value="">Select step...</option>
                     <option value="translation">Documents translation</option>
@@ -1021,41 +1001,99 @@ const StaffDashboard: FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Attach File</label>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1.5">Attach File</label>
+                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-5 text-center hover:border-amber-300 transition-colors">
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setNewDocument({ ...newDocument, fileObject: file, title: newDocument.title || file.name });
+                      }}
+                      className="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+                    />
+                    {newDocument.fileObject ? (
+                      <p className="mt-2 text-xs text-gray-600">Selected: <span className="font-semibold">{newDocument.fileObject.name}</span></p>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-400">PDF or image accepted</p>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => void handleAddDocument()}
+                  disabled={uploadingDoc}
+                  className="w-full bg-amber-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-amber-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {uploadingDoc ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                      Uploading…
+                    </>
+                  ) : 'Upload Now'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Request Document Modal */}
+      <AnimatePresence>
+        {showRequestModal && selectedStudent && (
+          <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50" onClick={() => setShowRequestModal(false)} />
+            <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }} className="relative bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-md overflow-hidden z-10">
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-base font-bold text-gray-900">Request a Document</h3>
+                <button onClick={() => setShowRequestModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-500">
+                  The student will receive a notification asking them to upload this document.
+                </p>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1.5">Document Name</label>
                   <input
-                    type="file"
-                    accept="application/pdf,image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setNewDocument({ ...newDocument, fileObject: file, title: newDocument.title || file.name });
-                    }}
-                    className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl text-sm font-medium transition-all outline-none"
+                    type="text"
+                    value={requestDoc.title}
+                    onChange={(e) => setRequestDoc(d => ({ ...d, title: e.target.value }))}
+                    placeholder="e.g. Bank statement, Proof of address..."
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                   />
-                  {newDocument.fileObject ? (
-                    <p className="mt-2 text-sm text-gray-500">Selected file: <span className="font-bold text-gray-900">{newDocument.fileObject.name}</span></p>
-                  ) : (
-                    <p className="mt-2 text-sm text-gray-400">Accepted: PDF or image</p>
-                  )}
                 </div>
-                
-                <div className="pt-4">
-                  <button
-                    onClick={() => void handleAddDocument()}
-                    disabled={uploadingDoc}
-                    className="w-full bg-black text-white py-4 rounded-2xl font-black text-lg hover:bg-amber-500 hover:text-black transition-all shadow-xl shadow-black/5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {uploadingDoc ? (
-                      <>
-                        <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                        </svg>
-                        Uploading…
-                      </>
-                    ) : 'Upload Now'}
-                  </button>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1.5">Instructions (optional)</label>
+                  <textarea
+                    value={requestDoc.description}
+                    onChange={(e) => setRequestDoc(d => ({ ...d, description: e.target.value }))}
+                    placeholder="Any specific requirements..."
+                    rows={3}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none resize-none"
+                  />
                 </div>
+                <button
+                  onClick={() => {
+                    if (!requestDoc.title.trim()) { toast.error('Enter a document name'); return; }
+                    try {
+                      staffRequestDocument(selectedStudent.studentId!, selectedStudent.id, requestDoc.title, requestDoc.description);
+                      toast.success('Document request sent to student');
+                      setShowRequestModal(false);
+                      setRequestDoc({ title: '', description: '' });
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : 'Failed');
+                    }
+                  }}
+                  className="w-full bg-amber-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-amber-700 transition-colors"
+                >
+                  Send Request
+                </button>
               </div>
             </motion.div>
           </div>

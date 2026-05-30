@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import { useAppStore } from '../store/appStore';
 import { useNavigate } from 'react-router-dom';
 import { getUniversityName } from '../lib/universities';
 import { openStorageUrl } from '../lib/storage';
+import { getSupabase } from '../lib/supabase';
+import toast from 'react-hot-toast';
 import {
   CheckCircle2,
   FileText,
@@ -14,7 +17,9 @@ import {
   Download,
   Clock,
   AlertCircle,
-  Info
+  Info,
+  Upload,
+  ClipboardList
 } from 'lucide-react';
 
 const admissionSteps = [
@@ -28,7 +33,40 @@ const admissionSteps = [
 const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
   const { applications, documents, users } = useApp();
+  const { documentRequests, studentFulfillRequest } = useAppStore();
   const navigate = useNavigate();
+  const [uploadingReqId, setUploadingReqId] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const myRequests = documentRequests.filter(r => r.studentId === user?.id && r.status === 'pending');
+
+  const handleFulfillRequest = async (reqId: string, file: File) => {
+    setUploadingReqId(reqId);
+    try {
+      const supabase = getSupabase();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const reader = new FileReader();
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.readAsDataURL(file);
+      });
+      const resp = await fetch('/api/upload-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }),
+      });
+      const json = await resp.json().catch(() => null) as { url?: string; error?: string } | null;
+      if (!resp.ok || !json?.url) throw new Error(json?.error ?? 'Upload failed');
+      studentFulfillRequest(reqId, json.url);
+      toast.success('Document uploaded successfully');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploadingReqId(null);
+    }
+  };
 
   const myApplication = applications.find(app => app.studentId === user?.id) ?? null;
   const uniName = getUniversityName(user?.assignedUniversityId || myApplication?.university) || 'Not assigned';
@@ -187,6 +225,56 @@ const StudentDashboard: React.FC = () => {
               </p>
             </div>
           </div>
+
+          {/* Pending Document Requests */}
+          {myRequests.length > 0 && (
+            <div className="bg-white rounded-3xl p-8 border border-blue-100 shadow-sm">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center">
+                  <ClipboardList className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-black">Documents Requested</h2>
+                  <p className="text-xs text-gray-500 font-medium">Your advisor needs these documents from you</p>
+                </div>
+                <span className="ml-auto px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-black">{myRequests.length} pending</span>
+              </div>
+              <div className="space-y-3">
+                {myRequests.map((req) => (
+                  <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-blue-50 border border-blue-100">
+                    <div>
+                      <p className="font-black text-black text-sm">{req.title}</p>
+                      {req.description && <p className="text-xs text-gray-500 font-medium mt-0.5">{req.description}</p>}
+                      <p className="text-[10px] text-gray-400 font-bold mt-1">Requested by {req.requestedByName} · {new Date(req.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div className="shrink-0">
+                      <input
+                        ref={el => { fileInputRefs.current[req.id] = el; }}
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleFulfillRequest(req.id, file);
+                          e.target.value = '';
+                        }}
+                      />
+                      <button
+                        onClick={() => fileInputRefs.current[req.id]?.click()}
+                        disabled={uploadingReqId === req.id}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {uploadingReqId === req.id ? (
+                          <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Uploading…</>
+                        ) : (
+                          <><Upload className="w-4 h-4" />Upload</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Documents Table */}
           <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">

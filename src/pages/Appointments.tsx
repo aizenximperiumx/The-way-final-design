@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  Calendar as CalendarIcon, 
-  Clock, 
-  Video, 
-  Users, 
-  Plus, 
-  ChevronLeft, 
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  Video,
+  Users,
+  Plus,
+  ChevronLeft,
   ChevronRight,
   MoreVertical,
   CheckCircle2,
@@ -42,54 +42,67 @@ const Appointments: React.FC = () => {
       status: 'pending',
       createdAt: new Date().toISOString(),
     } satisfies Omit<Appointment, 'id'>;
-    
+
     addAppointment(appt);
     toast.success('Appointment request sent! Waiting for confirmation.');
     setShowBookingModal(false);
   };
 
+  const statusBadge = (status: string) => {
+    if (status === 'confirmed') return 'bg-green-50 text-green-700 border border-green-100';
+    if (status === 'cancelled') return 'bg-gray-100 text-gray-500 border border-gray-200';
+    return 'bg-amber-50 text-amber-700 border border-amber-100';
+  };
+
   return (
-    <div className="space-y-8 pb-12">
-      <section className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div className="space-y-6 pb-12 bg-[#FAFAF9] min-h-screen">
+      {/* Page Header */}
+      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-black tracking-tight">Appointments</h1>
-          <p className="text-gray-500 font-medium">Manage your consultations and university meetings.</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Appointments</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Manage your consultations and university meetings.</p>
         </div>
         {user?.role === 'student' && (
-          <button 
+          <button
             onClick={() => setShowBookingModal(true)}
-            className="flex items-center gap-2 bg-black text-white px-8 py-3 rounded-2xl font-black hover:bg-amber-500 hover:text-black transition-all shadow-xl shadow-black/5"
+            className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm"
           >
-            <Plus className="w-5 h-5" />
-            Book New Session
+            <Plus className="w-4 h-4" />
+            Book Appointment
           </button>
         )}
       </section>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Calendar View (Simplified) */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Calendar Panel */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-xl font-black text-black">Calendar</h3>
-              <div className="flex gap-2">
-                <button className="p-2 hover:bg-gray-50 rounded-xl text-gray-400"><ChevronLeft className="w-5 h-5" /></button>
-                <button className="p-2 hover:bg-gray-50 rounded-xl text-gray-400"><ChevronRight className="w-5 h-5" /></button>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-semibold text-gray-900">Calendar</h3>
+              <div className="flex gap-1">
+                <button className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-400 transition-colors">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-400 transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
-            
-            <div className="grid grid-cols-7 gap-2 text-center mb-4">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
-                <span key={d} className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{d}</span>
+
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                <span key={i} className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider py-1">{d}</span>
               ))}
             </div>
-            
-            <div className="grid grid-cols-7 gap-2">
+
+            <div className="grid grid-cols-7 gap-1">
               {Array.from({ length: 31 }).map((_, i) => (
-                <button 
+                <button
                   key={i}
-                  className={`h-10 rounded-xl text-sm font-bold transition-all ${
-                    i + 1 === 26 ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'hover:bg-gray-50 text-gray-600'
+                  className={`h-8 rounded-lg text-xs font-medium transition-all ${
+                    i + 1 === 26
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'hover:bg-gray-50 text-gray-600'
                   }`}
                 >
                   {i + 1}
@@ -97,14 +110,15 @@ const Appointments: React.FC = () => {
               ))}
             </div>
 
-            <div className="mt-8 pt-8 border-t border-gray-50 space-y-4">
-              <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-black">
-                  <Video className="w-5 h-5" />
+            {/* Upcoming highlight */}
+            <div className="mt-5 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                <div className="w-9 h-9 bg-amber-600 rounded-lg flex items-center justify-center text-white shrink-0">
+                  <Video className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-black">Today at 4:00 PM</p>
-                  <p className="text-xs text-amber-700 font-bold">Visa Interview Prep</p>
+                  <p className="text-xs font-semibold text-gray-900">Today at 4:00 PM</p>
+                  <p className="text-xs text-amber-700">Visa Interview Prep</p>
                 </div>
               </div>
             </div>
@@ -112,60 +126,77 @@ const Appointments: React.FC = () => {
         </div>
 
         {/* Appointments List */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-              <h2 className="text-xl font-black text-black">Scheduled Sessions</h2>
+        <div className="lg:col-span-2">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">Scheduled Sessions</h2>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Requests</span>
+                <span className="w-2 h-2 bg-amber-500 rounded-full" />
+                <span className="text-xs text-gray-400 font-medium">Active Requests</span>
               </div>
             </div>
 
             <div className="divide-y divide-gray-50">
               {myAppointments.length === 0 ? (
-                <div className="p-20 text-center">
-                  <CalendarIcon className="w-16 h-16 text-gray-100 mx-auto mb-6" />
-                  <h3 className="text-xl font-black text-black mb-2">No appointments yet</h3>
-                  <p className="text-gray-400 font-medium">Book a session to get started with your application guidance.</p>
+                <div className="py-20 flex flex-col items-center justify-center text-center px-8">
+                  <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <CalendarIcon className="w-7 h-7 text-gray-300" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">No appointments yet</h3>
+                  <p className="text-sm text-gray-400 max-w-xs">
+                    Book a session to get started with your application guidance.
+                  </p>
+                  {user?.role === 'student' && (
+                    <button
+                      onClick={() => setShowBookingModal(true)}
+                      className="mt-5 flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Book Appointment
+                    </button>
+                  )}
                 </div>
               ) : (
                 myAppointments.map((appt, idx) => (
-                  <div key={idx} className="p-8 hover:bg-gray-50/50 transition-colors group">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div className="flex items-center gap-6">
-                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
-                          appt.type === 'video' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
+                  <div key={idx} className="p-5 hover:bg-gray-50 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                          appt.type === 'video' ? 'bg-blue-50 text-blue-500' : 'bg-purple-50 text-purple-500'
                         }`}>
-                          {appt.type === 'video' ? <Video className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+                          {appt.type === 'video' ? <Video className="w-5 h-5" /> : <Users className="w-5 h-5" />}
                         </div>
                         <div>
-                          <h3 className="text-lg font-black text-black">{appt.title}</h3>
-                          <div className="flex items-center gap-4 mt-1 text-sm font-bold text-gray-400">
-                            <span className="flex items-center gap-1"><CalendarIcon className="w-4 h-4" /> {appt.date}</span>
-                            <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {appt.time}</span>
+                          <h3 className="text-sm font-semibold text-gray-900">{appt.title}</h3>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                            <span className="flex items-center gap-1">
+                              <CalendarIcon className="w-3.5 h-3.5" />
+                              {appt.date}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {appt.time}
+                            </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4">
-                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                          appt.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                        }`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${statusBadge(appt.status)}`}>
                           {appt.status}
                         </span>
                         {user?.role !== 'student' && appt.status === 'pending' && (
-                          <div className="flex gap-2">
-                            <button className="p-2 text-green-600 hover:bg-green-50 rounded-xl transition-all">
-                              <CheckCircle2 className="w-5 h-5" />
+                          <div className="flex gap-1">
+                            <button className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                              <CheckCircle2 className="w-4 h-4" />
                             </button>
-                            <button className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-all">
-                              <XCircle className="w-5 h-5" />
+                            <button className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                              <XCircle className="w-4 h-4" />
                             </button>
                           </div>
                         )}
-                        <button className="p-2 text-gray-300 hover:text-black transition-colors">
-                          <MoreVertical className="w-5 h-5" />
+                        <button className="p-1.5 text-gray-300 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100">
+                          <MoreVertical className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -180,84 +211,96 @@ const Appointments: React.FC = () => {
       {/* Booking Modal */}
       <AnimatePresence>
         {showBookingModal && (
-          <div className="fixed inset-0 flex items-start justify-center overflow-y-auto z-[100] p-4">
-            <motion.div 
+          <div className="fixed inset-0 flex items-center justify-center z-[100] p-4">
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowBookingModal(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white rounded-[40px] p-10 max-w-lg w-full shadow-2xl overflow-hidden my-10 max-h-[90vh] overflow-y-auto custom-scrollbar"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
             >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-              
-              <h3 className="text-2xl font-black text-black mb-8 flex items-center gap-3">
-                <CalendarIcon className="w-6 h-6 text-amber-500" />
-                Book Consultation
-              </h3>
+              {/* Modal Header */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center">
+                  <CalendarIcon className="w-4 h-4 text-amber-600" />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900">Book Consultation</h3>
+              </div>
 
-              <form onSubmit={handleBook} className="space-y-6">
+              <form onSubmit={handleBook} className="space-y-5">
+                {/* Meeting Purpose */}
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Meeting Purpose</label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Meeting Purpose</label>
                   <input
                     name="title"
                     type="text"
                     required
                     placeholder="e.g. Visa Application Review"
-                    className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                   />
                 </div>
 
+                {/* Date & Time */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Date</label>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Date</label>
                     <input
                       name="date"
                       type="date"
                       required
-                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Time</label>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Time</label>
                     <input
                       name="time"
                       type="time"
                       required
-                      className="w-full px-5 py-4 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
                     />
                   </div>
                 </div>
 
+                {/* Meeting Type */}
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Meeting Type</label>
-                  <div className="grid grid-cols-2 gap-4">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Meeting Type</label>
+                  <div className="grid grid-cols-2 gap-3">
                     <label className="relative cursor-pointer group">
                       <input type="radio" name="type" value="video" className="peer sr-only" defaultChecked />
-                      <div className="p-4 bg-gray-50 border-2 border-transparent peer-checked:border-amber-500 peer-checked:bg-amber-50 rounded-2xl flex items-center gap-3 transition-all">
-                        <Video className="w-5 h-5 text-gray-400 group-hover:text-amber-500 transition-colors" />
-                        <span className="text-sm font-bold text-gray-600">Video Call</span>
+                      <div className="p-3 bg-gray-50 border border-gray-200 peer-checked:border-amber-500 peer-checked:bg-amber-50 rounded-lg flex items-center gap-2.5 transition-all">
+                        <Video className="w-4 h-4 text-gray-400 peer-checked:text-amber-600 group-hover:text-amber-500 transition-colors" />
+                        <span className="text-sm font-medium text-gray-700">Video Call</span>
                       </div>
                     </label>
                     <label className="relative cursor-pointer group">
                       <input type="radio" name="type" value="in-person" className="peer sr-only" />
-                      <div className="p-4 bg-gray-50 border-2 border-transparent peer-checked:border-amber-500 peer-checked:bg-amber-50 rounded-2xl flex items-center gap-3 transition-all">
-                        <Users className="w-5 h-5 text-gray-400 group-hover:text-amber-500 transition-colors" />
-                        <span className="text-sm font-bold text-gray-600">In Person</span>
+                      <div className="p-3 bg-gray-50 border border-gray-200 peer-checked:border-amber-500 peer-checked:bg-amber-50 rounded-lg flex items-center gap-2.5 transition-all">
+                        <Users className="w-4 h-4 text-gray-400 peer-checked:text-amber-600 group-hover:text-amber-500 transition-colors" />
+                        <span className="text-sm font-medium text-gray-700">In Person</span>
                       </div>
                     </label>
                   </div>
                 </div>
 
-                <div className="pt-4">
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBookingModal(false)}
+                    className="flex-1 bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="submit"
-                    className="w-full bg-black text-white py-5 rounded-2xl font-black text-lg hover:bg-amber-500 hover:text-black transition-all shadow-xl shadow-black/5"
+                    className="flex-1 bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors"
                   >
                     Confirm Booking
                   </button>

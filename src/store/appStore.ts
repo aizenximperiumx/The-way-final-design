@@ -152,6 +152,20 @@ export interface Appointment {
 
 export type AuthStatus = 'signed_out' | 'signed_in';
 
+export interface DocumentRequest {
+  id: string;
+  studentId: string;
+  applicationId?: string;
+  title: string;
+  description?: string;
+  requestedBy: string;
+  requestedByName: string;
+  createdAt: string;
+  status: 'pending' | 'fulfilled';
+  fulfilledFile?: string;
+  fulfilledAt?: string;
+}
+
 export interface ChatMessage {
   id: string;
   userId: string;
@@ -171,6 +185,7 @@ export interface AppStoreState {
   appointments: Appointment[];
   chatMessages: ChatMessage[];
   chatThreadReadAt: Record<string, string>;
+  documentRequests: DocumentRequest[];
   language: 'en' | 'ar';
   backendHydrated: boolean;
 
@@ -228,6 +243,8 @@ export interface AppStoreState {
   requestMoreInfo: (applicationId: string, message: string) => void;
   agencyAddExtraDocs: (applicationId: string, files: string[]) => void;
   checkExpiries: () => void;
+  staffRequestDocument: (studentId: string, applicationId: string | undefined, title: string, description?: string) => void;
+  studentFulfillRequest: (requestId: string, fileUrl: string) => void;
 }
 
 const ensureSignedIn = (user: User | null, authStatus: AuthStatus) => {
@@ -287,6 +304,7 @@ const useAppStore = create<AppStoreState>()(
         chatMessages: [],
         chatThreadReadAt: {},
         appointments: [],
+        documentRequests: [],
         language: 'en',
         backendHydrated: false,
 
@@ -376,7 +394,7 @@ const useAppStore = create<AppStoreState>()(
         const supabase = tryGetSupabase();
         if (supabase) void supabase.auth.signOut();
         localStorage.removeItem('the-way-storage');
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} });
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, documentRequests: [] });
       },
 
       restoreSession: async () => {
@@ -456,6 +474,7 @@ const useAppStore = create<AppStoreState>()(
           appointments: Array.isArray(s.appointments) ? (s.appointments as Appointment[]) : [],
           chatMessages: Array.isArray(s.chatMessages) ? (s.chatMessages as ChatMessage[]) : [],
           chatThreadReadAt: (s.chatThreadReadAt && typeof s.chatThreadReadAt === 'object') ? (s.chatThreadReadAt as Record<string, string>) : {},
+          documentRequests: Array.isArray(s.documentRequests) ? (s.documentRequests as DocumentRequest[]) : [],
           backendHydrated: true,
         });
         await get().refreshUsersFromBackend();
@@ -476,6 +495,7 @@ const useAppStore = create<AppStoreState>()(
           appointments: get().appointments,
           chatMessages: get().chatMessages,
           chatThreadReadAt: get().chatThreadReadAt,
+          documentRequests: get().documentRequests,
         };
         await fetch('/api/state-save', {
           method: 'POST',
@@ -1320,25 +1340,109 @@ const useAppStore = create<AppStoreState>()(
 
       checkExpiries: () => {
         const now = new Date();
-        const soon = (dateStr?: string) => {
-          if (!dateStr) return false;
+        const daysUntil = (dateStr?: string) => {
+          if (!dateStr) return null;
           const d = new Date(dateStr);
+          if (Number.isNaN(d.getTime())) return null;
           const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-          return diff > 0 && diff <= 60;
+          return diff > 0 ? Math.floor(diff) : null;
         };
         const current = get().currentUser;
-        if (!current) return;
+        if (!current || current.role !== 'student') return;
+
+        const alreadyNotified = (key: string) =>
+          get().notifications.some(n => n.userId === current.id && n.title.includes(key) &&
+            (now.getTime() - new Date(n.time).getTime()) < 1000 * 60 * 60 * 12);
+
         const push = (title: string, message: string) => {
           set((state) => ({
             notifications: [
               ...state.notifications,
-              { id: Date.now().toString(), userId: current.id, title, message, type: 'alert', time: new Date().toISOString(), read: false }
+              { id: `expiry-${Date.now()}`, userId: current.id, title, message, type: 'alert' as const, time: new Date().toISOString(), read: false }
             ]
           }));
+          queueBackendSave(get);
         };
-        if (soon(current.passportExpiry)) push('Passport Expiry', `Your passport expires on ${current.passportExpiry}`);
-        if (soon(current.visaExpiry)) push('Visa Expiry', `Your visa expires on ${current.visaExpiry}`);
-        if (soon(current.residenceExpiry)) push('Residence Permit Expiry', `Your residence permit expires on ${current.residenceExpiry}`);
+
+        const visaDays = daysUntil(current.visaExpiry);
+        if (visaDays !== null && visaDays <= 60 && !alreadyNotified('Visa Expiry')) {
+          const msg = `Your visa expires in ${visaDays} day${visaDays === 1 ? '' : 's'} (${current.visaExpiry}). Please renew as soon as possible.`;
+          push('Visa Expiry Warning', msg);
+          if (current.email) sendMail({ to: current.email, subject: 'Visa Expiry Reminder — The Way Georgia', text: msg, html: `<div style="font-family:Arial,sans-serif"><p>${msg}</p></div>` });
+        }
+
+        const residenceDays = daysUntil(current.residenceExpiry);
+        if (residenceDays !== null && residenceDays <= 60 && !alreadyNotified('Residence')) {
+          const msg = `Your residence permit expires in ${residenceDays} day${residenceDays === 1 ? '' : 's'} (${current.residenceExpiry}). Please renew as soon as possible.`;
+          push('Residence Permit Expiry Warning', msg);
+          if (current.email) sendMail({ to: current.email, subject: 'Residence Permit Reminder — The Way Georgia', text: msg, html: `<div style="font-family:Arial,sans-serif"><p>${msg}</p></div>` });
+        }
+      },
+
+      staffRequestDocument: (studentId: string, applicationId: string | undefined, title: string, description?: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['staff', 'agency_staff', 'ceo', 'sales', 'ops']);
+        const req: DocumentRequest = {
+          id: `docreq-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          studentId,
+          applicationId,
+          title: title.trim(),
+          description: description?.trim(),
+          requestedBy: actor.id,
+          requestedByName: actor.name,
+          createdAt: new Date().toISOString(),
+          status: 'pending',
+        };
+        set((state) => ({
+          documentRequests: [...state.documentRequests, req],
+          notifications: [
+            ...state.notifications,
+            {
+              id: `docreq-notif-${req.id}`,
+              userId: studentId,
+              title: 'Document Requested',
+              message: `Your advisor has requested: "${title}". Please upload it in your portal.`,
+              type: 'info' as const,
+              time: new Date().toISOString(),
+              read: false,
+            },
+          ],
+        }));
+        const student = get().users.find(u => u.id === studentId);
+        if (student?.email) {
+          sendMail({
+            to: student.email,
+            subject: 'Document Required — The Way Georgia',
+            text: `Your advisor has requested a document: "${title}". ${description ?? ''} Please log in to your portal to upload it.`,
+            html: `<div style="font-family:Arial,sans-serif"><p>Dear ${student.name},</p><p>Your advisor has requested the following document: <b>${title}</b>${description ? ` — ${description}` : ''}.</p><p>Please log in to your student portal to upload it.</p></div>`,
+          });
+        }
+        queueBackendSave(get);
+      },
+
+      studentFulfillRequest: (requestId: string, fileUrl: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        const req = get().documentRequests.find(r => r.id === requestId);
+        if (!req) throw new Error('Request not found');
+        if (req.studentId !== actor.id) throw new Error('Forbidden');
+        set((state) => ({
+          documentRequests: state.documentRequests.map(r =>
+            r.id === requestId ? { ...r, status: 'fulfilled' as const, fulfilledFile: fileUrl, fulfilledAt: new Date().toISOString() } : r
+          ),
+          notifications: [
+            ...state.notifications,
+            {
+              id: `docreq-fulfilled-${requestId}`,
+              userId: req.requestedBy,
+              title: 'Document Uploaded',
+              message: `Student uploaded the requested document: "${req.title}"`,
+              type: 'success' as const,
+              time: new Date().toISOString(),
+              read: false,
+            },
+          ],
+        }));
+        queueBackendSave(get);
       },
     };
     },

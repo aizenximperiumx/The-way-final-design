@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Shield, Video, FileText, Send, User, Award, TrendingUp, Building2, LogOut, ChevronRight } from 'lucide-react';
+import { Upload, Shield, Video, FileText, Send, User, Award, TrendingUp, Building2, LogOut, ChevronRight, ChevronDown, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 import toast from 'react-hot-toast';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
@@ -281,69 +281,75 @@ Underage: ${underage ? 'Yes' : 'No'}`;
     setExtraDocs([]);
   };
 
+  // ─── helpers ───────────────────────────────────────────────────────────────
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none bg-white';
+  const labelCls = 'block text-sm font-medium text-gray-700 mb-1.5';
+  const sectionHeadingCls = 'text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4';
+  const uploadZoneCls = 'border-2 border-dashed border-gray-200 rounded-xl p-5 text-center hover:border-amber-400 hover:bg-amber-50/30 transition-all cursor-pointer';
+
+  const statusBadge = (status: string) => {
+    if (status === 'approved') return 'bg-green-100 text-green-700';
+    if (status === 'rejected') return 'bg-red-100 text-red-700';
+    return 'bg-blue-100 text-blue-700';
+  };
+
+  const myApps = applications.filter(a => a.agencyId === user?.id);
+
   return (
-    <div className="min-h-screen bg-[#F8F9FA]">
-      <header className="bg-black text-white sticky top-0 z-[100]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <img src={logoUrl} alt="The Way" className="h-10 w-auto object-contain" />
-            <button
-              type="button"
-              onClick={() => setActiveTab(activeTab === 'dashboard' ? 'profile' : 'dashboard')}
-              className="md:hidden px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/10 text-white/80"
-            >
-              {activeTab === 'dashboard' ? 'Agency Profile' : 'Student Management'}
-            </button>
-            <div className="hidden md:flex items-center gap-1">
-              {[
-                { id: 'dashboard', label: 'Student Management', icon: Building2 },
-                { id: 'profile', label: 'Agency Profile', icon: User },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'dashboard' | 'profile')}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
-                    activeTab === tab.id ? 'bg-amber-500 text-black' : 'text-white/40 hover:text-white'
-                  }`}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+    <div className="min-h-screen bg-[#FAFAF9]">
+      {/* ── Header ── */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-[100]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
+          {/* Logo + agency name */}
+          <div className="flex items-center gap-3 shrink-0">
+            <img src={logoUrl} alt="The Way" className="h-8 w-auto object-contain" />
+            <div className="hidden sm:block h-5 w-px bg-gray-200" />
+            <span className="hidden sm:block text-sm font-semibold text-gray-800">{user?.name}</span>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-white/5 rounded-xl border border-white/10">
-              <Award className="w-4 h-4 text-amber-500" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/60">
-                {user?.points ?? 0} Points
-              </p>
+
+          {/* Tab nav */}
+          <nav className="flex items-center gap-1">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: Building2 },
+              { id: 'profile', label: 'Profile & Intake', icon: User },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as 'dashboard' | 'profile')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                  activeTab === tab.id
+                    ? 'text-amber-600 bg-amber-50 border-b-2 border-amber-600'
+                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          {/* User info + logout */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold">
+              <Award className="w-3.5 h-3.5" />
+              {user?.points ?? 0} pts
             </div>
-            <button 
+            <button
               onClick={() => logout()}
-              className="p-2.5 bg-white/5 text-white/60 hover:text-white hover:bg-red-500/10 rounded-xl transition-all"
+              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+              aria-label="Log out"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <section className="mb-10 rounded-[36px] bg-white border border-gray-100 shadow-[0_18px_60px_-45px_rgba(0,0,0,0.18)] p-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Agency Portal</p>
-              <h1 className="text-3xl font-black text-black">Manage your applications and documents</h1>
-              <p className="mt-3 text-sm text-gray-500 max-w-2xl">Submit new student applications, track approvals, and manage the required document flow from one place.</p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <span className="px-4 py-2 rounded-2xl bg-amber-50 text-amber-700 text-xs font-black uppercase tracking-widest">Agency: {user?.name}</span>
-              <span className="px-4 py-2 rounded-2xl bg-gray-50 text-gray-700 text-xs font-black uppercase tracking-widest">Points: {user?.points ?? 0}</span>
-            </div>
-          </div>
-        </section>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AnimatePresence mode="wait">
+          {/* ═══════════════════════════════════════════════════════════════
+              DASHBOARD TAB
+          ════════════════════════════════════════════════════════════════ */}
           {activeTab === 'dashboard' ? (
             <motion.div
               key="dashboard"
@@ -351,392 +357,565 @@ Underage: ${underage ? 'Yes' : 'No'}`;
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
+              className="space-y-8"
             >
-              <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+              {/* Stats row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Students', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id).length, icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
-                  { label: 'Approved', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id && a.status === 'approved').length, icon: Shield, color: 'text-green-500', bg: 'bg-green-50' },
-                  { label: 'Pending', value: applications.filter(a => (a.source ?? 'public') === 'agency' && a.agencyId === user?.id && a.status === 'submitted').length, icon: Upload, color: 'text-amber-500', bg: 'bg-amber-50' },
-                  { label: 'Documents', value: documents.filter(d => applications.some(a => a.studentId === d.studentId && a.agencyId === user?.id)).length, icon: Send, color: 'text-purple-500', bg: 'bg-purple-50' },
+                  { label: 'Total Students', value: myApps.length, icon: FileText, iconColor: 'text-blue-500', iconBg: 'bg-blue-50' },
+                  { label: 'Approved', value: myApps.filter(a => a.status === 'approved').length, icon: CheckCircle2, iconColor: 'text-green-500', iconBg: 'bg-green-50' },
+                  { label: 'Pending', value: myApps.filter(a => a.status === 'submitted').length, icon: Clock, iconColor: 'text-amber-500', iconBg: 'bg-amber-50' },
+                  { label: 'Documents', value: documents.filter(d => applications.some(a => a.studentId === d.studentId && a.agencyId === user?.id)).length, icon: Shield, iconColor: 'text-purple-500', iconBg: 'bg-purple-50' },
                 ].map((stat, i) => (
-                  <div key={i} className="tw-card p-6 flex items-center gap-4">
-                    <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
-                      <stat.icon className="w-6 h-6" />
+                  <div key={i} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div className={`w-10 h-10 ${stat.iconBg} ${stat.iconColor} rounded-xl flex items-center justify-center shrink-0`}>
+                      <stat.icon className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{stat.label}</p>
-                      <p className="text-2xl font-black text-black">{stat.value}</p>
+                      <p className="text-xs text-gray-400 font-medium">{stat.label}</p>
+                      <p className="text-2xl font-bold text-gray-900 leading-tight">{stat.value}</p>
                     </div>
                   </div>
                 ))}
-              </section>
+              </div>
 
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="tw-card tw-card-hover p-8">
-                <h1 className="text-2xl font-black text-black mb-6">Submit New Student</h1>
-                <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Full name</label>
-                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Age</label>
-                    <input
-                      className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-gray-500"
-                      value={form.dob ? (calculateAge(form.dob) == null ? '' : String(calculateAge(form.dob)!)) : ''}
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Country</label>
-                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Phone number</label>
-                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contact Email</label>
-                    <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Student Email</label>
-                    <input type="email" className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.studentEmail} onChange={(e) => setForm({ ...form, studentEmail: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Passport number</label>
-                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.passportNumber} onChange={(e) => setForm({ ...form, passportNumber: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Date of birth</label>
-                    <input
-                      type="date"
-                      className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black"
-                      value={form.dob}
-                      onChange={(e) => setForm({ ...form, dob: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Nationality</label>
-                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Second nationality (optional)</label>
-                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.secondNationality} onChange={(e) => setForm({ ...form, secondNationality: e.target.value })} />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Home address</label>
-                    <input className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.homeAddress} onChange={(e) => setForm({ ...form, homeAddress: e.target.value })} required />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">University to enroll</label>
-                    <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })} required>
-                      <option value="" disabled>Select university</option>
-                      {UNIVERSITY_OPTIONS.map((u) => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Study Level</label>
-                    <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.studyLevel} onChange={(e) => setForm({ ...form, studyLevel: e.target.value })} required>
-                      <option value="" disabled>Select level</option>
-                      <option value="bachelor">Bachelor's</option>
-                      <option value="master">Master's</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Aviation Degree (if applicable)</label>
-                    <select className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" value={form.aviationDegree} onChange={(e) => setForm({ ...form, aviationDegree: e.target.value })}>
-                      <option value="">None / Not Aviation</option>
-                      <option value="pilot">Commercial Pilot License (CPL)</option>
-                      <option value="atpl">Airline Transport Pilot License (ATPL)</option>
-                      <option value="engineering">Aviation Engineering</option>
-                      <option value="management">Aviation Management</option>
-                    </select>
-                  </div>
+              {/* My Students list */}
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-gray-900">My Students</h2>
+                  <span className="text-xs text-gray-400 font-medium">{myApps.length} total</span>
+                </div>
 
+                {myApps.length === 0 ? (
+                  <div className="px-6 py-14 text-center">
+                    <FileText className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                    <p className="text-sm text-gray-400 font-medium">No students yet. Submit your first application below.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-50">
+                    {myApps.map((app) => (
+                      <div key={app.id} className="px-6 py-4 flex flex-wrap items-center justify-between gap-4 hover:bg-gray-50/60 transition-colors">
+                        {/* Avatar + name */}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-semibold text-sm shrink-0">
+                            {app.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{app.name}</p>
+                            <p className="text-xs text-gray-400 truncate">{app.studentEmail || app.email}</p>
+                          </div>
+                        </div>
+
+                        {/* Meta */}
+                        <div className="flex items-center gap-6 flex-wrap">
+                          <div>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-0.5">Program</p>
+                            <p className="text-xs font-semibold text-gray-700">{app.program}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-0.5">Date</p>
+                            <p className="text-xs font-semibold text-gray-700">{new Date(app.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <span className={`rounded-full text-xs font-semibold px-2.5 py-0.5 ${statusBadge(app.status)}`}>
+                            {app.status}
+                          </span>
+                        </div>
+
+                        {/* Action */}
+                        <button
+                          onClick={() => setViewApp({ open: true, id: app.id })}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition-all"
+                        >
+                          Details
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Submit New Student form */}
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+                <div className="px-6 py-5 border-b border-gray-100">
+                  <h2 className="text-base font-semibold text-gray-900">Submit New Student</h2>
+                  <p className="text-sm text-gray-400 mt-0.5">Fill in all required fields and upload the necessary documents.</p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="px-6 py-6 space-y-8">
+
+                  {/* Section: Personal Information */}
                   <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload video (&gt;=40s)</label>
-                    <div className="flex items-center gap-3">
-                    <input type="file" accept="video/*" capture onChange={(e) => onFileVideo(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
-                      {videoUrl && <Video className="w-5 h-5 text-amber-500" />}
+                    <p className={sectionHeadingCls}>Personal Information</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelCls}>Full Name <span className="text-red-400">*</span></label>
+                        <input className={inputCls} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required placeholder="e.g. John Smith" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Date of Birth <span className="text-red-400">*</span></label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={form.dob}
+                          onChange={(e) => setForm({ ...form, dob: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Age (calculated)</label>
+                        <input
+                          className={`${inputCls} bg-gray-50 text-gray-400 cursor-not-allowed`}
+                          value={form.dob ? (calculateAge(form.dob) == null ? '' : String(calculateAge(form.dob)!)) : ''}
+                          readOnly
+                          placeholder="Auto-calculated from DOB"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Nationality <span className="text-red-400">*</span></label>
+                        <input className={inputCls} value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} required placeholder="e.g. Georgian" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Second Nationality</label>
+                        <input className={inputCls} value={form.secondNationality} onChange={(e) => setForm({ ...form, secondNationality: e.target.value })} placeholder="Optional" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Passport Number <span className="text-red-400">*</span></label>
+                        <input className={inputCls} value={form.passportNumber} onChange={(e) => setForm({ ...form, passportNumber: e.target.value })} required placeholder="e.g. AB1234567" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Country <span className="text-red-400">*</span></label>
+                        <input className={inputCls} value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} required placeholder="Country of residence" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className={labelCls}>Home Address <span className="text-red-400">*</span></label>
+                        <input className={inputCls} value={form.homeAddress} onChange={(e) => setForm({ ...form, homeAddress: e.target.value })} required placeholder="Full home address" />
+                      </div>
                     </div>
                   </div>
-                <div>
-                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Passport Copy</label>
-                  <div className="flex items-center gap-3">
-                    <input type="file" accept="image/*,.pdf" onChange={(e) => onPassportCopy(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">High School Certificate</label>
-                  <div className="flex items-center gap-3">
-                    {!noHighSchoolCertificate ? (
-                      <input type="file" accept="image/*,.pdf" onChange={(e) => onHighSchool(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
-                    ) : null}
-                  </div>
-                  <div className="mt-3 flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={noHighSchoolCertificate}
-                      onChange={(e) => {
-                        setNoHighSchoolCertificate(e.target.checked);
-                        if (!e.target.checked) setHighSchoolMissingNote('');
-                      }}
-                      className="h-4 w-4"
-                    />
-                    <p className="text-xs font-bold text-gray-600">Student does not have high school certificate</p>
-                  </div>
-                  {noHighSchoolCertificate ? (
-                    <textarea
-                      value={highSchoolMissingNote}
-                      onChange={(e) => setHighSchoolMissingNote(e.target.value)}
-                      className="w-full mt-2 px-5 py-3 bg-gray-50 rounded-2xl border-none text-black min-h-[100px] font-medium"
-                      placeholder="Write the reason / comment..."
-                    />
-                  ) : null}
-                </div>
-                {(() => {
-                  const age = form.dob ? calculateAge(form.dob) : null;
-                  const underage = age != null && age < 18;
-                  if (!underage) return null;
-                  return (
-                    <>
-                      <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Birth Certificate</label>
-                        <div className="flex items-center gap-3">
-                          <input type="file" accept="image/*,.pdf" onChange={(e) => onBirthCertificate(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Mother's Passport</label>
-                        <div className="flex items-center gap-3">
-                          <input type="file" accept="image/*,.pdf" onChange={(e) => onMotherPassport(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Father's Passport</label>
-                        <div className="flex items-center gap-3">
-                          <input type="file" accept="image/*,.pdf" onChange={(e) => onFatherPassport(e.target.files?.[0])} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
+
+                  {/* Section: Contact */}
                   <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Upload PDFs</label>
-                    <div className="flex items-center gap-3">
-                      <input multiple type="file" accept="application/pdf" onChange={(e) => onFilePdf(e.target.files)} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
-                      {pdfs.length > 0 && <FileText className="w-5 h-5 text-amber-500" />}
+                    <p className={sectionHeadingCls}>Contact Details</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelCls}>Contact Email <span className="text-red-400">*</span></label>
+                        <input type="email" className={inputCls} value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} required placeholder="Agency contact email" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Student Email <span className="text-red-400">*</span></label>
+                        <input type="email" className={inputCls} value={form.studentEmail} onChange={(e) => setForm({ ...form, studentEmail: e.target.value })} required placeholder="Student's own email" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Phone Number <span className="text-red-400">*</span></label>
+                        <input className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required placeholder="+995 555 000 000" />
+                      </div>
                     </div>
                   </div>
-                <div>
-                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Extra Documents (optional)</label>
-                  <div className="flex items-center gap-3">
-                    <input multiple type="file" accept="application/pdf,image/*" onChange={(e) => onFileExtra(e.target.files)} className="w-full px-5 py-3 bg-gray-50 rounded-2xl border-none text-black" />
-                  </div>
-                </div>
 
-                  <div className="md:col-span-2 flex justify-end">
-                    <button type="submit" className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-2xl font-black hover:bg-amber-500 hover:text-black transition-all">
+                  {/* Section: Academic */}
+                  <div>
+                    <p className={sectionHeadingCls}>Academic Information</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="sm:col-span-2">
+                        <label className={labelCls}>University to Enroll <span className="text-red-400">*</span></label>
+                        <select className={inputCls} value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })} required>
+                          <option value="" disabled>Select university…</option>
+                          {UNIVERSITY_OPTIONS.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Study Level <span className="text-red-400">*</span></label>
+                        <select className={inputCls} value={form.studyLevel} onChange={(e) => setForm({ ...form, studyLevel: e.target.value })} required>
+                          <option value="" disabled>Select level…</option>
+                          <option value="bachelor">Bachelor's</option>
+                          <option value="master">Master's</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Aviation Degree</label>
+                        <select className={inputCls} value={form.aviationDegree} onChange={(e) => setForm({ ...form, aviationDegree: e.target.value })}>
+                          <option value="">None / Not Aviation</option>
+                          <option value="pilot">Commercial Pilot License (CPL)</option>
+                          <option value="atpl">Airline Transport Pilot License (ATPL)</option>
+                          <option value="engineering">Aviation Engineering</option>
+                          <option value="management">Aviation Management</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section: Documents */}
+                  <div>
+                    <p className={sectionHeadingCls}>Documents & Media</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+
+                      {/* Video */}
+                      <div>
+                        <label className={labelCls}>
+                          Intro Video <span className="text-red-400">*</span>
+                          <span className="ml-1 text-xs text-gray-400 font-normal">(min 40 seconds)</span>
+                        </label>
+                        <label className={uploadZoneCls}>
+                          <input type="file" accept="video/*" capture onChange={(e) => onFileVideo(e.target.files?.[0])} className="sr-only" />
+                          <div className="flex flex-col items-center gap-2">
+                            {videoUrl ? (
+                              <>
+                                <Video className="w-6 h-6 text-amber-500" />
+                                <span className="text-xs font-semibold text-amber-600">Video uploaded</span>
+                              </>
+                            ) : (
+                              <>
+                                <Video className="w-6 h-6 text-gray-300" />
+                                <span className="text-xs text-gray-400">Click to upload video</span>
+                              </>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Passport Copy */}
+                      <div>
+                        <label className={labelCls}>Passport Copy</label>
+                        <label className={uploadZoneCls}>
+                          <input type="file" accept="image/*,.pdf" onChange={(e) => onPassportCopy(e.target.files?.[0])} className="sr-only" />
+                          <div className="flex flex-col items-center gap-2">
+                            {passportCopyUrl ? (
+                              <>
+                                <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                <span className="text-xs font-semibold text-green-600">Passport uploaded</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-6 h-6 text-gray-300" />
+                                <span className="text-xs text-gray-400">Click to upload passport copy</span>
+                              </>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* High School Certificate */}
+                      <div className="sm:col-span-2">
+                        <label className={labelCls}>High School Certificate</label>
+                        {!noHighSchoolCertificate && (
+                          <label className={`${uploadZoneCls} mb-3`}>
+                            <input type="file" accept="image/*,.pdf" onChange={(e) => onHighSchool(e.target.files?.[0])} className="sr-only" />
+                            <div className="flex flex-col items-center gap-2">
+                              {highSchoolUrl ? (
+                                <>
+                                  <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                  <span className="text-xs font-semibold text-green-600">Certificate uploaded</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="w-6 h-6 text-gray-300" />
+                                  <span className="text-xs text-gray-400">Click to upload certificate</span>
+                                </>
+                              )}
+                            </div>
+                          </label>
+                        )}
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={noHighSchoolCertificate}
+                            onChange={(e) => {
+                              setNoHighSchoolCertificate(e.target.checked);
+                              if (!e.target.checked) setHighSchoolMissingNote('');
+                            }}
+                            className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                          />
+                          <span className="text-sm text-gray-600 font-medium">Student does not have a high school certificate</span>
+                        </label>
+                        {noHighSchoolCertificate && (
+                          <textarea
+                            value={highSchoolMissingNote}
+                            onChange={(e) => setHighSchoolMissingNote(e.target.value)}
+                            className={`${inputCls} mt-3 min-h-[80px] resize-none`}
+                            placeholder="Write the reason or comment…"
+                          />
+                        )}
+                      </div>
+
+                      {/* Underage documents */}
+                      {(() => {
+                        const age = form.dob ? calculateAge(form.dob) : null;
+                        const underage = age != null && age < 18;
+                        if (!underage) return null;
+                        return (
+                          <>
+                            <div className="sm:col-span-2">
+                              <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-semibold">
+                                Student is under 18 — parental documents required.
+                              </div>
+                            </div>
+                            <div>
+                              <label className={labelCls}>Birth Certificate <span className="text-red-400">*</span></label>
+                              <label className={uploadZoneCls}>
+                                <input type="file" accept="image/*,.pdf" onChange={(e) => onBirthCertificate(e.target.files?.[0])} className="sr-only" />
+                                <div className="flex flex-col items-center gap-2">
+                                  {birthCertificateUrl ? (
+                                    <>
+                                      <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                      <span className="text-xs font-semibold text-green-600">Uploaded</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload className="w-6 h-6 text-gray-300" />
+                                      <span className="text-xs text-gray-400">Birth certificate</span>
+                                    </>
+                                  )}
+                                </div>
+                              </label>
+                            </div>
+                            <div>
+                              <label className={labelCls}>Mother's Passport <span className="text-red-400">*</span></label>
+                              <label className={uploadZoneCls}>
+                                <input type="file" accept="image/*,.pdf" onChange={(e) => onMotherPassport(e.target.files?.[0])} className="sr-only" />
+                                <div className="flex flex-col items-center gap-2">
+                                  {motherPassportUrl ? (
+                                    <>
+                                      <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                      <span className="text-xs font-semibold text-green-600">Uploaded</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload className="w-6 h-6 text-gray-300" />
+                                      <span className="text-xs text-gray-400">Mother's passport</span>
+                                    </>
+                                  )}
+                                </div>
+                              </label>
+                            </div>
+                            <div>
+                              <label className={labelCls}>Father's Passport <span className="text-red-400">*</span></label>
+                              <label className={uploadZoneCls}>
+                                <input type="file" accept="image/*,.pdf" onChange={(e) => onFatherPassport(e.target.files?.[0])} className="sr-only" />
+                                <div className="flex flex-col items-center gap-2">
+                                  {fatherPassportUrl ? (
+                                    <>
+                                      <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                      <span className="text-xs font-semibold text-green-600">Uploaded</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload className="w-6 h-6 text-gray-300" />
+                                      <span className="text-xs text-gray-400">Father's passport</span>
+                                    </>
+                                  )}
+                                </div>
+                              </label>
+                            </div>
+                          </>
+                        );
+                      })()}
+
+                      {/* PDFs */}
+                      <div>
+                        <label className={labelCls}>Supporting PDFs</label>
+                        <label className={uploadZoneCls}>
+                          <input multiple type="file" accept="application/pdf" onChange={(e) => onFilePdf(e.target.files)} className="sr-only" />
+                          <div className="flex flex-col items-center gap-2">
+                            {pdfs.length > 0 ? (
+                              <>
+                                <FileText className="w-6 h-6 text-amber-500" />
+                                <span className="text-xs font-semibold text-amber-600">{pdfs.length} PDF{pdfs.length > 1 ? 's' : ''} uploaded</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="w-6 h-6 text-gray-300" />
+                                <span className="text-xs text-gray-400">Click to upload PDFs (multiple allowed)</span>
+                              </>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Extra docs */}
+                      <div>
+                        <label className={labelCls}>Extra Documents <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
+                        <label className={uploadZoneCls}>
+                          <input multiple type="file" accept="application/pdf,image/*" onChange={(e) => onFileExtra(e.target.files)} className="sr-only" />
+                          <div className="flex flex-col items-center gap-2">
+                            {extraDocs.length > 0 ? (
+                              <>
+                                <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                <span className="text-xs font-semibold text-green-600">{extraDocs.length} file{extraDocs.length > 1 ? 's' : ''} uploaded</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-6 h-6 text-gray-300" />
+                                <span className="text-xs text-gray-400">Any additional files</span>
+                              </>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Submit */}
+                  <div className="flex justify-end pt-2 border-t border-gray-100">
+                    <button
+                      type="submit"
+                      className="flex items-center gap-2 bg-amber-600 text-white rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-amber-700 transition-colors"
+                    >
                       <Upload className="w-4 h-4" />
                       Submit Application
                     </button>
                   </div>
                 </form>
-              </motion.div>
-
-              <section className="mt-10">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-black text-black">My Students</h2>
-                  <div className="px-4 py-2 bg-white rounded-xl border border-gray-100 shadow-sm text-xs font-bold text-gray-500">
-                    Showing {applications.filter(a => a.agencyId === user?.id).length} results
-                  </div>
-                </div>
-                <div className="grid gap-4">
-                  {applications.filter(a => a.agencyId === user?.id).length > 0 ? (
-                    applications.filter(a => a.agencyId === user?.id).map((app) => (
-                      <div key={app.id} className="tw-card p-6 flex flex-wrap items-center justify-between gap-6 hover:border-amber-200 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center font-black text-gray-400">
-                            {app.name.charAt(0)}
-                          </div>
-                          <div>
-                            <h3 className="font-black text-black">{app.name}</h3>
-                            <p className="text-xs font-medium text-gray-500">{app.studentEmail || app.email}</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-8">
-                          <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Program</p>
-                            <p className="text-sm font-bold text-black">{app.program}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</p>
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                              app.status === 'approved' ? 'bg-green-100 text-green-600' :
-                              app.status === 'rejected' ? 'bg-red-100 text-red-600' :
-                              'bg-amber-100 text-amber-600'
-                            }`}>
-                              {app.status}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stage</p>
-                            <p className="text-sm font-bold text-black capitalize">{app.stage}</p>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => setViewApp({ open: true, id: app.id })}
-                          className="px-6 py-2.5 bg-black text-white rounded-xl text-xs font-black hover:bg-amber-500 hover:text-black transition-all"
-                        >
-                          View Details
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="tw-card p-12 text-center border-dashed">
-                      <p className="text-gray-400 font-medium">No students found. Submit your first student above!</p>
-                    </div>
-                  )}
-                </div>
-              </section>
+              </div>
             </motion.div>
+
           ) : (
+            /* ═══════════════════════════════════════════════════════════════
+                PROFILE / INTAKE TAB
+            ════════════════════════════════════════════════════════════════ */
             <motion.div
               key="profile"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="space-y-8"
+              className="space-y-6"
             >
-              <div className="grid lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-8">
-                  <section className="tw-card p-8">
-                    <div className="flex items-center gap-6 mb-8">
-                      <div className="w-20 h-20 bg-black text-amber-500 rounded-[32px] flex items-center justify-center text-3xl font-black">
+              <div className="grid lg:grid-cols-3 gap-6">
+                {/* Left: profile + performance */}
+                <div className="lg:col-span-2 space-y-6">
+
+                  {/* Agency info card */}
+                  <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0">
                         {user?.name.charAt(0)}
                       </div>
                       <div>
-                        <h2 className="text-2xl font-black text-black">{user?.name}</h2>
-                        <p className="text-sm font-medium text-gray-500">Official Partner Agency</p>
-                        <div className="flex items-center gap-4 mt-3">
-                          <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider">
-                            <Award className="w-3.5 h-3.5" />
+                        <h2 className="text-lg font-semibold text-gray-900">{user?.name}</h2>
+                        <p className="text-sm text-gray-400">Official Partner Agency</p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-xs font-semibold">
+                            <Award className="w-3 h-3" />
                             Tier 1 Partner
-                          </div>
-                          <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                            Member since {user?.createdAt ? new Date(user.createdAt).getFullYear() : '-'}
-                          </div>
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            Since {user?.createdAt ? new Date(user.createdAt).getFullYear() : '-'}
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid sm:grid-cols-2 gap-4 pt-8 border-t border-gray-50">
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agency ID</p>
-                        <p className="font-bold text-black">{user?.id.slice(0, 8)}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email Address</p>
-                        <p className="font-bold text-black">{user?.email}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Portal Username</p>
-                        <p className="font-bold text-black">@{user?.username}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Points</p>
-                        <p className="font-bold text-amber-600">{user?.points ?? 0} PTS</p>
-                      </div>
+                    <div className="grid sm:grid-cols-2 gap-4 pt-5 border-t border-gray-100">
+                      {[
+                        { label: 'Agency ID', value: user?.id.slice(0, 8) },
+                        { label: 'Email Address', value: user?.email },
+                        { label: 'Portal Username', value: `@${user?.username}` },
+                        { label: 'Total Points', value: `${user?.points ?? 0} pts`, highlight: true },
+                      ].map((row) => (
+                        <div key={row.label}>
+                          <p className="text-xs text-gray-400 font-medium mb-0.5">{row.label}</p>
+                          <p className={`text-sm font-semibold ${row.highlight ? 'text-amber-600' : 'text-gray-800'}`}>{row.value}</p>
+                        </div>
+                      ))}
                     </div>
-                  </section>
+                  </div>
 
-                  <section className="tw-card p-8">
-                    <h3 className="text-xl font-black text-black mb-6 flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-amber-500" />
+                  {/* Performance */}
+                  <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-5 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-amber-500" />
                       Agency Performance
                     </h3>
-                    <div className="space-y-6">
-                      {(() => {
-                        const myApps = applications.filter(a => a.agencyId === user?.id);
-                        const approved = myApps.filter(a => a.status === 'approved').length;
-                        const total = myApps.length;
-                        const rate = total > 0 ? Math.round((approved / total) * 100) : 0;
-                        return (
-                          <>
-                            <div className="grid sm:grid-cols-3 gap-6">
-                              <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Success Rate</p>
-                                <p className="text-2xl font-black text-black">{rate}%</p>
+                    {(() => {
+                      const approved = myApps.filter(a => a.status === 'approved').length;
+                      const total = myApps.length;
+                      const rate = total > 0 ? Math.round((approved / total) * 100) : 0;
+                      return (
+                        <div className="space-y-5">
+                          <div className="grid sm:grid-cols-3 gap-4">
+                            {[
+                              { label: 'Success Rate', value: `${rate}%` },
+                              { label: 'Active Students', value: myApps.filter(a => a.status === 'approved' && a.stage !== 'enrolled').length },
+                              { label: 'Points Earned', value: user?.points ?? 0 },
+                            ].map((m) => (
+                              <div key={m.label} className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                                <p className="text-xs text-gray-400 font-medium mb-1">{m.label}</p>
+                                <p className="text-xl font-bold text-gray-900">{m.value}</p>
                               </div>
-                              <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Students</p>
-                                <p className="text-2xl font-black text-black">{myApps.filter(a => a.status === 'approved' && a.stage !== 'enrolled').length}</p>
-                              </div>
-                              <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Earned</p>
-                                <p className="text-2xl font-black text-black">{user?.points ?? 0}</p>
-                              </div>
+                            ))}
+                          </div>
+                          <div>
+                            <div className="flex justify-between mb-1.5">
+                              <p className="text-xs font-medium text-gray-500">Tier 1</p>
+                              <p className="text-xs font-medium text-gray-500">Tier 2 — 1,000 pts</p>
                             </div>
-                            <div className="pt-4">
-                              <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Next Tier Progress</p>
-                              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min((user?.points ?? 0) / 10, 100)}%` }} />
-                              </div>
-                              <div className="flex justify-between mt-2">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tier 1</p>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tier 2 (1000 PTS)</p>
-                              </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-amber-500 rounded-full transition-all"
+                                style={{ width: `${Math.min((user?.points ?? 0) / 10, 100)}%` }}
+                              />
                             </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </section>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
 
-                <div className="space-y-8">
-                  <section className="tw-card p-8">
-                    <h3 className="text-xl font-black text-black mb-6">Top Agencies</h3>
-                    <div className="space-y-4">
+                {/* Right: leaderboard + support */}
+                <div className="space-y-6">
+                  <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-4">Top Agencies</h3>
+                    <div className="space-y-2">
                       {users
                         .filter(u => u.role === 'agency')
                         .sort((a, b) => (b.points ?? 0) - (a.points ?? 0))
                         .slice(0, 5)
                         .map((u, i) => (
-                          <div key={u.id} className={`flex items-center justify-between p-4 rounded-2xl border ${u.id === user?.id ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100'}`}>
-                            <div className="flex items-center gap-3">
-                              <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${i === 0 ? 'bg-amber-500 text-black' : 'bg-black text-white'}`}>
+                          <div
+                            key={u.id}
+                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl border ${
+                              u.id === user?.id ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${i === 0 ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
                                 {i + 1}
                               </span>
                               <div>
-                                <p className="text-sm font-black text-black">{u.name}</p>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{u.points ?? 0} PTS</p>
+                                <p className="text-sm font-semibold text-gray-800">{u.name}</p>
+                                <p className="text-xs text-gray-400">{u.points ?? 0} pts</p>
                               </div>
                             </div>
                             {u.id === user?.id && <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />}
                           </div>
                         ))}
                     </div>
-                  </section>
+                  </div>
 
-                  <section className="tw-card p-8 bg-black text-white">
-                    <h3 className="text-lg font-black mb-4">Partner Support</h3>
-                    <p className="text-sm text-white/60 mb-6 font-medium">Need help with a student application or have a special request?</p>
-                    <a href="mailto:partners@theway.ge" className="flex items-center justify-between p-4 bg-white/10 rounded-2xl hover:bg-white hover:text-black transition-all group">
-                      <span className="text-sm font-black">Contact Manager</span>
-                      <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  {/* Support */}
+                  <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-1">Partner Support</h3>
+                    <p className="text-xs text-gray-400 mb-4">Need help with an application or special request?</p>
+                    <a
+                      href="mailto:partners@theway.ge"
+                      className="flex items-center justify-between px-4 py-3 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors group"
+                    >
+                      Contact Manager
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                     </a>
-                  </section>
+                  </div>
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </main>
+
+      {/* ─── Application Detail Modal ─── */}
       {viewApp?.open && (() => {
         const a = applications.find(x => x.id === viewApp.id);
         if (!a) return null;
@@ -755,21 +934,39 @@ Underage: ${underage ? 'Yes' : 'No'}`;
           : [];
         return (
           <div className="fixed inset-0 z-[120] p-4 flex items-start justify-center overflow-y-auto">
-            <div className="absolute inset-0 bg-black/60" onClick={() => setViewApp({ open: false })} />
-            <div className="relative tw-card p-8 w-full max-w-3xl my-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
-              <h3 className="text-2xl font-black text-black mb-6">Student Profile</h3>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <p className="text-xs font-bold text-gray-500">Name</p>
-                  <p className="font-black">{a.name}</p>
-                  <p className="text-xs font-bold text-gray-500 mt-2">University</p>
-                  <p className="font-black">{a.university ? getUniversityName(a.university) : '-'}</p>
-                  <div className="mt-4">
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-2 bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setViewApp({ open: false })} />
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-sm w-full max-w-3xl my-10 overflow-y-auto max-h-[90vh]">
+
+              {/* Modal header */}
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-2xl">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">{a.name}</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">{a.studentEmail || a.email}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full text-xs font-semibold px-2.5 py-0.5 ${statusBadge(a.status)}`}>{a.status}</span>
+                  <button
+                    onClick={() => setViewApp({ open: false })}
+                    className="text-gray-400 hover:text-gray-700 text-xs font-medium"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-6 py-6 space-y-6">
+                {/* Two columns: progress + video/docs */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Progress */}
+                  <div>
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-3">Application Progress</p>
+                    <div className="mb-2">
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">{done} / {steps.length} steps complete</p>
                     </div>
-                    <p className="text-[10px] text-gray-500 font-bold mt-1">Progress: {done}/5</p>
-                    <div className="mt-3 grid grid-cols-1 gap-2">
+                    <div className="space-y-1.5 mt-3">
                       {(['translation','university-approval','recognition-letter','ministry-order','visa-documents'] as const).map((s) => {
                         const has = a.studentId ? documents.some(d => d.studentId === a.studentId && d.type === s && d.status === 'verified') : false;
                         const label = s === 'translation' ? 'Documents translation'
@@ -777,143 +974,192 @@ Underage: ${underage ? 'Yes' : 'No'}`;
                           : s === 'recognition-letter' ? 'Recognition letter'
                           : s === 'ministry-order' ? 'Ministry order' : 'Visa required documents';
                         return (
-                          <div key={s} className={`px-3 py-2 rounded-xl border text-[12px] font-bold ${has ? 'bg-green-50 border-green-100 text-green-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
+                          <div key={s} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium ${has ? 'bg-green-50 border-green-100 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-500'}`}>
+                            {has ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" /> : <Clock className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
                             {label}
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {a.intakeVideoUrl && <video controls className="w-full rounded-2xl border border-gray-100" src={a.intakeVideoUrl} />}
-                  <pre className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-medium whitespace-pre-wrap">{a.intakeDetails || 'No intake summary'}</pre>
-                  <div className="flex flex-wrap gap-2">
-                    {a.intakePassportCopy && <a href={a.intakePassportCopy} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black">Passport</a>}
-                    {a.intakeHighSchoolCertificate && <a href={a.intakeHighSchoolCertificate} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-[10px] font-black">HS Certificate</a>}
-                    {(a.intakeAttachments || []).map((p,i)=> <a key={i} href={p} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-black">PDF {i+1}</a>)}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-6 bg-white border border-gray-100 rounded-[28px] p-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Timeline</p>
-                {(a.events ?? []).length === 0 ? (
-                  <p className="text-sm font-medium text-gray-500">No activity yet.</p>
-                ) : (
-                  <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-2">
-                    {(a.events ?? [])
-                      .slice()
-                      .sort((x, y) => new Date(y.time).getTime() - new Date(x.time).getTime())
-                      .slice(0, 12)
-                      .map((ev) => (
-                        <div key={ev.id} className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-black text-black">{ev.type.replaceAll('_', ' ')}</p>
-                              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">{ev.byName}</p>
-                            </div>
-                            <p className="text-[10px] font-bold text-gray-400">{new Date(ev.time).toLocaleString()}</p>
-                          </div>
-                          {ev.details && <p className="text-sm font-medium text-gray-600 mt-2 whitespace-pre-wrap">{ev.details}</p>}
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-              {a.hold && (
-                <div className="mt-6 bg-red-50 border border-red-100 rounded-[28px] p-6">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-red-600">More info requested</p>
-                  <p className="font-black text-black mt-1">{a.hold.message}</p>
-                  <p className="text-[10px] font-bold text-red-600 mt-2">{a.hold.byName} - {new Date(a.hold.time).toLocaleString()}</p>
-                  <div className="mt-4">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Upload additional documents</label>
-                    <input
-                      multiple
-                      type="file"
-                      accept="application/pdf,image/*,video/*"
-                      onChange={(e) => {
-                        const files = e.target.files;
-                        if (!files || files.length === 0) return;
-                        (async () => {
-                          try {
-                            const urls = await Promise.all(Array.from(files).map(async (f) => uploadFile(f)));
-                            agencyAddExtraDocs(a.id, urls);
-                            toast.success('Documents uploaded');
-                          } catch (err) {
-                            const msg = err instanceof Error ? err.message : 'Upload failed';
-                            toast.error(msg);
-                          } finally {
-                            e.target.value = '';
-                          }
-                        })();
-                      }}
-                      className="mt-2 w-full px-5 py-3 bg-white rounded-2xl border border-red-100"
-                    />
-                  </div>
-                </div>
-              )}
-              <div className="mt-6">
-                {a.assignedStaffId && user?.role === 'agency' ? (
-                  <div className="bg-gray-50 border border-gray-100 rounded-[28px] overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Chat with assigned admin</p>
-                        <p className="font-black text-black">{staff?.name ?? 'Assigned Admin'}</p>
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Per student</span>
+
+                    <div className="mt-4 space-y-1">
+                      <p className="text-xs text-gray-400 font-medium">University</p>
+                      <p className="text-sm font-semibold text-gray-800">{a.university ? getUniversityName(a.university) : '—'}</p>
                     </div>
-                    <div className="p-6 max-h-64 overflow-y-auto custom-scrollbar space-y-3">
-                      {thread.length === 0 ? (
-                        <p className="text-sm font-medium text-gray-500">No messages yet.</p>
-                      ) : (
-                        thread.map((m) => {
-                          const mine = m.userId === user.id;
-                          return (
-                            <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`${mine ? 'bg-black text-white rounded-2xl rounded-tr-none' : 'bg-white border border-gray-200 rounded-2xl rounded-tl-none'} px-4 py-3 max-w-[80%]`}>
-                                <p className="text-sm font-medium whitespace-pre-wrap">{m.text}</p>
-                                <p className={`text-[10px] font-bold mt-2 ${mine ? 'text-white/40' : 'text-gray-400'}`}>{new Date(m.time).toLocaleString()}</p>
-                              </div>
-                            </div>
-                          );
-                        })
+                  </div>
+
+                  {/* Media + docs */}
+                  <div className="space-y-3">
+                    {a.intakeVideoUrl && (
+                      <video controls className="w-full rounded-xl border border-gray-100" src={a.intakeVideoUrl} />
+                    )}
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                      <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap leading-relaxed">{a.intakeDetails || 'No intake summary'}</pre>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {a.intakePassportCopy && (
+                        <a href={a.intakePassportCopy} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition-colors">
+                          <FileText className="w-3 h-3" /> Passport
+                        </a>
                       )}
-                    </div>
-                    <div className="p-4 border-t border-gray-100 bg-white">
-                      <div className="relative">
-                        <input
-                          value={chatDraft}
-                          onChange={(e) => setChatDraft(e.target.value)}
-                          placeholder="Type a message..."
-                          className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium outline-none focus:ring-2 focus:ring-amber-500/20"
-                        />
-                        <button
-                          onClick={() => {
-                            const msg = chatDraft.trim();
-                            if (!msg || !a.assignedStaffId) return;
-                            try {
-                              addChatMessage(a.assignedStaffId, msg, a.id);
-                              setChatDraft('');
-                            } catch (e) {
-                              toast.error(e instanceof Error ? e.message : 'Unable to send message');
-                            }
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-black text-white rounded-xl flex items-center justify-center hover:bg-amber-500 hover:text-black transition-all"
-                          aria-label="Send"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {a.intakeHighSchoolCertificate && (
+                        <a href={a.intakeHighSchoolCertificate} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-semibold hover:bg-purple-100 transition-colors">
+                          <FileText className="w-3 h-3" /> HS Certificate
+                        </a>
+                      )}
+                      {(a.intakeAttachments || []).map((p, i) => (
+                        <a key={i} href={p} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition-colors">
+                          <FileText className="w-3 h-3" /> PDF {i + 1}
+                        </a>
+                      ))}
                     </div>
                   </div>
-                ) : (
-                  <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-medium text-gray-500">
-                    Chat will be available after an admin is assigned to this student.
+                </div>
+
+                {/* Timeline */}
+                <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
+                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-3">Timeline</p>
+                  {(a.events ?? []).length === 0 ? (
+                    <p className="text-sm text-gray-400">No activity yet.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {(a.events ?? [])
+                        .slice()
+                        .sort((x, y) => new Date(y.time).getTime() - new Date(x.time).getTime())
+                        .slice(0, 12)
+                        .map((ev) => (
+                          <div key={ev.id} className="bg-white border border-gray-100 rounded-lg p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-semibold text-gray-800">{ev.type.replaceAll('_', ' ')}</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">{ev.byName}</p>
+                              </div>
+                              <p className="text-[10px] text-gray-400 shrink-0">{new Date(ev.time).toLocaleString()}</p>
+                            </div>
+                            {ev.details && <p className="text-xs text-gray-600 mt-1.5 whitespace-pre-wrap">{ev.details}</p>}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Hold / more info requested */}
+                {a.hold && (
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                      <p className="text-xs font-semibold text-red-600 uppercase tracking-wider">More info requested</p>
+                    </div>
+                    <p className="text-sm font-medium text-gray-800">{a.hold.message}</p>
+                    <p className="text-xs text-red-400 mt-1">{a.hold.byName} — {new Date(a.hold.time).toLocaleString()}</p>
+                    <div className="mt-4">
+                      <label className={labelCls}>Upload additional documents</label>
+                      <label className={`${uploadZoneCls} border-red-200 hover:border-red-400 hover:bg-red-50/30`}>
+                        <input
+                          multiple
+                          type="file"
+                          accept="application/pdf,image/*,video/*"
+                          onChange={(e) => {
+                            const files = e.target.files;
+                            if (!files || files.length === 0) return;
+                            (async () => {
+                              try {
+                                const urls = await Promise.all(Array.from(files).map(async (f) => uploadFile(f)));
+                                agencyAddExtraDocs(a.id, urls);
+                                toast.success('Documents uploaded');
+                              } catch (err) {
+                                const msg = err instanceof Error ? err.message : 'Upload failed';
+                                toast.error(msg);
+                              } finally {
+                                e.target.value = '';
+                              }
+                            })();
+                          }}
+                          className="sr-only"
+                        />
+                        <div className="flex flex-col items-center gap-1.5">
+                          <Upload className="w-5 h-5 text-red-300" />
+                          <span className="text-xs text-red-400">Click to upload additional files</span>
+                        </div>
+                      </label>
+                    </div>
                   </div>
                 )}
-              </div>
-              <div className="mt-6 flex justify-end">
-                <button onClick={() => setViewApp({ open: false })} className="px-6 py-3 rounded-2xl font-black text-sm bg-black text-white hover:bg-amber-500 hover:text-black transition-all">Close</button>
+
+                {/* Chat */}
+                <div>
+                  {a.assignedStaffId && user?.role === 'agency' ? (
+                    <div className="border border-gray-100 rounded-xl overflow-hidden">
+                      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-gray-400 font-medium">Chat with assigned admin</p>
+                          <p className="text-sm font-semibold text-gray-800">{staff?.name ?? 'Assigned Admin'}</p>
+                        </div>
+                        <span className="text-xs text-gray-400">Per student</span>
+                      </div>
+                      <div className="p-4 max-h-56 overflow-y-auto space-y-2 bg-white">
+                        {thread.length === 0 ? (
+                          <p className="text-sm text-gray-400 text-center py-4">No messages yet.</p>
+                        ) : (
+                          thread.map((m) => {
+                            const mine = m.userId === user.id;
+                            return (
+                              <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`px-3.5 py-2.5 rounded-xl max-w-[78%] text-sm ${mine ? 'bg-amber-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
+                                  <p className="whitespace-pre-wrap">{m.text}</p>
+                                  <p className={`text-[10px] mt-1.5 ${mine ? 'text-amber-200' : 'text-gray-400'}`}>{new Date(m.time).toLocaleString()}</p>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                      <div className="p-3 border-t border-gray-100 bg-white">
+                        <div className="flex gap-2">
+                          <input
+                            value={chatDraft}
+                            onChange={(e) => setChatDraft(e.target.value)}
+                            placeholder="Type a message…"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                const msg = chatDraft.trim();
+                                if (!msg || !a.assignedStaffId) return;
+                                try {
+                                  addChatMessage(a.assignedStaffId, msg, a.id);
+                                  setChatDraft('');
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : 'Unable to send message');
+                                }
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              const msg = chatDraft.trim();
+                              if (!msg || !a.assignedStaffId) return;
+                              try {
+                                addChatMessage(a.assignedStaffId, msg, a.id);
+                                setChatDraft('');
+                              } catch (e) {
+                                toast.error(e instanceof Error ? e.message : 'Unable to send message');
+                              }
+                            }}
+                            className="bg-amber-600 text-white rounded-lg px-3 py-2 hover:bg-amber-700 transition-colors"
+                            aria-label="Send"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm text-gray-400">
+                      Chat will be available after an admin is assigned to this student.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
