@@ -157,6 +157,8 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
+      {/* Public marketing site — reachable even while logged in (staff "Main website" link) */}
+      <Route path="/welcome" element={<LandingPage />} />
       <Route path="/universities" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />
       <Route path="/universities/:id" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />
       <Route

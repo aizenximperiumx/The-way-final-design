@@ -25,6 +25,30 @@ import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import toast from 'react-hot-toast';
 import { tryGetSupabase } from '../lib/supabase';
 
+/* ── Shared modal shell (module scope so typing in inputs doesn't remount them) ── */
+const ModalShell = ({ title, onClose, children, maxW = 'max-w-lg' }: { title: string; onClose: () => void; children: React.ReactNode; maxW?: string }) => (
+  <div className="fixed inset-0 z-[100] p-4 flex items-start justify-center overflow-y-auto">
+    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+    <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${maxW} my-10 max-h-[90vh] overflow-y-auto`}>
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+        <h3 className="text-base font-bold text-gray-900">{title}</h3>
+        <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="p-6">{children}</div>
+    </div>
+  </div>
+);
+
+/* ── Shared form field (module scope, same reason) ── */
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="space-y-1.5">
+    <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">{label}</label>
+    {children}
+  </div>
+);
+
 const AdminDashboard: React.FC = () => {
   useAuth();
   const { users, applications, ceoCreateAgencyAccount, ceoResetCredentials, assignStaffAdmin, ceoCreateUser, ceoUpdateUser } = useAppStore();
@@ -43,6 +67,8 @@ const AdminDashboard: React.FC = () => {
   const [credUserId, setCredUserId] = useState<string | null>(null);
   const [credUsername, setCredUsername] = useState('');
   const [credPassword, setCredPassword] = useState('');
+  const [credEmail, setCredEmail] = useState('');
+  const [credSaving, setCredSaving] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignStudentId, setAssignStudentId] = useState<string>('');
   const [assignStaffId, setAssignStaffId] = useState<string>('');
@@ -173,30 +199,7 @@ const AdminDashboard: React.FC = () => {
   }, [activeTab]);
 
   /* ── Shared modal shell ── */
-  const ModalShell = ({ title, onClose, children, maxW = 'max-w-lg' }: { title: string; onClose: () => void; children: React.ReactNode; maxW?: string }) => (
-    <div className="fixed inset-0 z-[100] p-4 flex items-start justify-center overflow-y-auto">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${maxW} my-10 max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
-          <h3 className="text-base font-bold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
-  );
-
-  /* ── Shared form field ── */
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="space-y-1.5">
-      <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">{label}</label>
-      {children}
-    </div>
-  );
-
-  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none transition-all";
+  const inputCls ="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none transition-all";
   const selectCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none transition-all appearance-none bg-white";
 
   /* ── Shared credentials display ── */
@@ -680,6 +683,7 @@ const AdminDashboard: React.FC = () => {
                         onClick={() => {
                           setCredUserId(u.id);
                           setCredUsername(u.username);
+                          setCredEmail(u.email);
                           setCredPassword('');
                           setShowCredModal(true);
                         }}
@@ -748,31 +752,50 @@ const AdminDashboard: React.FC = () => {
             )}
 
             {showCredModal && (
-              <ModalShell title="Reset Credentials" onClose={() => setShowCredModal(false)}>
+              <ModalShell title="Edit Account" onClose={() => setShowCredModal(false)}>
                 <div className="space-y-4">
                   <Field label="Username">
-                    <input className={inputCls} value={credUsername} onChange={(e) => setCredUsername(e.target.value)} />
+                    <input className={inputCls} value={credUsername} onChange={(e) => setCredUsername(e.target.value)} autoComplete="off" />
+                  </Field>
+                  <Field label="Email">
+                    <input type="email" className={inputCls} value={credEmail} onChange={(e) => setCredEmail(e.target.value)} autoComplete="off" placeholder="login@email.com" />
                   </Field>
                   <Field label="New Password">
-                    <input type="password" className={inputCls} value={credPassword} onChange={(e) => setCredPassword(e.target.value)} />
+                    <input type="text" className={inputCls} value={credPassword} onChange={(e) => setCredPassword(e.target.value)} autoComplete="new-password" placeholder="Leave blank to keep current" />
                   </Field>
+                  <p className="text-xs text-gray-400">Only the fields you change are updated. The user can sign in with the new email/username immediately.</p>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
                   <button onClick={() => setShowCredModal(false)} className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors">Cancel</button>
                   <button
+                    disabled={credSaving}
                     onClick={async () => {
                       if (!credUserId) return;
+                      const original = users.find(u => u.id === credUserId);
+                      const updates: { username?: string; email?: string; password?: string } = {};
+                      const uname = credUsername.trim();
+                      const mail = credEmail.trim();
+                      if (uname && uname !== original?.username) updates.username = uname;
+                      if (mail && mail !== original?.email) updates.email = mail;
+                      if (credPassword) {
+                        if (credPassword.length < 8) { toast.error('Password must be at least 8 characters'); return; }
+                        updates.password = credPassword;
+                      }
+                      if (Object.keys(updates).length === 0) { toast.error('Nothing to update'); return; }
+                      setCredSaving(true);
                       try {
-                        await ceoResetCredentials(credUserId, { username: credUsername, password: credPassword });
-                        toast.success('Credentials updated');
+                        await ceoResetCredentials(credUserId, updates);
+                        toast.success('Account updated');
                         setShowCredModal(false);
                       } catch (e) {
                         toast.error(e instanceof Error ? e.message : 'Failed to update');
+                      } finally {
+                        setCredSaving(false);
                       }
                     }}
-                    className="bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors"
+                    className="bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-60"
                   >
-                    Save Changes
+                    {credSaving ? 'Saving…' : 'Save Changes'}
                   </button>
                 </div>
               </ModalShell>

@@ -17,6 +17,8 @@ import iliaPhotoUrl from '../../Ilia State University (ISU).jpg';
 import altePhotoUrl from '../../Alte University.jpg';
 import { useAuth } from '../context/AuthContext';
 import { useAppStore } from '../store/appStore';
+import { useI18n } from '../lib/i18n';
+import LanguageToggle from '../components/LanguageToggle';
 
 type ProgramRow = { program: string; duration?: string; fee?: string };
 type ProgramSection = { title: string; rows: ProgramRow[] };
@@ -1177,8 +1179,7 @@ function ProgramTable({ section }: { section: ProgramSection }) {
 export default function UniversitiesPage() {
   const { user } = useAuth();
   const { id } = useParams<{ id?: string }>();
-  const language = 'ar'; // Fixed to Arabic as requested
-  const isRTL = true; // Arabic is RTL
+  const { lang: language, isRTL, dir, fontFamily } = useI18n();
   
   const universities = useMemo(() => {
     return decodedUniversities.map(u => ({
@@ -1216,7 +1217,7 @@ export default function UniversitiesPage() {
   const backHref = user ? getHomePathForRole(user.role) : '/';
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9]" dir={isRTL ? 'rtl' : 'ltr'} style={{ fontFamily: isRTL ? 'var(--font-arabic)' : 'var(--font-sans)' }}>
+    <div className="min-h-screen bg-[#FAFAF9]" dir={dir} style={{ fontFamily }}>
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -1233,13 +1234,16 @@ export default function UniversitiesPage() {
               </p>
             </div>
           </div>
-          <Link
-            to={backHref}
-            className="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
-          >
-            {isRTL ? <ArrowLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            {isRTL ? 'رجوع' : 'Back'}
-          </Link>
+          <div className="flex items-center gap-2">
+            <LanguageToggle />
+            <Link
+              to={backHref}
+              className="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
+            >
+              {isRTL ? <ArrowLeft className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              {isRTL ? 'رجوع' : 'Back'}
+            </Link>
+          </div>
         </div>
       </header>
 

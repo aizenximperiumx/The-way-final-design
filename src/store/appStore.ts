@@ -193,6 +193,9 @@ export interface AppStoreState {
   login: (username: string, password: string) => Promise<User | null>;
   logout: () => void;
   changePassword: (newPassword: string) => Promise<void>;
+  markNotificationsRead: (ids?: string[]) => void;
+  markAllNotificationsRead: () => void;
+  updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => void;
   restoreSession: () => Promise<void>;
   refreshUsersFromBackend: () => Promise<void>;
   loadBackendState: () => Promise<void>;
@@ -235,7 +238,7 @@ export interface AppStoreState {
 
   ceoCreateUser: (user: User) => Promise<User>;
   ceoUpdateUser: (userId: string, updates: Partial<User>) => void;
-  ceoResetCredentials: (userId: string, updates: Partial<Pick<User, 'username' | 'password'>>) => Promise<void>;
+  ceoResetCredentials: (userId: string, updates: Partial<Pick<User, 'username' | 'password' | 'email'>>) => Promise<void>;
   ceoCreateAgencyAccount: (name: string, email: string) => Promise<User>;
 
   addAppointment: (appt: Omit<Appointment, 'id'>) => void;
@@ -405,6 +408,29 @@ const useAppStore = create<AppStoreState>()(
         if (!supabase) throw new Error('Account service is not available right now');
         const { error } = await supabase.auth.updateUser({ password: pw });
         if (error) throw new Error(error.message || 'Could not update password');
+      },
+
+      markNotificationsRead: (ids?: string[]) => {
+        const me = get().currentUser;
+        if (!me) return;
+        const idSet = ids ? new Set(ids) : null;
+        set((state) => ({
+          notifications: state.notifications.map(n =>
+            n.userId === me.id && (!idSet || idSet.has(n.id)) ? { ...n, read: true } : n
+          ),
+        }));
+        queueBackendSave(get);
+      },
+
+      markAllNotificationsRead: () => {
+        get().markNotificationsRead();
+      },
+
+      updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => {
+        set((state) => ({
+          appointments: state.appointments.map(a => a.id === appointmentId ? { ...a, status } : a),
+        }));
+        queueBackendSave(get);
       },
 
       restoreSession: async () => {
@@ -1172,7 +1198,7 @@ const useAppStore = create<AppStoreState>()(
         })();
       },
 
-      ceoResetCredentials: async (userId: string, updates: Partial<Pick<User, 'username' | 'password'>>) => {
+      ceoResetCredentials: async (userId: string, updates: Partial<Pick<User, 'username' | 'password' | 'email'>>) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         requireRole(actor, ['ceo']);
         const supabase = getSupabase();
@@ -1182,7 +1208,7 @@ const useAppStore = create<AppStoreState>()(
         const resp = await fetch('/api/admin-reset-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ userId, username: updates.username, password: updates.password }),
+          body: JSON.stringify({ userId, username: updates.username, password: updates.password, email: updates.email }),
         });
         const json = (await resp.json()) as { ok?: unknown; error?: unknown };
         if (!resp.ok) {
@@ -1211,6 +1237,7 @@ const useAppStore = create<AppStoreState>()(
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         if (actor.role === 'student' && appt.userId !== actor.id) throw new Error('Forbidden');
         set((state) => ({ appointments: [...state.appointments, { ...appt, id: Date.now().toString() }] }));
+        queueBackendSave(get);
       },
 
       markChatThreadRead: (threadKey: string) => {
@@ -1460,8 +1487,9 @@ const useAppStore = create<AppStoreState>()(
       name: 'the-way-storage',
       storage: createJSONStorage(() => localStorage),
       version: 5,
-      partialize: (state) => ({ 
-        currentUser: state.currentUser, 
+      partialize: (state) => ({
+        language: state.language,
+        currentUser: state.currentUser,
         authStatus: state.authStatus,
         users: state.users,
         applications: state.applications,

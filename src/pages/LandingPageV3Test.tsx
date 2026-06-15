@@ -30,6 +30,8 @@ import ibsuPhotoUrl from '../../International Black Sea University (IBSU).jpg';
 import tsmuPhotoUrl from '../../Tbilisi state medical university ( TSMU ).jpg';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../lib/i18n';
+import LanguageToggle from '../components/LanguageToggle';
 
 const applicationSchema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -67,6 +69,7 @@ function AnimatedCount({ target, suffix }: { target: number; suffix?: string }) 
 
 export default function LandingPageV3Test() {
   const { user } = useAuth();
+  const { t: tr, dir, fontFamily } = useI18n();
   const [navSolid, setNavSolid] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -99,22 +102,22 @@ export default function LandingPageV3Test() {
   const onSubmit = async (data: ApplicationForm) => {
     try {
       await addApplication({ ...data, status: 'submitted', stage: 'applied', createdAt: new Date().toISOString() });
-      toast.success('Application submitted! Our team will contact you soon.');
+      toast.success(tr('Application submitted! Our team will contact you soon.', 'تم إرسال طلبك! سيتواصل معك فريقنا قريباً.'));
       reset();
       window.setTimeout(() => navigate('/login'), 900);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to submit');
+      toast.error(e instanceof Error ? e.message : tr('Failed to submit', 'تعذر إرسال الطلب'));
     }
   };
 
   return (
-    <div className="v3 min-h-screen">
+    <div className="v3 min-h-screen" dir={dir} style={{ fontFamily }}>
       <div className="hidden lg:block fixed top-0 left-0 right-0 z-[60]" style={{ background: 'var(--v3-yellow)' }}>
         <div className="max-w-7xl mx-auto px-6 h-[42px] flex items-center justify-between">
           <div className="flex items-center gap-7 text-[12px] font-medium" style={{ color: 'var(--v3-navy)' }}>
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4" />
-              Vakhtang Chabukiani 2, Tbilisi, Georgia
+              {tr('Vakhtang Chabukiani 2, Tbilisi, Georgia', 'فاختانغ تشابوكياني 2، تبليسي، جورجيا')}
             </div>
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4" />
@@ -163,10 +166,10 @@ export default function LandingPageV3Test() {
 
           <div className="hidden lg:flex items-center gap-10">
             {[
-              ['#home', 'Home'],
-              ['/universities', 'Universities'],
-              ['#services', 'Our Services'],
-              ['#about', 'About Us'],
+              ['#home', tr('Home', 'الرئيسية')],
+              ['/universities', tr('Universities', 'الجامعات')],
+              ['#services', tr('Our Services', 'خدماتنا')],
+              ['#about', tr('About Us', 'من نحن')],
             ].map(([href, label]) => (
               href.startsWith('/') ? (
                 <Link
@@ -188,23 +191,27 @@ export default function LandingPageV3Test() {
                 </a>
               )
             ))}
+            <LanguageToggle variant="dark" />
             <a
               href={user ? "/login" : "#contact"}
               className="v3-btn-fx px-6 py-3 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center gap-2"
               style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}
             >
-              {user ? "Go to Dashboard" : "Register Now"} <ArrowRight className="w-4 h-4" />
+              {user ? tr('Go to Dashboard', 'لوحة التحكم') : tr('Register Now', 'سجّل الآن')} <ArrowRight className="w-4 h-4" />
             </a>
           </div>
 
-          <button
-            type="button"
-            className="lg:hidden p-2"
-            aria-label="Open menu"
-            onClick={() => setMobileMenuOpen(true)}
-          >
-            <Menu className="w-6 h-6" style={{ color: 'var(--v3-yellow)' }} />
-          </button>
+          <div className="lg:hidden flex items-center gap-2">
+            <LanguageToggle variant="dark" />
+            <button
+              type="button"
+              className="p-2"
+              aria-label="Open menu"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu className="w-6 h-6" style={{ color: 'var(--v3-yellow)' }} />
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -223,12 +230,12 @@ export default function LandingPageV3Test() {
                   <X className="w-7 h-7" style={{ color: 'var(--v3-yellow)' }} />
                 </button>
                 {[
-                  ['#home', 'Home'],
-                  ['/universities', 'Universities'],
-                  ['#services', 'Our Services'],
-                  ['#about', 'About Us'],
-                  ['#contact', 'Contact Us'],
-                  ['/login', user ? 'Dashboard' : 'Portal Login'],
+                  ['#home', tr('Home', 'الرئيسية')],
+                  ['/universities', tr('Universities', 'الجامعات')],
+                  ['#services', tr('Our Services', 'خدماتنا')],
+                  ['#about', tr('About Us', 'من نحن')],
+                  ['#contact', tr('Contact Us', 'اتصل بنا')],
+                  ['/login', user ? tr('Dashboard', 'لوحة التحكم') : tr('Portal Login', 'تسجيل الدخول')],
                 ].map(([href, label]) => (
                   <div key={href} className="py-4">
                     {href.startsWith('/') ? (
@@ -272,16 +279,16 @@ export default function LandingPageV3Test() {
               <div className="flex items-center gap-4">
                 <div className="w-10 h-[2px]" style={{ background: 'var(--v3-yellow)' }} />
                 <p className="text-[10px] sm:text-[11px] tracking-[2px] sm:tracking-[4px] uppercase font-semibold" style={{ color: 'var(--v3-yellow)' }}>
-                  Your Gateway to Education in Georgia
+                  {tr('Your Gateway to Education in Georgia', 'بوابتك للتعليم في جورجيا')}
                 </p>
               </div>
               <h1 className="v3-serif mt-6 font-black leading-[1.1] sm:leading-[0.93] text-[34px] xs:text-[38px] sm:text-[74px] lg:text-[96px]" style={{ color: 'var(--v3-white)' }}>
-                Study in<br />
-                <em className="italic" style={{ color: 'var(--v3-yellow)' }}>Georgia</em><br />
-                <span className="block mt-2 md:mt-0" style={{ WebkitTextStroke: '1px rgba(255,255,255,0.18)', color: 'transparent', fontSize: '0.85em' }}>The Right Way</span>
+                {tr('Study in', 'ادرس في')}<br />
+                <em className="italic" style={{ color: 'var(--v3-yellow)' }}>{tr('Georgia', 'جورجيا')}</em><br />
+                <span className="block mt-2 md:mt-0" style={{ WebkitTextStroke: '1px rgba(255,255,255,0.18)', color: 'transparent', fontSize: '0.85em' }}>{tr('The Right Way', 'بالطريقة الصحيحة')}</span>
               </h1>
               <p className="v3-body mt-6 text-[15px] sm:text-[20px] leading-[1.6] sm:leading-[1.75] max-w-[520px]" style={{ color: 'rgba(245,240,232,0.65)' }}>
-                We guide international students through every step of enrolling in Georgia&apos;s top universities - from application to graduation and beyond.
+                {tr('We guide international students through every step of enrolling in Georgia’s top universities - from application to graduation and beyond.', 'نرافق الطلاب الدوليين في كل خطوة للالتحاق بأفضل جامعات جورجيا — من التقديم حتى التخرج وما بعده.')}
               </p>
               <div className="mt-8 sm:mt-10 flex flex-wrap gap-3">
                 <Link
@@ -289,14 +296,14 @@ export default function LandingPageV3Test() {
                   className="v3-btn-fx w-full sm:w-auto px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center justify-center gap-2"
                   style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}
                 >
-                  Explore Universities <ArrowRight className="w-4 h-4" />
+                  {tr('Explore Universities', 'استكشف الجامعات')} <ArrowRight className="w-4 h-4" />
                 </Link>
                 <a
                   href="#contact"
                   className="v3-btn-fx w-full sm:w-auto px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-semibold inline-flex items-center justify-center gap-2 border-2"
                   style={{ borderColor: 'rgba(255,255,255,0.40)', color: 'var(--v3-white)', borderRadius: 4 }}
                 >
-                  Apply Now - Free
+                  {tr('Apply Now - Free', 'قدّم الآن — مجاناً')}
                 </a>
               </div>
             </div>
@@ -305,16 +312,16 @@ export default function LandingPageV3Test() {
           <div className="absolute left-6 bottom-[124px] hidden lg:flex items-center gap-4">
             <div className="w-px h-14" style={{ background: 'linear-gradient(to bottom, transparent, var(--v3-yellow))' }} />
             <div className="text-[9px] tracking-[3px] uppercase" style={{ color: 'rgba(245,168,0,0.55)', writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-              Scroll
+              {tr('Scroll', 'مرّر')}
             </div>
           </div>
 
           <div className="relative md:absolute left-0 right-0 bottom-0 grid grid-cols-2 lg:grid-cols-4 border-t" style={{ borderColor: 'var(--v3-glass-border)', background: 'rgba(10,22,40,0.95)', backdropFilter: 'blur(16px)' }}>
             {[
-              { n: 5000, s: '+', l: 'Students Enrolled' },
-              { n: 40, s: '+', l: 'Partner Universities' },
-              { n: 15, s: '+', l: 'Years Experience' },
-              { n: 98, s: '%', l: 'Success Rate' },
+              { n: 5000, s: '+', l: tr('Students Enrolled', 'طالب مسجّل') },
+              { n: 40, s: '+', l: tr('Partner Universities', 'جامعة شريكة') },
+              { n: 15, s: '+', l: tr('Years Experience', 'سنة خبرة') },
+              { n: 98, s: '%', l: tr('Success Rate', 'نسبة النجاح') },
             ].map((it) => (
               <div key={it.l} className="px-4 sm:px-6 py-4 sm:py-5 border-r last:border-r-0 border-b lg:border-b-0" style={{ borderColor: 'var(--v3-glass-border)' }}>
                 <AnimatedCount target={it.n} suffix={it.s} />
@@ -346,10 +353,10 @@ export default function LandingPageV3Test() {
                 <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 40% 70%, rgba(245,168,0,0.12) 0%, transparent 65%)' }} />
                 <div className="absolute bottom-0 left-0 right-0 p-8" style={{ background: 'linear-gradient(to top, rgba(10,22,40,0.97), transparent)' }}>
                   <div className="inline-block px-3 py-1 text-[10px] tracking-[2px] uppercase font-bold rounded-sm" style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}>
-                    Trusted Since 2009
+                    {tr('Trusted Since 2009', 'موثوق منذ 2009')}
                   </div>
                   <div className="v3-serif mt-3 text-[22px] font-bold" style={{ color: 'var(--v3-white)' }}>
-                    Your Education Partner
+                    {tr('Your Education Partner', 'شريكك التعليمي')}
                   </div>
                   <div className="mt-3">
                     <div
@@ -357,7 +364,7 @@ export default function LandingPageV3Test() {
                       style={{ borderColor: 'rgba(245,168,0,0.18)', background: 'rgba(10,22,40,0.55)', color: 'rgba(245,240,232,0.70)' }}
                     >
                       <MapPin className="w-4 h-4" style={{ color: 'var(--v3-yellow)' }} />
-                      <span className="text-[10px] tracking-[2px] uppercase font-bold">Tbilisi Only</span>
+                      <span className="text-[10px] tracking-[2px] uppercase font-bold">{tr('Tbilisi Only', 'تبليسي فقط')}</span>
                     </div>
                   </div>
                 </div>
@@ -367,7 +374,7 @@ export default function LandingPageV3Test() {
               >
                 <div className="v3-serif text-[42px] font-black leading-none" style={{ color: 'var(--v3-yellow)' }}>40+</div>
                 <div className="mt-2 text-[10px] tracking-[2px] uppercase" style={{ color: 'rgba(245,240,232,0.45)' }}>
-                  Partner Universities
+                  {tr('Partner Universities', 'جامعة شريكة')}
                 </div>
               </div>
             </div>
@@ -376,26 +383,26 @@ export default function LandingPageV3Test() {
               <div className="flex items-center gap-3">
                 <div className="w-8 h-px" style={{ background: 'var(--v3-yellow)' }} />
                 <div className="text-[10px] tracking-[4px] uppercase font-semibold" style={{ color: 'var(--v3-yellow)' }}>
-                  About The Way
+                  {tr('About The Way', 'عن ذا واي')}
                 </div>
               </div>
               <h2 className="v3-serif mt-5 text-[38px] sm:text-[52px] font-bold leading-[1.08]" style={{ color: 'var(--v3-white)' }}>
-                Your Bridge to<br /><em className="italic" style={{ color: 'var(--v3-yellow)' }}>World-Class</em><br />Education in Georgia
+                {tr('Your Bridge to', 'جسرك نحو')}<br /><em className="italic" style={{ color: 'var(--v3-yellow)' }}>{tr('World-Class', 'تعليم عالمي')}</em><br />{tr('Education in Georgia', 'في جورجيا')}
               </h2>
               <p className="v3-body mt-5 text-[18px] leading-[1.82]" style={{ color: 'rgba(245,240,232,0.62)' }}>
-                The Way is a leading student recruitment and consultancy company helping international students gain admission to Georgia&apos;s top universities. We simplify every step of the process of studying abroad.
+                {tr('The Way is a leading student recruitment and consultancy company helping international students gain admission to Georgia’s top universities. We simplify every step of the process of studying abroad.', 'ذا واي شركة رائدة في استقطاب الطلاب والاستشارات التعليمية، تساعد الطلاب الدوليين على الالتحاق بأفضل جامعات جورجيا. نبسّط كل خطوة في رحلة الدراسة بالخارج.')}
               </p>
               <p className="v3-body mt-4 text-[18px] leading-[1.82]" style={{ color: 'rgba(245,240,232,0.62)' }}>
-                From choosing the right university and program, to visa support, accommodation, and ongoing student care - we are with you every step of the way.
+                {tr('From choosing the right university and program, to visa support, accommodation, and ongoing student care - we are with you every step of the way.', 'من اختيار الجامعة والتخصص المناسبين، إلى دعم التأشيرة والسكن والرعاية المستمرة للطالب — نحن معك في كل خطوة.')}
               </p>
               <ul className="mt-6 space-y-3">
                 {[
-                  'Free university admission consulting',
-                  'Official partner network across Georgia',
-                  'Full visa & document support',
-                  'Accommodation assistance',
-                  'Airport pickup & arrival support',
-                  'Ongoing student care throughout your studies',
+                  tr('Free university admission consulting', 'استشارات قبول جامعي مجانية'),
+                  tr('Official partner network across Georgia', 'شبكة شركاء رسميين في جميع أنحاء جورجيا'),
+                  tr('Full visa & document support', 'دعم كامل للتأشيرة والمستندات'),
+                  tr('Accommodation assistance', 'المساعدة في تأمين السكن'),
+                  tr('Airport pickup & arrival support', 'الاستقبال في المطار ودعم الوصول'),
+                  tr('Ongoing student care throughout your studies', 'رعاية مستمرة للطالب طوال فترة الدراسة'),
                 ].map((t) => (
                   <li key={t} className="flex items-start gap-3 text-[14px] leading-[1.5]" style={{ color: 'rgba(245,240,232,0.70)' }}>
                     <span className="w-5 h-5 rounded-full flex items-center justify-center mt-[2px]" style={{ background: 'var(--v3-yellow)' }}>
@@ -407,10 +414,10 @@ export default function LandingPageV3Test() {
               </ul>
               <div className="mt-8 flex flex-wrap gap-3">
                 <a href="#services" className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center gap-2" style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}>
-                  Learn More About Us
+                  {tr('Learn More About Us', 'اعرف المزيد عنا')}
                 </a>
                 <a href="#contact" className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold border-2" style={{ borderColor: 'var(--v3-yellow)', color: 'var(--v3-yellow)', borderRadius: 4 }}>
-                  Apply Free
+                  {tr('Apply Free', 'قدّم مجاناً')}
                 </a>
               </div>
             </div>
@@ -423,23 +430,23 @@ export default function LandingPageV3Test() {
               <div className="inline-flex items-center gap-3">
                 <div className="w-8 h-px" style={{ background: 'var(--v3-yellow)' }} />
                 <div className="text-[10px] tracking-[4px] uppercase font-semibold" style={{ color: 'var(--v3-yellow)' }}>
-                  Why Georgia
+                  {tr('Why Georgia', 'لماذا جورجيا')}
                 </div>
                 <div className="w-8 h-px" style={{ background: 'var(--v3-yellow)' }} />
               </div>
               <h2 className="v3-serif mt-5 text-[38px] sm:text-[52px] font-bold" style={{ color: 'var(--v3-white)' }}>
-                Why Study in <em className="italic" style={{ color: 'var(--v3-yellow)' }}>Georgia?</em>
+                {tr('Why Study in', 'لماذا الدراسة في')} <em className="italic" style={{ color: 'var(--v3-yellow)' }}>{tr('Georgia?', 'جورجيا؟')}</em>
               </h2>
             </div>
 
             <div className="mt-14 grid md:grid-cols-2 xl:grid-cols-3 gap-6">
               {[
-                { t: 'WHO-Recognized Degrees', d: 'Georgian university degrees are recognized worldwide - your degree opens doors globally.' },
-                { t: 'Affordable Tuition Fees', d: 'Study at a fraction of the cost compared to Europe or the US - without compromising quality.' },
-                { t: 'English-Taught Programs', d: 'Most programs are offered fully in English, making Georgia accessible to international students.' },
-                { t: 'Safe & Welcoming Country', d: 'Georgia is ranked among the safest countries with a warm culture that welcomes students.' },
-                { t: 'Modern Universities', d: 'Modern facilities, teaching hospitals, and internationally qualified professors.' },
-                { t: 'Vibrant Student Life', d: 'A thriving international community in a city blending ancient history and modern energy.' },
+                { t: tr('WHO-Recognized Degrees', 'شهادات معترف بها من WHO'), d: tr('Georgian university degrees are recognized worldwide - your degree opens doors globally.', 'شهادات الجامعات الجورجية معترف بها عالمياً — شهادتك تفتح لك الأبواب في كل مكان.') },
+                { t: tr('Affordable Tuition Fees', 'رسوم دراسية معقولة'), d: tr('Study at a fraction of the cost compared to Europe or the US - without compromising quality.', 'ادرس بجزء بسيط من تكلفة أوروبا أو أمريكا — دون التنازل عن الجودة.') },
+                { t: tr('English-Taught Programs', 'برامج باللغة الإنجليزية'), d: tr('Most programs are offered fully in English, making Georgia accessible to international students.', 'معظم البرامج تُدرّس بالكامل بالإنجليزية، مما يجعل جورجيا في متناول الطلاب الدوليين.') },
+                { t: tr('Safe & Welcoming Country', 'بلد آمن ومرحّب'), d: tr('Georgia is ranked among the safest countries with a warm culture that welcomes students.', 'تُصنّف جورجيا من أكثر الدول أماناً، بثقافة دافئة تُرحّب بالطلاب.') },
+                { t: tr('Modern Universities', 'جامعات حديثة'), d: tr('Modern facilities, teaching hospitals, and internationally qualified professors.', 'مرافق حديثة، ومستشفيات تعليمية، وأساتذة بكفاءات دولية.') },
+                { t: tr('Vibrant Student Life', 'حياة طلابية نابضة'), d: tr('A thriving international community in a city blending ancient history and modern energy.', 'مجتمع دولي نابض بالحياة في مدينة تمزج بين التاريخ العريق والطاقة العصرية.') },
               ].map((c) => (
                 <div key={c.t} className="p-8 border transition-colors v3-card-float"
                   style={{ borderColor: 'var(--v3-glass-border)', background: 'var(--v3-glass)' }}
@@ -464,25 +471,25 @@ export default function LandingPageV3Test() {
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-px" style={{ background: 'var(--v3-yellow)' }} />
                   <div className="text-[10px] tracking-[4px] uppercase font-semibold" style={{ color: 'var(--v3-yellow)' }}>
-                    What We Offer
+                    {tr('What We Offer', 'ما نقدّمه')}
                   </div>
                 </div>
                 <h2 className="v3-serif mt-5 text-[38px] sm:text-[52px] font-bold" style={{ color: 'var(--v3-white)' }}>
-                  Our <em className="italic" style={{ color: 'var(--v3-yellow)' }}>Services</em>
+                  {tr('Our', 'خدماتنا')} <em className="italic" style={{ color: 'var(--v3-yellow)' }}>{tr('Services', '')}</em>
                 </h2>
               </div>
               <a href="#contact" className="v3-btn-fx px-6 py-3 text-[10px] tracking-[2.5px] uppercase font-bold border-2 inline-flex items-center gap-2"
                 style={{ borderColor: 'var(--v3-yellow)', color: 'var(--v3-yellow)', borderRadius: 4 }}
               >
-                Apply Free <ArrowRight className="w-4 h-4" />
+                {tr('Apply Free', 'قدّم مجاناً')} <ArrowRight className="w-4 h-4" />
               </a>
             </div>
 
             <div className="mt-14 grid md:grid-cols-2 xl:grid-cols-3 gap-6">
               {[
-                { n: '01 --', t: 'University Admission', d: 'Free consultation and complete application support to get you admitted into your chosen university and program.', img: cccUrl },
-                { n: '02 --', t: 'Visa & Documents', d: 'Full support with student visa applications, translation, notarization, and all official paperwork required.', img: whatsappUrl },
-                { n: '03 --', t: 'Accommodation', d: 'We help you find safe, comfortable, and affordable accommodation near your university before you arrive.', img: vvvUrl },
+                { n: '01 --', t: tr('University Admission', 'القبول الجامعي'), d: tr('Free consultation and complete application support to get you admitted into your chosen university and program.', 'استشارة مجانية ودعم كامل للتقديم لضمان قبولك في الجامعة والتخصص الذي تختاره.'), img: cccUrl },
+                { n: '02 --', t: tr('Visa & Documents', 'التأشيرة والمستندات'), d: tr('Full support with student visa applications, translation, notarization, and all official paperwork required.', 'دعم كامل في طلبات تأشيرة الطالب والترجمة والتوثيق وجميع المعاملات الرسمية المطلوبة.'), img: whatsappUrl },
+                { n: '03 --', t: tr('Accommodation', 'السكن'), d: tr('We help you find safe, comfortable, and affordable accommodation near your university before you arrive.', 'نساعدك في إيجاد سكن آمن ومريح وبأسعار مناسبة قرب جامعتك قبل وصولك.'), img: vvvUrl },
               ].map((c) => (
                 <div key={c.t} className="relative overflow-hidden border p-8 v3-card-float"
                   style={{ borderColor: 'var(--v3-glass-border)', background: 'var(--v3-glass)' }}
@@ -504,22 +511,22 @@ export default function LandingPageV3Test() {
           <div className="max-w-7xl mx-auto px-6">
             <div className="text-center">
               <div className="text-[13px] font-bold tracking-[3px] uppercase" style={{ color: 'var(--v3-yellow)' }}>
-                Choose your university
+                {tr('Choose your university', 'اختر جامعتك')}
               </div>
               <h2 className="v3-serif mt-3 text-[32px] sm:text-[42px] font-bold" style={{ color: 'var(--v3-white)' }}>
-                Partner <em className="italic" style={{ color: 'var(--v3-yellow)' }}>Universities</em>
+                {tr('Partner', 'الجامعات')} <em className="italic" style={{ color: 'var(--v3-yellow)' }}>{tr('Universities', 'الشريكة')}</em>
               </h2>
               <p className="mt-3 text-[14px] tracking-[1px]" style={{ color: 'rgba(245,240,232,0.45)' }}>
-                A preview list - open any university to see full details, fees, and requirements.
+                {tr('A preview list - open any university to see full details, fees, and requirements.', 'قائمة مختصرة — افتح أي جامعة لعرض التفاصيل الكاملة والرسوم والمتطلبات.')}
               </p>
             </div>
 
             <div className="mt-12 grid md:grid-cols-2 xl:grid-cols-3 gap-7">
               {[
-                { id: 'ug', abbr: 'UG', name: 'University of Georgia', location: 'Tbilisi, Georgia', img: ugPhotoUrl, badge: 'Popular', tags: ['Medicine', 'Dentistry', 'IT', 'Business'] },
-                { id: 'aoug', abbr: 'GAU', name: 'Georgian American University', location: 'Tbilisi, Georgia', img: gauPhotoUrl, badge: 'Accredited', tags: ['Medicine', 'Business'] },
-                { id: 'ibsu', abbr: 'IBSU', name: 'International Black Sea University', location: 'Tbilisi, Georgia', img: ibsuPhotoUrl, badge: 'English Programs', tags: ['Business', 'CS', 'IR', 'Design'] },
-                { id: 'tsmu', abbr: 'TSMU', name: 'Tbilisi State Medical University', location: 'Tbilisi, Georgia', img: tsmuPhotoUrl, badge: 'Medical Focus', tags: ['Medicine', 'Dentistry', 'Pharmacy', 'Nursing'] },
+                { id: 'ug', abbr: 'UG', name: tr('University of Georgia', 'جامعة جورجيا'), location: tr('Tbilisi, Georgia', 'تبليسي، جورجيا'), img: ugPhotoUrl, badge: tr('Popular', 'الأكثر طلباً'), tags: ['Medicine', 'Dentistry', 'IT', 'Business'] },
+                { id: 'aoug', abbr: 'GAU', name: tr('Georgian American University', 'الجامعة الجورجية الأمريكية'), location: tr('Tbilisi, Georgia', 'تبليسي، جورجيا'), img: gauPhotoUrl, badge: tr('Accredited', 'معتمدة'), tags: ['Medicine', 'Business'] },
+                { id: 'ibsu', abbr: 'IBSU', name: tr('International Black Sea University', 'جامعة البحر الأسود الدولية'), location: tr('Tbilisi, Georgia', 'تبليسي، جورجيا'), img: ibsuPhotoUrl, badge: tr('English Programs', 'برامج إنجليزية'), tags: ['Business', 'CS', 'IR', 'Design'] },
+                { id: 'tsmu', abbr: 'TSMU', name: tr('Tbilisi State Medical University', 'جامعة تبليسي الطبية الحكومية'), location: tr('Tbilisi, Georgia', 'تبليسي، جورجيا'), img: tsmuPhotoUrl, badge: tr('Medical Focus', 'تخصص طبي'), tags: ['Medicine', 'Dentistry', 'Pharmacy', 'Nursing'] },
               ].map((u) => (
                 <Link
                   key={u.id}
@@ -560,14 +567,14 @@ export default function LandingPageV3Test() {
                 className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center gap-2"
                 style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}
               >
-                View All Universities <ArrowRight className="w-4 h-4" />
+                {tr('View All Universities', 'عرض كل الجامعات')} <ArrowRight className="w-4 h-4" />
               </Link>
               <a
                 href="#contact"
                 className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-semibold inline-flex items-center gap-2 border-2"
                 style={{ borderColor: 'rgba(255,255,255,0.40)', color: 'var(--v3-white)', borderRadius: 4 }}
               >
-                Ask For More Info
+                {tr('Ask For More Info', 'اطلب مزيداً من المعلومات')}
               </a>
             </div>
           </div>
@@ -579,7 +586,7 @@ export default function LandingPageV3Test() {
               <div className="flex items-center gap-3">
                 <div className="w-8 h-px" style={{ background: 'var(--v3-yellow)' }} />
                 <div className="text-[10px] tracking-[4px] uppercase font-semibold" style={{ color: 'var(--v3-yellow)' }}>
-                  Student Stories
+                  {tr('Student Stories', 'قصص الطلاب')}
                 </div>
               </div>
               <div className="v3-serif mt-5 text-[96px] leading-[0.75]" style={{ color: 'var(--v3-yellow)', opacity: 0.15 }}>
@@ -589,15 +596,15 @@ export default function LandingPageV3Test() {
                 {'*****'.split('').map((s, i) => <span key={i} className="text-[16px]">{s}</span>)}
               </div>
               <p className="v3-body mt-5 text-[22px] italic leading-[1.62]" style={{ color: 'var(--v3-white)' }}>
-                &quot;The Way made my dream of studying in Georgia a reality. They handled everything - admission, documents, and accommodation. I arrived prepared and supported.&quot;
+                {tr('“The Way made my dream of studying in Georgia a reality. They handled everything - admission, documents, and accommodation. I arrived prepared and supported.”', '«حوّل ذا واي حلمي بالدراسة في جورجيا إلى حقيقة. تكفّلوا بكل شيء — القبول والمستندات والسكن. وصلتُ وأنا مستعد ومدعوم بالكامل.»')}
               </p>
               <div className="mt-7 flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full flex items-center justify-center v3-serif text-[18px] font-bold" style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}>
                   A
                 </div>
                 <div>
-                  <div className="text-[14px] font-semibold" style={{ color: 'var(--v3-white)' }}>Ahmed Al-Rashidi</div>
-                  <div className="text-[11px] tracking-[1px]" style={{ color: 'rgba(245,240,232,0.45)' }}>Medical Student - From Jordan</div>
+                  <div className="text-[14px] font-semibold" style={{ color: 'var(--v3-white)' }}>{tr('Ahmed Al-Rashidi', 'أحمد الراشدي')}</div>
+                  <div className="text-[11px] tracking-[1px]" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Medical Student - From Jordan', 'طالب طب — من الأردن')}</div>
                 </div>
               </div>
             </div>
@@ -607,15 +614,15 @@ export default function LandingPageV3Test() {
                   {'*****'.split('').map((s, i) => <span key={i} className="text-[12px]">{s}</span>)}
                 </div>
                 <p className="v3-body mt-3 text-[15px] italic leading-[1.6]" style={{ color: 'rgba(245,240,232,0.70)' }}>
-                  &quot;I was confused about which university to choose. The consultants guided me perfectly. Now I&apos;m in my second year and couldn&apos;t be happier.&quot;
+                  {tr('“I was confused about which university to choose. The consultants guided me perfectly. Now I’m in my second year and couldn’t be happier.”', '«كنت محتاراً في اختيار الجامعة المناسبة. أرشدني المستشارون بشكل مثالي. أنا الآن في سنتي الثانية وفي قمة السعادة.»')}
                 </p>
                 <div className="mt-3 text-[11px] font-bold tracking-[1px]" style={{ color: 'var(--v3-yellow)' }}>
-                  - Priya Sharma - Dentistry Student, India
+                  {tr('- Priya Sharma - Dentistry Student, India', '— بريا شارما — طالبة طب أسنان، الهند')}
                 </div>
               </div>
               {[
-                { t: 'Fast, professional, genuinely caring. Best decision I ever made.', a: '- David Osei - Ghana' },
-                { t: 'They answered every question instantly. Outstanding support team.', a: '- Fatima Malik - Pakistan' },
+                { t: tr('Fast, professional, genuinely caring. Best decision I ever made.', 'سريعون ومحترفون ويهتمون فعلاً. أفضل قرار اتخذته في حياتي.'), a: tr('- David Osei - Ghana', '— ديفيد أوسي — غانا') },
+                { t: tr('They answered every question instantly. Outstanding support team.', 'أجابوا على كل أسئلتي فوراً. فريق دعم متميز.'), a: tr('- Fatima Malik - Pakistan', '— فاطمة مالك — باكستان') },
               ].map((x) => (
                 <div key={x.a} className="border p-6" style={{ borderColor: 'var(--v3-glass-border)', background: 'var(--v3-glass)', borderRadius: 4 }}>
                   <div className="flex gap-1" style={{ color: 'var(--v3-yellow)' }}>
@@ -641,15 +648,15 @@ export default function LandingPageV3Test() {
               <div className="inline-flex items-center gap-3">
                 <div className="w-8 h-px" style={{ background: 'var(--v3-yellow)' }} />
                 <div className="text-[10px] tracking-[4px] uppercase font-semibold" style={{ color: 'var(--v3-yellow)' }}>
-                  Begin Your Journey
+                  {tr('Begin Your Journey', 'ابدأ رحلتك')}
                 </div>
                 <div className="w-8 h-px" style={{ background: 'var(--v3-yellow)' }} />
               </div>
               <h2 className="v3-serif mt-5 text-[38px] sm:text-[64px] font-black leading-[0.96]" style={{ color: 'var(--v3-white)' }}>
-                Start Your Studies<br /><em className="italic" style={{ color: 'var(--v3-yellow)' }}>in Georgia Today</em>
+                {tr('Start Your Studies', 'ابدأ دراستك')}<br /><em className="italic" style={{ color: 'var(--v3-yellow)' }}>{tr('in Georgia Today', 'في جورجيا اليوم')}</em>
               </h2>
               <p className="v3-body mt-4 text-[20px] leading-[1.7] max-w-[520px] mx-auto" style={{ color: 'rgba(245,240,232,0.55)' }}>
-                Free consultation. No hidden fees. Expert guidance to get you into the university of your dreams.
+                {tr('Free consultation. No hidden fees. Expert guidance to get you into the university of your dreams.', 'استشارة مجانية. لا رسوم خفية. إرشاد متخصص للالتحاق بجامعة أحلامك.')}
               </p>
             </div>
 
@@ -657,13 +664,13 @@ export default function LandingPageV3Test() {
               <div className="lg:col-span-5 border p-8" style={{ borderColor: 'rgba(245,168,0,0.12)', background: 'rgba(245,168,0,0.03)' }}>
                 <div className="flex items-center gap-3">
                   <ShieldCheck className="w-5 h-5" style={{ color: 'var(--v3-yellow)' }} />
-                  <p className="text-[10px] tracking-[3px] uppercase font-bold" style={{ color: 'var(--v3-yellow)' }}>Contact</p>
+                  <p className="text-[10px] tracking-[3px] uppercase font-bold" style={{ color: 'var(--v3-yellow)' }}>{tr('Contact', 'تواصل معنا')}</p>
                 </div>
                 <div className="mt-6 space-y-5">
                   {[
-                    { icon: MapPin, label: 'Office', value: 'Vakhtang Chabukiani 2, Tbilisi, Georgia' },
-                    { icon: Mail, label: 'Email', value: 'info@theway.ge' },
-                    { icon: Phone, label: 'Phone', value: '+995 571 009 550' },
+                    { icon: MapPin, label: tr('Office', 'المكتب'), value: tr('Vakhtang Chabukiani 2, Tbilisi, Georgia', 'فاختانغ تشابوكياني 2، تبليسي، جورجيا') },
+                    { icon: Mail, label: tr('Email', 'البريد الإلكتروني'), value: 'info@theway.ge' },
+                    { icon: Phone, label: tr('Phone', 'الهاتف'), value: '+995 571 009 550' },
                   ].map((it) => (
                     <div key={it.label} className="flex items-start gap-4">
                       <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,168,0,0.10)' }}>
@@ -677,7 +684,7 @@ export default function LandingPageV3Test() {
                   ))}
                 </div>
                 <div className="mt-8">
-                  <p className="text-[10px] tracking-[3px] uppercase font-bold mb-4" style={{ color: 'var(--v3-yellow)' }}>Follow Us</p>
+                  <p className="text-[10px] tracking-[3px] uppercase font-bold mb-4" style={{ color: 'var(--v3-yellow)' }}>{tr('Follow Us', 'تابعنا')}</p>
                   <div className="flex gap-3">
                     <a href="https://www.instagram.com/thewayge0?igsh=MTN3eWJ3dHpwYjZiOQ%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" className="w-11 h-11 rounded-xl flex items-center justify-center border hover:bg-[var(--v3-yellow)] hover:text-[var(--v3-navy)] transition-all"
                       style={{ borderColor: 'rgba(245,168,0,0.25)', background: 'rgba(245,168,0,0.05)', color: 'var(--v3-yellow)' }}
@@ -703,23 +710,23 @@ export default function LandingPageV3Test() {
 
               <div className="lg:col-span-7">
                 <div className="v3-serif text-[36px] font-bold" style={{ color: 'var(--v3-white)' }}>
-                  Apply <em className="italic" style={{ color: 'var(--v3-yellow)' }}>Free</em>
+                  {tr('Apply', 'قدّم')} <em className="italic" style={{ color: 'var(--v3-yellow)' }}>{tr('Free', 'مجاناً')}</em>
                 </div>
                 <div className="mt-8 border p-8" style={{ borderColor: 'rgba(245,168,0,0.12)', background: 'rgba(255,255,255,0.02)' }}>
                   <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Full name</label>
+                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Full name', 'الاسم الكامل')}</label>
                         <input
                           {...register('name')}
                           className="w-full px-4 py-3 text-[13px] outline-none border rounded"
                           style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
-                          placeholder="Your name"
+                          placeholder={tr('Your name', 'اسمك')}
                         />
                         {errors.name && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.name.message}</p>}
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Email</label>
+                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Email', 'البريد الإلكتروني')}</label>
                         <input
                           type="email"
                           {...register('email')}
@@ -732,7 +739,7 @@ export default function LandingPageV3Test() {
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Phone</label>
+                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Phone', 'الهاتف')}</label>
                         <input
                           {...register('phone')}
                           className="w-full px-4 py-3 text-[13px] outline-none border rounded"
@@ -742,62 +749,62 @@ export default function LandingPageV3Test() {
                         {errors.phone && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.phone.message}</p>}
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Country</label>
+                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Country', 'الدولة')}</label>
                         <input
                           {...register('country')}
                           className="w-full px-4 py-3 text-[13px] outline-none border rounded"
                           style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
-                          placeholder="Your country"
+                          placeholder={tr('Your country', 'دولتك')}
                         />
                         {errors.country && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.country.message}</p>}
                       </div>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Program</label>
+                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Program', 'التخصص')}</label>
                         <select
                           {...register('program')}
                           className="w-full px-4 py-3 text-[13px] outline-none border rounded"
                           style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
                         >
-                          <option value="">Select a program</option>
-                          <option value="Medicine">Medicine</option>
-                          <option value="Dentistry">Dentistry</option>
-                          <option value="Pharmacy">Pharmacy</option>
-                          <option value="Engineering">Engineering</option>
-                          <option value="Business">Business</option>
-                          <option value="Computer Science">Computer Science</option>
-                          <option value="Aviation">Aviation</option>
+                          <option value="">{tr('Select a program', 'اختر تخصصاً')}</option>
+                          <option value="Medicine">{tr('Medicine', 'الطب')}</option>
+                          <option value="Dentistry">{tr('Dentistry', 'طب الأسنان')}</option>
+                          <option value="Pharmacy">{tr('Pharmacy', 'الصيدلة')}</option>
+                          <option value="Engineering">{tr('Engineering', 'الهندسة')}</option>
+                          <option value="Business">{tr('Business', 'إدارة الأعمال')}</option>
+                          <option value="Computer Science">{tr('Computer Science', 'علوم الحاسوب')}</option>
+                          <option value="Aviation">{tr('Aviation', 'الطيران')}</option>
                         </select>
                         {errors.program && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.program.message}</p>}
                       </div>
                       {selectedProgram === 'Aviation' && (
                         <div>
-                          <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Aviation Degree (Optional)</label>
+                          <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Aviation Degree (Optional)', 'تخصص الطيران (اختياري)')}</label>
                           <select
                             {...register('aviationDegree')}
                             className="w-full px-4 py-3 text-[13px] outline-none border rounded"
                             style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
                           >
-                            <option value="">None / Not Aviation</option>
-                            <option value="CPL">Commercial Pilot License (CPL)</option>
-                            <option value="ATPL">Airline Transport Pilot License (ATPL)</option>
-                            <option value="Engineering">Aviation Engineering</option>
-                            <option value="Management">Aviation Management</option>
+                            <option value="">{tr('None / Not Aviation', 'لا ينطبق')}</option>
+                            <option value="CPL">{tr('Commercial Pilot License (CPL)', 'رخصة طيار تجاري (CPL)')}</option>
+                            <option value="ATPL">{tr('Airline Transport Pilot License (ATPL)', 'رخصة طيار النقل الجوي (ATPL)')}</option>
+                            <option value="Engineering">{tr('Aviation Engineering', 'هندسة الطيران')}</option>
+                            <option value="Management">{tr('Aviation Management', 'إدارة الطيران')}</option>
                           </select>
                         </div>
                       )}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>Study Level</label>
+                      <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Study Level', 'المرحلة الدراسية')}</label>
                       <select
                         {...register('studyLevel')}
                         className="w-full px-4 py-3 text-[13px] outline-none border rounded"
                         style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
                       >
-                        <option value="">Select Level</option>
-                        <option value="Bachelor">Bachelor&apos;s</option>
-                        <option value="Master">Master&apos;s</option>
+                        <option value="">{tr('Select Level', 'اختر المرحلة')}</option>
+                        <option value="Bachelor">{tr('Bachelor’s', 'بكالوريوس')}</option>
+                        <option value="Master">{tr('Master’s', 'ماجستير')}</option>
                       </select>
                       {errors.studyLevel && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.studyLevel.message}</p>}
                     </div>
@@ -807,7 +814,7 @@ export default function LandingPageV3Test() {
                         className="v3-btn-fx w-full px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center justify-center gap-2"
                         style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}
                       >
-                        Submit Application <ArrowRight className="w-4 h-4" />
+                        {tr('Submit Application', 'إرسال الطلب')} <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
                   </form>
@@ -816,7 +823,7 @@ export default function LandingPageV3Test() {
                   <Link to="/login" className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-semibold border-2 inline-flex items-center gap-2"
                     style={{ borderColor: 'rgba(255,255,255,0.40)', color: 'var(--v3-white)', borderRadius: 4 }}
                   >
-                    Portal Login <ArrowRight className="w-4 h-4" />
+                    {tr('Portal Login', 'تسجيل الدخول')} <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
               </div>
@@ -828,11 +835,11 @@ export default function LandingPageV3Test() {
       <footer style={{ background: '#050b14', borderTop: '1px solid rgba(245,168,0,0.12)' }}>
         <div className="py-5" style={{ background: 'var(--v3-yellow)' }}>
           <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="text-[13px] font-semibold" style={{ color: 'var(--v3-navy)' }}>Start your journey with a free consultation</div>
+            <div className="text-[13px] font-semibold" style={{ color: 'var(--v3-navy)' }}>{tr('Start your journey with a free consultation', 'ابدأ رحلتك باستشارة مجانية')}</div>
             <a href="#contact" className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold inline-flex items-center gap-2"
               style={{ background: 'var(--v3-navy)', color: 'var(--v3-yellow)', borderRadius: 999 }}
             >
-              Apply Free <ArrowRight className="w-4 h-4" />
+              {tr('Apply Free', 'قدّم مجاناً')} <ArrowRight className="w-4 h-4" />
             </a>
           </div>
         </div>
@@ -844,7 +851,7 @@ export default function LandingPageV3Test() {
                 <img src={logoUrl} alt="The Way" className="h-12 w-auto object-contain" />
               </div>
               <p className="mt-4 text-[13px] leading-[1.82]" style={{ color: 'rgba(245,240,232,0.38)', maxWidth: 320 }}>
-                Helping international students gain admission to Georgia&apos;s top universities with clear steps, fast follow-up, and full guidance.
+                {tr('Helping international students gain admission to Georgia’s top universities with clear steps, fast follow-up, and full guidance.', 'نساعد الطلاب الدوليين على الالتحاق بأفضل جامعات جورجيا بخطوات واضحة ومتابعة سريعة وإرشاد كامل.')}
               </p>
               <div className="mt-6 flex gap-2">
                 {[
@@ -862,14 +869,14 @@ export default function LandingPageV3Test() {
               </div>
             </div>
             <div>
-              <div className="text-[10px] font-bold tracking-[3px] uppercase" style={{ color: 'var(--v3-yellow)' }}>Links</div>
+              <div className="text-[10px] font-bold tracking-[3px] uppercase" style={{ color: 'var(--v3-yellow)' }}>{tr('Links', 'روابط')}</div>
               <div className="mt-5 space-y-2">
                 {[
-                  ['#home', 'Home'],
-                  ['/universities', 'Universities'],
-                  ['#services', 'Our Services'],
-                  ['#about', 'About'],
-                  ['#contact', 'Contact'],
+                  ['#home', tr('Home', 'الرئيسية')],
+                  ['/universities', tr('Universities', 'الجامعات')],
+                  ['#services', tr('Our Services', 'خدماتنا')],
+                  ['#about', tr('About', 'من نحن')],
+                  ['#contact', tr('Contact', 'تواصل معنا')],
                 ].map(([href, label]) => (
                   href.startsWith('/') ? (
                     <Link key={href} to={href} className="block text-[13px] font-medium transition-colors" style={{ color: 'rgba(245,240,232,0.43)' }}>
@@ -884,27 +891,27 @@ export default function LandingPageV3Test() {
               </div>
             </div>
             <div>
-              <div className="text-[10px] font-bold tracking-[3px] uppercase" style={{ color: 'var(--v3-yellow)' }}>Portal</div>
+              <div className="text-[10px] font-bold tracking-[3px] uppercase" style={{ color: 'var(--v3-yellow)' }}>{tr('Portal', 'البوابة')}</div>
               <div className="mt-5 space-y-3">
                   <Link to="/login" className="v3-btn-fx px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-semibold border-2 inline-flex items-center gap-2"
                   style={{ borderColor: 'rgba(255,255,255,0.40)', color: 'var(--v3-white)', borderRadius: 4 }}
                 >
-                  {user ? 'My Dashboard' : 'Portal Login'}
+                  {user ? tr('My Dashboard', 'لوحة التحكم') : tr('Portal Login', 'تسجيل الدخول')}
                 </Link>
                 <a href={user ? "/login" : "#contact"} className="v3-btn-fx block px-10 py-4 text-[11px] tracking-[2.5px] uppercase font-bold text-center"
                   style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 4 }}
                 >
-                  {user ? 'Return to Portal' : 'Apply Now - Free'}
+                  {user ? tr('Return to Portal', 'العودة إلى البوابة') : tr('Apply Now - Free', 'قدّم الآن — مجاناً')}
                 </a>
               </div>
             </div>
           </div>
 
           <div className="mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t" style={{ borderColor: 'rgba(245,168,0,0.07)' }}>
-            <p className="text-[11px]" style={{ color: 'rgba(245,240,232,0.25)' }}>(c) 2026 The Way</p>
+            <p className="text-[11px]" style={{ color: 'rgba(245,240,232,0.25)' }}>{tr('© 2026 The Way', '© 2026 ذا واي')}</p>
             <div className="flex items-center gap-6">
-              <a href="#contact" className="text-[11px]" style={{ color: 'rgba(245,240,232,0.25)' }}>Support</a>
-              <a href="#contact" className="text-[11px]" style={{ color: 'rgba(245,240,232,0.25)' }}>Privacy</a>
+              <a href="#contact" className="text-[11px]" style={{ color: 'rgba(245,240,232,0.25)' }}>{tr('Support', 'الدعم')}</a>
+              <a href="#contact" className="text-[11px]" style={{ color: 'rgba(245,240,232,0.25)' }}>{tr('Privacy', 'الخصوصية')}</a>
             </div>
           </div>
         </div>

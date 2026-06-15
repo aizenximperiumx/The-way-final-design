@@ -142,10 +142,37 @@ export default async function handler(req, res) {
         const userId = asString(body.userId).trim();
         const username = asString(body.username).trim() || undefined;
         const password = asString(body.password) || undefined;
+        const newEmail = asString(body.email).trim().toLowerCase() || undefined;
         void getForcedInternal2faCode();
         if (!userId) {
             res.status(400).json({ error: 'Missing userId' });
             return;
+        }
+        if (newEmail) {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+                res.status(400).json({ error: 'Invalid email address' });
+                return;
+            }
+            // Update the auth login email (auto-confirm so the user can sign in immediately).
+            const updatedEmail = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+                method: 'PUT',
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: newEmail, email_confirm: true }),
+            });
+            if (!updatedEmail.ok) {
+                res.status(500).json({ error: 'Failed to update email', details: updatedEmail.text });
+                return;
+            }
+            // Keep the profiles row's email column in sync.
+            const updatedProfileEmail = await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+                body: JSON.stringify({ email: newEmail }),
+            });
+            if (!updatedProfileEmail.ok) {
+                res.status(500).json({ error: 'Failed to sync profile email', details: updatedProfileEmail.text });
+                return;
+            }
         }
         if (password) {
             const updated = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {

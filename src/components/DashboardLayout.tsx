@@ -6,15 +6,24 @@ import {
   Search, Calendar, MessageSquare, BarChart3, GraduationCap,
   Building2, X as CloseIcon, Trophy, Star,
   Award, ChevronRight, Mail, Zap,
-  KeyRound, Phone, Eye, EyeOff, Loader2, BadgeCheck, AtSign
+  KeyRound, Phone, Eye, EyeOff, Loader2, BadgeCheck, AtSign,
+  Home, Globe, Camera, Trash2, CheckCheck, ArrowUpRight
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useAppStore } from '../store/appStore';
+import { getAvatar, setAvatar, clearAvatar, onAvatarChange, fileToAvatarDataUrl } from '../lib/avatar';
 // Dark-text wordmark — the previous logo had white text that was invisible on
 // the white sidebar, leaving only the orange marks with an empty gap.
 import logoUrl from '../../thewaynewlogo-removebg-preview.png';
+
+// Avatar: shows the uploaded photo, else a colored initial. `className` sizes it.
+const Avatar = ({ name, photo, className = '', textClass = 'text-sm' }: { name?: string; photo?: string; className?: string; textClass?: string }) => (
+  photo
+    ? <img src={photo} alt={name ?? 'avatar'} className={`object-cover ${className}`} />
+    : <div className={`bg-amber-100 text-amber-700 font-bold flex items-center justify-center ${textClass} ${className}`}>{name?.charAt(0)?.toUpperCase() ?? '?'}</div>
+);
 
 interface SidebarItem {
   label: string;
@@ -63,7 +72,7 @@ const howToEarn = [
 
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
-  const { notifications, users, changePassword } = useAppStore();
+  const { notifications, users, applications, changePassword, markNotificationsRead, markAllNotificationsRead } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -76,8 +85,42 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const [confirmPw, setConfirmPw] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
+  // Avatar photo (device-local)
+  const [avatarUrl, setAvatarUrl] = useState<string>(() => getAvatar(user?.id));
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  // Global search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
   const notifsRef = useRef<HTMLDivElement>(null);
   const lastNotifCountRef = useRef(0);
+
+  // Keep avatar in sync with the logged-in user and any change elsewhere.
+  useEffect(() => {
+    setAvatarUrl(getAvatar(user?.id));
+    return onAvatarChange(() => setAvatarUrl(getAvatar(user?.id)));
+  }, [user?.id]);
+
+  // Close the search dropdown on outside click.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowSearch(false);
+    };
+    if (showSearch) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSearch]);
+
+  const handleAvatarFile = async (file?: File) => {
+    if (!file || !user) return;
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file);
+      setAvatar(user.id, dataUrl);
+      toast.success('Photo updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not set photo');
+    }
+  };
+  const removeAvatar = () => { if (user) { clearAvatar(user.id); toast.success('Photo removed'); } };
 
   useEffect(() => {
     if (!user) return;
@@ -103,6 +146,45 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const handleLogout = () => { void logout(); navigate('/login'); };
   const unreadCount = notifications.filter(n => n.userId === user?.id && !n.read).length;
   const myNotifs = notifications.filter(n => n.userId === user?.id).slice().reverse();
+
+  const roleHome = (r?: string) => {
+    if (r === 'student') return '/dashboard';
+    if (r === 'sales') return '/sales';
+    if (r === 'ops') return '/ops';
+    if (r === 'staff' || r === 'agency_staff') return '/staff';
+    if (r === 'agency') return '/agencies';
+    if (r === 'ceo') return '/admin';
+    return '/';
+  };
+
+  // ── Global search across people + applications (role-aware) ──
+  const isInternalRole = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(user?.role ?? '');
+  const q = searchQuery.trim().toLowerCase();
+  type SearchResult = { kind: 'application' | 'user'; id: string; title: string; subtitle: string; tag: string };
+  const searchResults: SearchResult[] = q.length < 1 ? [] : [
+    ...applications
+      .filter(a => [a.name, a.email, a.program, a.country, a.university].some(v => v && String(v).toLowerCase().includes(q)))
+      .slice(0, 6)
+      .map(a => ({ kind: 'application' as const, id: a.id, title: a.name || 'Unnamed', subtitle: [a.email, a.program].filter(Boolean).join(' · '), tag: a.status })),
+    ...(isInternalRole
+      ? users
+          .filter(u => u.id !== user?.id && [u.name, u.username, u.email].some(v => v && String(v).toLowerCase().includes(q)))
+          .slice(0, 4)
+          .map(u => ({ kind: 'user' as const, id: u.id, title: u.name, subtitle: `@${u.username}`, tag: u.role }))
+      : []),
+  ];
+  const pickSearchResult = (res: SearchResult) => {
+    setShowSearch(false);
+    setSearchQuery('');
+    navigate(res.kind === 'user' ? '/admin' : roleHome(user?.role));
+  };
+
+  const handleNotifClick = (n: { id: string; read: boolean; title: string; message: string }) => {
+    if (!n.read) markNotificationsRead([n.id]);
+    setShowNotifs(false);
+    const text = `${n.title} ${n.message}`.toLowerCase();
+    navigate(text.includes('message') || text.includes('chat') ? '/messages' : roleHome(user?.role));
+  };
 
   // Leaderboard data
   const peers = users
@@ -145,12 +227,23 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
       {/* ── Sidebar Desktop ── */}
       <aside className={`hidden md:flex flex-col bg-white border-r border-gray-100 transition-all duration-300 ease-in-out shrink-0 ${isSidebarOpen ? 'w-64' : 'w-[72px]'}`}>
         {/* Logo */}
-        <div className={`flex items-center gap-3 border-b border-gray-100 ${isSidebarOpen ? 'px-5 py-4' : 'px-4 py-4 justify-center'}`}>
-          <img src={logoUrl} alt="The Way" className="h-9 w-auto object-contain shrink-0" />
-        </div>
+        <Link to="/" title="Home" className={`flex items-center gap-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${isSidebarOpen ? 'px-5 py-4' : 'px-4 py-4 justify-center'}`}>
+          <img src={logoUrl} alt="The Way — Home" className="h-9 w-auto object-contain shrink-0" />
+        </Link>
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+          <Link
+            to="/"
+            title={!isSidebarOpen ? 'Home' : undefined}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative ${
+              location.pathname === '/' ? 'bg-amber-50 text-amber-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
+            {location.pathname === '/' && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-amber-500 rounded-r-full" />}
+            <Home className={`w-5 h-5 shrink-0 ${location.pathname === '/' ? 'text-amber-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+            {isSidebarOpen && <span className="text-sm font-semibold truncate">Home</span>}
+          </Link>
           {filteredItems.map((item) => {
             const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
             return (
@@ -174,13 +267,21 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
         {/* User footer */}
         <div className="p-3 border-t border-gray-100 space-y-1">
+          <a
+            href="/welcome"
+            target="_blank"
+            rel="noopener noreferrer"
+            title={!isSidebarOpen ? 'Main website' : undefined}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-all ${!isSidebarOpen ? 'justify-center' : ''}`}
+          >
+            <Globe className="w-5 h-5 shrink-0 text-gray-400" />
+            {isSidebarOpen && <><span className="text-sm font-semibold flex-1">Main website</span><ArrowUpRight className="w-4 h-4 text-gray-300" /></>}
+          </a>
           <button
             onClick={openProfile}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-all text-left ${!isSidebarOpen ? 'justify-center' : ''}`}
           >
-            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
-              {user?.name?.charAt(0) ?? '?'}
-            </div>
+            <Avatar name={user?.name} photo={avatarUrl} className="w-8 h-8 rounded-lg shrink-0" />
             {isSidebarOpen && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-900 truncate leading-none">{user?.name}</p>
@@ -210,13 +311,62 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             <button onClick={() => setIsSidebarOpen(v => !v)} className="hidden md:flex p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
               <Menu className="w-5 h-5" />
             </button>
-            <div className="relative hidden lg:block">
+            <div className="relative hidden lg:block" ref={searchRef}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search..."
-                className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm w-72 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300 transition-all"
+                placeholder="Search students, applications…"
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
+                onFocus={() => setShowSearch(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setShowSearch(false); (e.target as HTMLInputElement).blur(); }
+                  if (e.key === 'Enter' && searchResults[0]) pickSearchResult(searchResults[0]);
+                }}
+                className="pl-9 pr-8 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm w-72 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300 transition-all"
               />
+              {searchQuery && (
+                <button onClick={() => { setSearchQuery(''); setShowSearch(false); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600">
+                  <CloseIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <AnimatePresence>
+                {showSearch && q.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: 0.14 }}
+                    className="absolute left-0 top-full mt-2 w-[22rem] bg-white border border-gray-100 rounded-2xl shadow-xl z-50 overflow-hidden"
+                  >
+                    {searchResults.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <Search className="w-7 h-7 text-gray-200 mx-auto mb-2" />
+                        <p className="text-sm text-gray-400 font-medium">No matches for “{searchQuery}”</p>
+                      </div>
+                    ) : (
+                      <div className="max-h-96 overflow-y-auto py-1.5 custom-scrollbar">
+                        {searchResults.map((res) => (
+                          <button
+                            key={`${res.kind}-${res.id}`}
+                            onClick={() => pickSearchResult(res)}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                          >
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${res.kind === 'user' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+                              {res.kind === 'user' ? <Users className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{res.title}</p>
+                              {res.subtitle && <p className="text-xs text-gray-400 truncate">{res.subtitle}</p>}
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5 shrink-0">{res.tag}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
@@ -246,9 +396,13 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                   >
                     <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
                       <p className="text-sm font-bold text-gray-900">Notifications</p>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${unreadCount > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
-                        {unreadCount > 0 ? `${unreadCount} new` : 'All read'}
-                      </span>
+                      {unreadCount > 0 ? (
+                        <button onClick={() => markAllNotificationsRead()} className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors">
+                          <CheckCheck className="w-3.5 h-3.5" /> Mark all read
+                        </button>
+                      ) : (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">All read</span>
+                      )}
                     </div>
                     <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
                       {myNotifs.length === 0 ? (
@@ -257,12 +411,14 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                           <p className="text-sm text-gray-400 font-medium">No notifications yet</p>
                         </div>
                       ) : myNotifs.map(n => (
-                        <div key={n.id} className={`px-4 py-3 hover:bg-gray-50 transition-colors ${!n.read ? 'bg-amber-50/40' : ''}`}>
-                          {!n.read && <span className="inline-block w-1.5 h-1.5 bg-amber-500 rounded-full mb-1" />}
-                          <p className="text-sm font-semibold text-gray-900">{n.title}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.message}</p>
-                          <p className="text-[10px] text-gray-400 mt-1">{new Date(n.time).toLocaleString()}</p>
-                        </div>
+                        <button key={n.id} onClick={() => handleNotifClick(n)} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex gap-2.5 ${!n.read ? 'bg-amber-50/40' : ''}`}>
+                          <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${!n.read ? 'bg-amber-500' : 'bg-transparent'}`} />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold text-gray-900">{n.title}</span>
+                            <span className="block text-xs text-gray-500 mt-0.5 leading-relaxed">{n.message}</span>
+                            <span className="block text-[10px] text-gray-400 mt-1">{new Date(n.time).toLocaleString()}</span>
+                          </span>
+                        </button>
                       ))}
                     </div>
                   </motion.div>
@@ -272,16 +428,15 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
             <div className="w-px h-6 bg-gray-100 mx-1" />
 
-            {/* Profile trigger */}
+            {/* Account chip */}
             <button
               onClick={openProfile}
-              className="flex items-center gap-2.5 pl-1 pr-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+              title="Your profile"
+              className="flex items-center gap-2.5 p-1 sm:pr-3 rounded-xl border border-transparent sm:border-gray-100 sm:bg-gray-50/60 hover:bg-gray-100 hover:border-gray-200 transition-colors"
             >
-              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm">
-                {user?.name?.charAt(0) ?? '?'}
-              </div>
+              <Avatar name={user?.name} photo={avatarUrl} className="w-8 h-8 rounded-lg shrink-0" />
               <div className="hidden sm:block text-left">
-                <p className="text-sm font-semibold text-gray-900 leading-none">{user?.name}</p>
+                <p className="text-sm font-semibold text-gray-900 leading-none truncate max-w-[140px]">{user?.name}</p>
                 <p className="text-[10px] text-gray-400 mt-0.5">{meta.label}</p>
               </div>
             </button>
@@ -319,11 +474,15 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
               <div className="px-6 pb-2">
                 <div className="flex items-end justify-between -mt-10 mb-4">
                   <div className="relative">
-                    <div className="w-20 h-20 rounded-2xl bg-white border-4 border-white shadow-xl flex items-center justify-center text-3xl font-black text-amber-600 bg-amber-50">
-                      {user.name.charAt(0)}
+                    <div className="w-20 h-20 rounded-2xl border-4 border-white shadow-xl overflow-hidden">
+                      <Avatar name={user.name} photo={avatarUrl} className="w-full h-full" textClass="text-3xl" />
                     </div>
+                    <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { void handleAvatarFile(e.target.files?.[0]); e.target.value = ''; }} />
+                    <button onClick={() => avatarInputRef.current?.click()} title="Change photo" className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-md ring-2 ring-white hover:bg-amber-600 transition-colors">
+                      <Camera className="w-3.5 h-3.5" />
+                    </button>
                     {isCompetitive && myRank > 0 && myRank <= 3 && (
-                      <span className="absolute -bottom-2 -right-2 text-xl">{medal.emoji}</span>
+                      <span className="absolute -top-2 -right-2 text-xl">{medal.emoji}</span>
                     )}
                   </div>
                   {isCompetitive ? (
@@ -475,6 +634,21 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
                 {profileTab === 'account' && (
                   <div className="space-y-5">
+                    {/* Profile photo */}
+                    <div className="flex items-center gap-4">
+                      <Avatar name={user.name} photo={avatarUrl} className="w-14 h-14 rounded-2xl shrink-0" textClass="text-xl" />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button onClick={() => avatarInputRef.current?.click()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors">
+                          <Camera className="w-4 h-4" /> {avatarUrl ? 'Change photo' : 'Add photo'}
+                        </button>
+                        {avatarUrl && (
+                          <button onClick={removeAvatar} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
+                            <Trash2 className="w-4 h-4" /> Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Identity grid */}
                     <div>
                       <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Account details</p>
@@ -561,12 +735,22 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/40 z-40 md:hidden" />
             <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="fixed inset-y-0 left-0 w-72 bg-white z-50 md:hidden flex flex-col shadow-2xl">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                <img src={logoUrl} alt="The Way" className="h-9 w-auto object-contain" />
+                <Link to="/" onClick={() => setIsMobileMenuOpen(false)}>
+                  <img src={logoUrl} alt="The Way — Home" className="h-9 w-auto object-contain" />
+                </Link>
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
                   <CloseIcon className="w-5 h-5" />
                 </button>
               </div>
               <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+                <Link to="/" onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all relative ${
+                    location.pathname === '/' ? 'bg-amber-50 text-amber-700' : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Home className={`w-5 h-5 shrink-0 ${location.pathname === '/' ? 'text-amber-600' : 'text-gray-400'}`} />
+                  <span className="text-sm font-semibold">Home</span>
+                </Link>
                 {filteredItems.map((item) => {
                   const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
                   return (
@@ -583,8 +767,13 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 })}
               </nav>
               <div className="p-3 border-t border-gray-100 space-y-1">
+                <a href="/welcome" target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
+                  <Globe className="w-5 h-5 shrink-0 text-gray-400" />
+                  <span className="text-sm font-semibold flex-1">Main website</span>
+                  <ArrowUpRight className="w-4 h-4 text-gray-300" />
+                </a>
                 <button onClick={() => { openProfile(); setIsMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">{user?.name?.charAt(0)}</div>
+                  <Avatar name={user?.name} photo={avatarUrl} className="w-8 h-8 rounded-lg shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
                     <p className="text-xs text-gray-400">{meta.label} · {user?.points ?? 0} pts</p>

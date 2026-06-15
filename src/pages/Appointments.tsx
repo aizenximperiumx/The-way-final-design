@@ -5,7 +5,6 @@ import {
   Video,
   Users,
   Plus,
-  MoreVertical,
   CheckCircle2,
   XCircle
 } from 'lucide-react';
@@ -17,7 +16,7 @@ import type { Appointment } from '../store/appStore';
 
 const Appointments: React.FC = () => {
   const { user } = useAuth();
-  const { appointments, addAppointment } = useApp();
+  const { appointments, addAppointment, updateAppointmentStatus } = useApp();
   const [showBookingModal, setShowBookingModal] = useState(false);
 
   const myAppointments = appointments.filter(appt => appt.userId === user?.id || user?.role !== 'student');
@@ -207,17 +206,30 @@ const Appointments: React.FC = () => {
                         </span>
                         {user?.role !== 'student' && appt.status === 'pending' && (
                           <div className="flex gap-1">
-                            <button className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                            <button
+                              onClick={() => { updateAppointmentStatus(appt.id, 'confirmed'); toast.success('Appointment confirmed'); }}
+                              title="Confirm"
+                              className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            >
                               <CheckCircle2 className="w-4 h-4" />
                             </button>
-                            <button className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                            <button
+                              onClick={() => { updateAppointmentStatus(appt.id, 'cancelled'); toast('Appointment declined'); }}
+                              title="Decline"
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
                               <XCircle className="w-4 h-4" />
                             </button>
                           </div>
                         )}
-                        <button className="p-1.5 text-gray-300 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100">
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
+                        {user?.role === 'student' && appt.status !== 'cancelled' && (
+                          <button
+                            onClick={() => { updateAppointmentStatus(appt.id, 'cancelled'); toast('Appointment cancelled'); }}
+                            className="px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg border border-red-100 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

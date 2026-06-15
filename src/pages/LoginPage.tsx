@@ -6,6 +6,8 @@ import logoUrl from '../../thewaynewlogo-removebg-preview.png';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import type { UserRole } from '../store/appStore';
+import { useI18n } from '../lib/i18n';
+import LanguageToggle from '../components/LanguageToggle';
 
 const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -13,6 +15,7 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { t: tr, dir, fontFamily } = useI18n();
   const navigate = useNavigate();
 
   const getHomePath = (role: UserRole) => {
@@ -31,14 +34,17 @@ const LoginPage: React.FC = () => {
 
     const user = await login(username, password);
     if (user) {
-      toast.success('Welcome back!');
+      toast.success(tr('Welcome back!', 'مرحباً بعودتك!'));
       navigate(getHomePath(user.role));
     }
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans" dir={dir} style={{ fontFamily }}>
+      <div className="absolute top-5 right-5 z-20">
+        <LanguageToggle variant="dark" />
+      </div>
       {/* Background Orbs */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2"></div>
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[120px] translate-y-1/2 -translate-x-1/2"></div>
@@ -52,7 +58,7 @@ const LoginPage: React.FC = () => {
           {/* Header */}
           <div className="text-center mb-10">
             <img src={logoUrl} alt="The Way" className="mx-auto h-16 w-auto object-contain mb-6" />
-            <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-2">Student Management Platform</p>
+            <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-2">{tr('Student Management Platform', 'منصة إدارة الطلاب')}</p>
           </div>
 
           <motion.form
@@ -63,7 +69,7 @@ const LoginPage: React.FC = () => {
           >
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">
-                    Username or Email
+                    {tr('Username or Email', 'اسم المستخدم أو البريد')}
                   </label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -72,7 +78,7 @@ const LoginPage: React.FC = () => {
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-amber-500/20 transition-all outline-none"
-                      placeholder="e.g. admin"
+                      placeholder={tr('e.g. admin', 'مثال: admin')}
                       required
                     />
                   </div>
@@ -80,7 +86,7 @@ const LoginPage: React.FC = () => {
 
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">
-                    Password
+                    {tr('Password', 'كلمة المرور')}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -105,7 +111,7 @@ const LoginPage: React.FC = () => {
                 <div className="flex items-center px-1">
                   <label className="flex items-center gap-2 cursor-pointer group">
                     <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500/20" />
-                    <span className="text-xs font-bold text-gray-400 group-hover:text-black transition-colors">Remember me</span>
+                    <span className="text-xs font-bold text-gray-400 group-hover:text-black transition-colors">{tr('Remember me', 'تذكّرني')}</span>
                   </label>
                 </div>
 
@@ -118,7 +124,7 @@ const LoginPage: React.FC = () => {
                     <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   ) : (
                     <>
-                      Login to Portal
+                      {tr('Login to Portal', 'دخول البوابة')}
                       <ArrowRight className="w-5 h-5" />
                     </>
                   )}
@@ -128,7 +134,7 @@ const LoginPage: React.FC = () => {
 
         {/* Footer Links */}
         <div className="mt-10 flex items-center justify-center gap-8 relative z-10">
-          <Link to="/" className="text-gray-500 hover:text-amber-500 font-bold text-xs uppercase tracking-widest transition-colors">Home</Link>
+          <Link to="/" className="text-gray-500 hover:text-amber-500 font-bold text-xs uppercase tracking-widest transition-colors">{tr('Home', 'الرئيسية')}</Link>
         </div>
       </motion.div>
     </div>
