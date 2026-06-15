@@ -3,7 +3,8 @@ import { useAppStore } from '../store/appStore';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, Shield, Video, FileText, Send, User, Award, TrendingUp, Building2, LogOut, ChevronRight, ChevronDown, CheckCircle2, Clock, XCircle } from 'lucide-react';
-import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
+// Dark-text wordmark (the other logo's white text is invisible on this white header)
+import logoUrl from '../../thewaynewlogo-removebg-preview.png';
 import toast from 'react-hot-toast';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';

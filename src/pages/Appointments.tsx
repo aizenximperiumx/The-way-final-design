@@ -5,8 +5,6 @@ import {
   Video,
   Users,
   Plus,
-  ChevronLeft,
-  ChevronRight,
   MoreVertical,
   CheckCircle2,
   XCircle
@@ -23,6 +21,19 @@ const Appointments: React.FC = () => {
   const [showBookingModal, setShowBookingModal] = useState(false);
 
   const myAppointments = appointments.filter(appt => appt.userId === user?.id || user?.role !== 'student');
+
+  // Real current-month calendar + next upcoming appointment (no placeholder data)
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const todayDate = today.getDate();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthLabel = today.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(todayDate).padStart(2, '0')}`;
+  const upcoming = [...myAppointments]
+    .filter(a => a.status !== 'cancelled' && a.date >= todayStr)
+    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0];
 
   const handleBook = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,15 +89,8 @@ const Appointments: React.FC = () => {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-semibold text-gray-900">Calendar</h3>
-              <div className="flex gap-1">
-                <button className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-400 transition-colors">
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-400 transition-colors">
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
+              <h3 className="text-sm font-semibold text-gray-900">{monthLabel}</h3>
+              <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5 uppercase tracking-wider">This month</span>
             </div>
 
             <div className="grid grid-cols-7 gap-1 text-center mb-2">
@@ -96,31 +100,47 @@ const Appointments: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: 31 }).map((_, i) => (
-                <button
-                  key={i}
-                  className={`h-8 rounded-lg text-xs font-medium transition-all ${
-                    i + 1 === 26
-                      ? 'bg-amber-600 text-white shadow-sm'
-                      : 'hover:bg-gray-50 text-gray-600'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+              {Array.from({ length: firstWeekday }).map((_, i) => <span key={`pad-${i}`} className="h-8" />)}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1;
+                const dayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isToday = day === todayDate;
+                const hasAppt = myAppointments.some(a => a.date === dayStr && a.status !== 'cancelled');
+                return (
+                  <div
+                    key={day}
+                    className={`relative h-8 flex items-center justify-center rounded-lg text-xs font-medium transition-all ${
+                      isToday ? 'bg-amber-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {day}
+                    {hasAppt && !isToday && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-500" />}
+                    {hasAppt && isToday && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-white" />}
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Upcoming highlight */}
+            {/* Next upcoming appointment (real data) */}
             <div className="mt-5 pt-4 border-t border-gray-100">
-              <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
-                <div className="w-9 h-9 bg-amber-600 rounded-lg flex items-center justify-center text-white shrink-0">
-                  <Video className="w-4 h-4" />
+              {upcoming ? (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                  <div className="w-9 h-9 bg-amber-600 rounded-lg flex items-center justify-center text-white shrink-0">
+                    {upcoming.type === 'video' ? <Video className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 truncate">{upcoming.title}</p>
+                    <p className="text-xs text-amber-700">{upcoming.date} · {upcoming.time}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-900">Today at 4:00 PM</p>
-                  <p className="text-xs text-amber-700">Visa Interview Prep</p>
+              ) : (
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="w-9 h-9 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-gray-300 shrink-0">
+                    <CalendarIcon className="w-4 h-4" />
+                  </div>
+                  <p className="text-xs font-medium text-gray-400">No upcoming appointments</p>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

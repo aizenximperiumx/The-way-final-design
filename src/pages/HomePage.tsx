@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useAppStore } from '../store/appStore';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, MessageSquare, Bell, LayoutDashboard, ChevronDown } from 'lucide-react';
+import { LogOut, MessageSquare, Bell, LayoutDashboard, ChevronDown, ShieldCheck, BadgeCheck, BellRing } from 'lucide-react';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 
 const HomePage: React.FC = () => {
@@ -184,22 +184,39 @@ const HomePage: React.FC = () => {
               )}
             </div>
 
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-xl hover:bg-white/10 transition-colors">
-              <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Account Status</p>
-              <p className="text-white font-black text-2xl">Active</p>
-              <div className="mt-3 h-1 bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-amber-500 to-orange-600 w-full"></div>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-xl hover:bg-white/10 transition-colors">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-gray-400 text-xs font-black uppercase tracking-widest">Account Status</p>
+                  <span className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center"><ShieldCheck className="w-[18px] h-[18px]" /></span>
+                </div>
+                <p className="text-white font-black text-2xl">Active</p>
+                <div className="mt-3 h-1 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-amber-500 to-orange-600 w-full"></div>
+                </div>
               </div>
-            </div>
 
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-xl hover:bg-white/10 transition-colors">
-              <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Your Role</p>
-              <p className="text-white font-black text-2xl capitalize">{user.role}</p>
-            </div>
+              <div className="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-xl hover:bg-white/10 transition-colors">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-gray-400 text-xs font-black uppercase tracking-widest">Your Role</p>
+                  <span className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center"><BadgeCheck className="w-[18px] h-[18px]" /></span>
+                </div>
+                <p className="text-white font-black text-2xl capitalize">{user.role.replace('_', ' ')}</p>
+              </div>
 
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-xl hover:bg-white/10 transition-colors">
-              <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Unread Notifications</p>
-              <p className="text-white font-black text-2xl">{unreadNotifications}</p>
+              <button
+                onClick={() => navigate('/messages')}
+                className="text-left rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-xl hover:bg-white/10 transition-colors"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-gray-400 text-xs font-black uppercase tracking-widest">Unread Notifications</p>
+                  <span className="relative w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center">
+                    <BellRing className="w-[18px] h-[18px]" />
+                    {unreadNotifications > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-black/40" />}
+                  </span>
+                </div>
+                <p className="text-white font-black text-2xl">{unreadNotifications}</p>
+              </button>
             </div>
           </div>
         </div>
