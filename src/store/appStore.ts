@@ -9,6 +9,8 @@ export type UserRole = 'ceo' | 'sales' | 'ops' | 'staff' | 'agency_staff' | 'stu
 // Manually-tracked WhatsApp / direct leads owned by a sales (or customer-support)
 // rep. Separate from public Applications — these are early prospects a rep is
 // nurturing before a formal application exists.
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'won' | 'lost';
+
 export interface Lead {
   id: string;
   ownerId: string;          // sales/support user who owns this lead
@@ -19,6 +21,9 @@ export interface Lead {
   country: string;
   universityInterested: string;
   notes: string;
+  status: LeadStatus;
+  followUpDate?: string;     // YYYY-MM-DD — drives the "follow-ups due" queue
+  convertedApplicationId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -214,9 +219,10 @@ export interface AppStoreState {
   markNotificationsRead: (ids?: string[]) => void;
   markAllNotificationsRead: () => void;
   updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => void;
-  addLead: (lead: Pick<Lead, 'name' | 'phone' | 'email' | 'country' | 'universityInterested' | 'notes'>) => { duplicate: boolean };
-  updateLead: (id: string, updates: Partial<Pick<Lead, 'name' | 'phone' | 'email' | 'country' | 'universityInterested' | 'notes'>>) => void;
+  addLead: (lead: Pick<Lead, 'name' | 'phone' | 'email' | 'country' | 'universityInterested' | 'notes'> & Partial<Pick<Lead, 'status' | 'followUpDate'>>) => { duplicate: boolean };
+  updateLead: (id: string, updates: Partial<Pick<Lead, 'name' | 'phone' | 'email' | 'country' | 'universityInterested' | 'notes' | 'status' | 'followUpDate'>>) => void;
   deleteLead: (id: string) => void;
+  convertLeadToApplication: (id: string) => Promise<void>;
   restoreSession: () => Promise<void>;
   refreshUsersFromBackend: () => Promise<void>;
   loadBackendState: () => Promise<void>;
@@ -475,12 +481,44 @@ const useAppStore = create<AppStoreState>()(
           country: (lead.country || '').trim(),
           universityInterested: (lead.universityInterested || '').trim(),
           notes: lead.notes ?? '',
+          status: lead.status ?? 'new',
+          followUpDate: lead.followUpDate || undefined,
           createdAt: now,
           updatedAt: now,
         };
         set((state) => ({ leads: [newLead, ...state.leads] }));
         queueBackendSave(get);
         return { duplicate };
+      },
+
+      convertLeadToApplication: async (id: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['sales', 'customer_support', 'ceo']);
+        const lead = get().leads.find(l => l.id === id);
+        if (!lead) throw new Error('Lead not found');
+        if (lead.convertedApplicationId) throw new Error('This lead has already been converted');
+        if (!lead.name.trim() && !lead.email.trim()) throw new Error('Add a name and email before converting');
+        const beforeIds = new Set(get().applications.map(a => a.id));
+        // Create a real public application from the lead's details.
+        await get().addApplication({
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          country: lead.country,
+          program: lead.universityInterested || 'Not specified',
+          status: 'submitted',
+          stage: 'applied',
+          createdAt: new Date().toISOString(),
+          source: 'public',
+        } as Omit<Application, 'id'>);
+        // addApplication reloads state; find the newly-created application id.
+        const created = get().applications.find(a => !beforeIds.has(a.id) && a.email === lead.email);
+        set((state) => ({
+          leads: state.leads.map(l => l.id === id
+            ? { ...l, status: 'won', convertedApplicationId: created?.id, updatedAt: new Date().toISOString() }
+            : l),
+        }));
+        queueBackendSave(get);
       },
 
       updateLead: (id, updates) => {
