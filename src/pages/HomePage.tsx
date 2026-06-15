@@ -30,6 +30,8 @@ const HomePage: React.FC = () => {
         return '/staff';
       case 'agency':
         return '/agencies';
+      case 'customer_support':
+        return '/support';
       case 'ceo':
         return '/admin';
       default:
