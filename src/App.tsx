@@ -20,6 +20,14 @@ import NotFound from './pages/NotFound';
 const UniversitiesPage = React.lazy(() => import('./pages/UniversitiesPage'));
 const AgenciesPortal = React.lazy(() => import('./pages/AgenciesPortal'));
 
+// Mobile student app (/app/*) — its own design, used inside the Capacitor shell.
+const MobileLanding = React.lazy(() => import('./mobile/MobileLanding'));
+const MobileLogin = React.lazy(() => import('./mobile/MobileLogin'));
+const MobileHome = React.lazy(() => import('./mobile/MobileHome'));
+const MobileDocuments = React.lazy(() => import('./mobile/MobileDocuments'));
+const MobileMessages = React.lazy(() => import('./mobile/MobileMessages'));
+const MobileProfile = React.lazy(() => import('./mobile/MobileProfile'));
+
 // Context
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
@@ -147,6 +155,26 @@ const HomeRoute = () => {
   return <LandingPage />;
 };
 
+// ── Mobile student-app guards (/app/*) ──
+const appLoader = (
+  <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A1628' }}>
+    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500" />
+  </div>
+);
+const AppPublic = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  if (loading) return appLoader;
+  if (user?.role === 'student') return <Navigate to="/app/home" replace />;
+  return <>{children}</>;
+};
+const AppProtected = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  if (loading) return appLoader;
+  if (!user) return <Navigate to="/app/login" replace />;
+  return <>{children}</>; // MobileLayout handles the non-student case
+};
+const appSuspense = (node: React.ReactNode) => <React.Suspense fallback={appLoader}>{node}</React.Suspense>;
+
 function AppRoutes() {
   return (
     <Routes>
@@ -164,6 +192,14 @@ function AppRoutes() {
       />
       {/* Public marketing site — reachable even while logged in (staff "Main website" link) */}
       <Route path="/welcome" element={<LandingPage />} />
+
+      {/* ── Mobile student app (loaded by the Capacitor shell) ── */}
+      <Route path="/app" element={<AppPublic>{appSuspense(<MobileLanding />)}</AppPublic>} />
+      <Route path="/app/login" element={<AppPublic>{appSuspense(<MobileLogin />)}</AppPublic>} />
+      <Route path="/app/home" element={<AppProtected>{appSuspense(<MobileHome />)}</AppProtected>} />
+      <Route path="/app/documents" element={<AppProtected>{appSuspense(<MobileDocuments />)}</AppProtected>} />
+      <Route path="/app/messages" element={<AppProtected>{appSuspense(<MobileMessages />)}</AppProtected>} />
+      <Route path="/app/profile" element={<AppProtected>{appSuspense(<MobileProfile />)}</AppProtected>} />
       <Route path="/universities" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />
       <Route path="/universities/:id" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />
       <Route
