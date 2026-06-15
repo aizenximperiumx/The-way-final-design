@@ -22,7 +22,8 @@ const LoginPage: React.FC = () => {
     if (role === 'student') return '/dashboard';
     if (role === 'sales') return '/sales';
     if (role === 'ops') return '/ops';
-    if (role === 'staff' || role === 'agency_staff') return '/staff';
+    if (role === 'staff') return '/staff';
+    if (role === 'agency_staff') return '/agency-staff';
     if (role === 'agency') return '/agencies';
     if (role === 'customer_support') return '/support';
     if (role === 'ceo') return '/admin';

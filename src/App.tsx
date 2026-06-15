@@ -9,7 +9,9 @@ import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 const StudentDashboard = React.lazy(() => import('./pages/StudentDashboard'));
 const SalesDashboard = React.lazy(() => import('./pages/SalesDashboard'));
+const OpsDashboard = React.lazy(() => import('./pages/OpsDashboard'));
 const StaffDashboard = React.lazy(() => import('./pages/StaffDashboard'));
+const AgencyStaffDashboard = React.lazy(() => import('./pages/AgencyStaffDashboard'));
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
 const SupportDashboard = React.lazy(() => import('./pages/SupportDashboard'));
 const Appointments = React.lazy(() => import('./pages/Appointments'));
@@ -68,7 +70,8 @@ const getHomePath = (role: UserRole) => {
   if (role === 'student') return '/dashboard';
   if (role === 'sales') return '/sales';
   if (role === 'ops') return '/ops';
-  if (role === 'staff' || role === 'agency_staff') return '/staff';
+  if (role === 'staff') return '/staff';
+  if (role === 'agency_staff') return '/agency-staff';
   if (role === 'agency') return '/agencies';
   if (role === 'customer_support') return '/support';
   if (role === 'ceo') return '/admin';
@@ -191,15 +194,23 @@ function AppRoutes() {
         path="/ops"
         element={
           <ProtectedRoute allowedRoles={['ops', 'ceo']}>
-            <React.Suspense fallback={<div className="p-8 text-center font-bold">Loading...</div>}><SalesDashboard /></React.Suspense>
+            <React.Suspense fallback={<div className="p-8 text-center font-bold">Loading...</div>}><OpsDashboard /></React.Suspense>
           </ProtectedRoute>
         }
       />
       <Route
         path="/staff"
         element={
-          <ProtectedRoute allowedRoles={['staff', 'agency_staff', 'ceo']}>
+          <ProtectedRoute allowedRoles={['staff', 'ceo']}>
             <React.Suspense fallback={<div className="p-8 text-center font-bold">Loading...</div>}><StaffDashboard /></React.Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agency-staff"
+        element={
+          <ProtectedRoute allowedRoles={['agency_staff', 'ceo']}>
+            <React.Suspense fallback={<div className="p-8 text-center font-bold">Loading...</div>}><AgencyStaffDashboard /></React.Suspense>
           </ProtectedRoute>
         }
       />
