@@ -73,9 +73,10 @@ const asState = (value) => {
         chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
         chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? v.chatThreadReadAt : {},
         documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
+        leads: Array.isArray(v.leads) ? v.leads : [],
     };
 };
-const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(role);
+const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(role);
 const safeParseJson = (line) => {
     try {
         return JSON.parse(line);
