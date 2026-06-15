@@ -212,7 +212,7 @@ function AppRoutes() {
       <Route
         path="/appointments"
         element={
-          <ProtectedRoute allowedRoles={['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo']}>
+          <ProtectedRoute allowedRoles={['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo', 'customer_support']}>
             <React.Suspense fallback={<div className="p-8 text-center font-bold">Loading...</div>}><Appointments /></React.Suspense>
           </ProtectedRoute>
         }
@@ -220,7 +220,7 @@ function AppRoutes() {
       <Route
         path="/messages"
         element={
-          <ProtectedRoute allowedRoles={['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo']}>
+          <ProtectedRoute allowedRoles={['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo', 'customer_support']}>
             <React.Suspense fallback={<div className="p-8 text-center font-bold">Loading...</div>}><Messages /></React.Suspense>
           </ProtectedRoute>
         }

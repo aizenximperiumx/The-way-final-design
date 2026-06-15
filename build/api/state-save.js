@@ -68,9 +68,10 @@ const asState = (value) => {
         chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
         chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? v.chatThreadReadAt : {},
         documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
+        leads: Array.isArray(v.leads) ? v.leads : [],
     };
 };
-const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(role);
+const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(role);
 const asRecord = (value) => (value && typeof value === 'object') ? value : null;
 const getString = (r, key) => (r && typeof r[key] === 'string' ? r[key] : '');
 const uniqueBy = (items, keyFn) => {
@@ -273,6 +274,7 @@ export default async function handler(req, res) {
                 chatMessages: mergeCollection(current.chatMessages, incoming.chatMessages, 200_000),
                 chatThreadReadAt: mergeReadAt(current.chatThreadReadAt, incoming.chatThreadReadAt),
                 documentRequests: mergeCollection(current.documentRequests, incoming.documentRequests, 50_000),
+                leads: mergeCollection(current.leads, incoming.leads, 50_000),
             };
         }
         else if (role === 'student') {

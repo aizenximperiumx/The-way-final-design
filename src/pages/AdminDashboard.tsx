@@ -81,6 +81,10 @@ const AdminDashboard: React.FC = () => {
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [staffName, setStaffName] = useState('');
   const [staffEmail, setStaffEmail] = useState('');
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [supportName, setSupportName] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [createdSupportCreds, setCreatedSupportCreds] = useState<{ username: string; password?: string } | null>(null);
   const [showUniModal, setShowUniModal] = useState(false);
   const [uniUserId, setUniUserId] = useState<string | null>(null);
   const [uniSelection, setUniSelection] = useState<string[]>([]);
@@ -151,6 +155,7 @@ const AdminDashboard: React.FC = () => {
     sales: 'bg-purple-100 text-purple-700',
     ops: 'bg-teal-100 text-teal-700',
     agency: 'bg-amber-100 text-amber-700',
+    customer_support: 'bg-rose-100 text-rose-700',
   };
   const roleAvatarColors: Record<string, string> = {
     ceo: 'bg-gray-900 text-white',
@@ -158,6 +163,7 @@ const AdminDashboard: React.FC = () => {
     sales: 'bg-purple-100 text-purple-700',
     ops: 'bg-teal-100 text-teal-700',
     agency: 'bg-amber-100 text-amber-700',
+    customer_support: 'bg-rose-100 text-rose-700',
   };
 
   const runHealth = async () => {
@@ -631,6 +637,12 @@ const AdminDashboard: React.FC = () => {
                       + Staff
                     </button>
                     <button
+                      onClick={() => setShowSupportModal(true)}
+                      className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      + Support
+                    </button>
+                    <button
                       onClick={() => setShowAssignModal(true)}
                       className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
                     >
@@ -974,6 +986,43 @@ const AdminDashboard: React.FC = () => {
                         const created = await ceoCreateUser(u);
                         setCreatedStaffCreds({ username: created.username, ...(created.password ? { password: created.password } : {}) });
                         toast.success('Staff user created');
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'Failed to create user');
+                      }
+                    }}
+                    className="bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors"
+                  >
+                    Create
+                  </button>
+                </div>
+              </ModalShell>
+            )}
+
+            {showSupportModal && (
+              <ModalShell title="Create Customer Support User" onClose={() => { setShowSupportModal(false); setCreatedSupportCreds(null); }}>
+                <div className="space-y-4">
+                  <Field label="Name">
+                    <input className={inputCls} value={supportName} onChange={(e) => setSupportName(e.target.value)} />
+                  </Field>
+                  <Field label="Email">
+                    <input type="email" className={inputCls} value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
+                  </Field>
+                  <p className="text-xs text-gray-400">Customer Support can manage their own leads and monitor every sales rep's leads &amp; notes.</p>
+                  {createdSupportCreds && <CredsDisplay creds={createdSupportCreds} />}
+                </div>
+                <div className="mt-6 flex justify-end gap-3">
+                  <button onClick={() => { setShowSupportModal(false); setCreatedSupportCreds(null); }} className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button
+                    onClick={async () => {
+                      const name = supportName.trim();
+                      const email = supportEmail.trim();
+                      if (!name || !email) { toast.error('Please enter name and email'); return; }
+                      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Invalid email'); return; }
+                      const u = { id: '', username: '', role: 'customer_support' as const, name, email, points: 0, createdAt: new Date().toISOString() };
+                      try {
+                        const created = await ceoCreateUser(u);
+                        setCreatedSupportCreds({ username: created.username, ...(created.password ? { password: created.password } : {}) });
+                        toast.success('Customer Support user created');
                       } catch (e) {
                         toast.error(e instanceof Error ? e.message : 'Failed to create user');
                       }

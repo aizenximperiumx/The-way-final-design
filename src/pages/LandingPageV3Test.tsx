@@ -13,6 +13,7 @@ import {
   Mail,
   MapPin,
   Menu,
+  MessageCircle,
   Phone,
   ShieldCheck,
   Video,
@@ -916,6 +917,19 @@ export default function LandingPageV3Test() {
           </div>
         </div>
       </footer>
+
+      {/* Floating WhatsApp CTA */}
+      <a
+        href="https://wa.me/995571009550"
+        target="_blank"
+        rel="noreferrer"
+        aria-label={tr('Chat with us on WhatsApp', 'تحدث معنا على واتساب')}
+        className="fixed bottom-5 z-[70] flex items-center gap-2 rounded-full bg-[#25D366] text-white px-4 py-3 shadow-[0_12px_30px_-8px_rgba(37,211,102,0.7)] hover:scale-105 transition-transform"
+        style={dir === 'rtl' ? { left: 20 } : { right: 20 }}
+      >
+        <MessageCircle className="w-5 h-5" />
+        <span className="hidden sm:inline text-sm font-bold">{tr('Chat on WhatsApp', 'تواصل عبر واتساب')}</span>
+      </a>
     </div>
   );
 }

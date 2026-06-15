@@ -7,7 +7,8 @@ import {
   Building2, X as CloseIcon, Trophy, Star,
   Award, ChevronRight, Mail, Zap,
   KeyRound, Phone, Eye, EyeOff, Loader2, BadgeCheck, AtSign,
-  Home, Globe, Camera, Trash2, CheckCheck, ArrowUpRight
+  Home, Globe, Camera, Trash2, CheckCheck, ArrowUpRight,
+  Plus, Pencil, Briefcase, Save
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -35,14 +36,14 @@ interface SidebarItem {
 
 const sidebarItems: SidebarItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['student'] },
-  { label: 'Universities', icon: GraduationCap, path: '/universities', roles: ['student', 'sales', 'ops', 'staff', 'agency_staff', 'ceo', 'agency'] },
+  { label: 'Universities', icon: GraduationCap, path: '/universities', roles: ['student', 'sales', 'ops', 'staff', 'agency_staff', 'ceo', 'agency', 'customer_support'] },
   { label: 'Applications', icon: FileText, path: '/sales', roles: ['sales', 'ceo'] },
   { label: 'Agency Leads', icon: FileText, path: '/ops', roles: ['ops', 'ceo'] },
   { label: 'Agencies', icon: Building2, path: '/agencies', roles: ['agency', 'ceo'] },
   { label: 'Students', icon: Users, path: '/staff', roles: ['staff', 'agency_staff', 'ceo'] },
   { label: 'Analytics', icon: BarChart3, path: '/admin', roles: ['ceo'] },
-  { label: 'Appointments', icon: Calendar, path: '/appointments', roles: ['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo'] },
-  { label: 'Messages', icon: MessageSquare, path: '/messages', roles: ['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo'] },
+  { label: 'Appointments', icon: Calendar, path: '/appointments', roles: ['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo', 'customer_support'] },
+  { label: 'Messages', icon: MessageSquare, path: '/messages', roles: ['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo', 'customer_support'] },
 ];
 
 const roleMeta: Record<string, { label: string; color: string; bg: string }> = {
@@ -53,6 +54,7 @@ const roleMeta: Record<string, { label: string; color: string; bg: string }> = {
   agency_staff: { label: 'Agency Staff', color: 'text-orange-700', bg: 'bg-orange-50'  },
   student:      { label: 'Student',      color: 'text-green-700',  bg: 'bg-green-50'   },
   agency:       { label: 'Agency',       color: 'text-indigo-700', bg: 'bg-indigo-50'  },
+  customer_support: { label: 'Customer Support', color: 'text-rose-700', bg: 'bg-rose-50' },
 };
 
 const rankMedal = (rank: number) => {
@@ -72,14 +74,21 @@ const howToEarn = [
 
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
-  const { notifications, users, applications, changePassword, markNotificationsRead, markAllNotificationsRead } = useAppStore();
+  const { notifications, users, applications, leads, addLead, updateLead, deleteLead, changePassword, markNotificationsRead, markAllNotificationsRead } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [profileTab, setProfileTab] = useState<'overview' | 'leaderboard' | 'account'>('overview');
+  const [profileTab, setProfileTab] = useState<'overview' | 'leaderboard' | 'workspace' | 'account'>('overview');
+  // Leads CRM (sales / customer-support / ceo)
+  const [leadFormOpen, setLeadFormOpen] = useState(false);
+  const [leadEditId, setLeadEditId] = useState<string | null>(null);
+  const [leadDraft, setLeadDraft] = useState({ name: '', phone: '', email: '', country: '', universityInterested: '', notes: '' });
+  const [leadSaving, setLeadSaving] = useState(false);
+  const [noteLeadId, setNoteLeadId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
   // Self-service password change (available to every role)
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
@@ -196,10 +205,102 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const medal = rankMedal(myRank);
 
   // Internal/competitive roles see points + leaderboard; everyone gets Account.
-  const isCompetitive = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(user?.role ?? '');
+  const isCompetitive = ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(user?.role ?? '');
+  // Roles whose profile Workspace tab is the Leads CRM.
+  const hasLeads = ['sales', 'customer_support', 'ceo'].includes(user?.role ?? '');
+  const canMonitorLeads = user?.role === 'customer_support' || user?.role === 'ceo';
+  const myLeads = leads.filter(l => l.ownerId === user?.id);
+  const monitoredLeads = canMonitorLeads ? leads.filter(l => l.ownerId !== user?.id) : [];
+
+  const blankLead = { name: '', phone: '', email: '', country: '', universityInterested: '', notes: '' };
+  const openAddLead = () => { setLeadEditId(null); setLeadDraft(blankLead); setLeadFormOpen(true); };
+  const openEditLead = (l: typeof leads[number]) => {
+    setLeadEditId(l.id);
+    setLeadDraft({ name: l.name, phone: l.phone, email: l.email, country: l.country, universityInterested: l.universityInterested, notes: l.notes });
+    setLeadFormOpen(true);
+  };
+  const saveLead = () => {
+    if (!leadDraft.name.trim() && !leadDraft.phone.trim()) { toast.error('Add at least a name or phone'); return; }
+    setLeadSaving(true);
+    try {
+      if (leadEditId) { updateLead(leadEditId, leadDraft); toast.success('Lead updated'); }
+      else { const { duplicate } = addLead(leadDraft); toast.success(duplicate ? 'Lead added — heads up, looks like a possible duplicate' : 'Lead added'); }
+      setLeadFormOpen(false);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save lead'); }
+    finally { setLeadSaving(false); }
+  };
+  const saveNote = () => {
+    if (!noteLeadId) return;
+    try { updateLead(noteLeadId, { notes: noteDraft }); toast.success('Note saved'); setNoteLeadId(null); }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save note'); }
+  };
+  const removeLead = (l: typeof leads[number]) => {
+    if (!window.confirm(`Delete lead "${l.name || l.phone || 'untitled'}"? This cannot be undone.`)) return;
+    try { deleteLead(l.id); toast.success('Lead deleted'); }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'Could not delete'); }
+  };
+
+  // Render helper (no typed inputs inside, so safe to recreate each render).
+  const leadsTable = (list: typeof leads, opts: { showOwner?: boolean; canEditFields?: boolean; canDelete?: boolean }) => (
+    list.length === 0 ? (
+      <div className="rounded-2xl border border-dashed border-gray-200 py-8 text-center">
+        <p className="text-sm text-gray-400 font-medium">No leads yet</p>
+      </div>
+    ) : (
+      <div className="overflow-x-auto rounded-2xl border border-gray-100">
+        <table className="w-full text-sm min-w-[640px]">
+          <thead>
+            <tr className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-400">
+              <th className="text-left font-bold px-3 py-2.5">Name</th>
+              <th className="text-left font-bold px-3 py-2.5">Phone</th>
+              <th className="text-left font-bold px-3 py-2.5">Email</th>
+              <th className="text-left font-bold px-3 py-2.5">Country</th>
+              <th className="text-left font-bold px-3 py-2.5">University</th>
+              {opts.showOwner && <th className="text-left font-bold px-3 py-2.5">Rep</th>}
+              <th className="text-right font-bold px-3 py-2.5">Notes / Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {list.map((l) => (
+              <tr key={l.id} className="hover:bg-gray-50/60">
+                <td className="px-3 py-2.5 font-semibold text-gray-900 whitespace-nowrap">{l.name || '—'}</td>
+                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{l.phone || '—'}</td>
+                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{l.email || '—'}</td>
+                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{l.country || '—'}</td>
+                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{l.universityInterested || '—'}</td>
+                {opts.showOwner && <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{l.ownerName}</td>}
+                <td className="px-3 py-2.5">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => { setNoteLeadId(l.id); setNoteDraft(l.notes); }}
+                      title="Open notes"
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-colors ${l.notes ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                      <FileText className="w-3.5 h-3.5" /> {l.notes ? 'Notes' : 'Add note'}
+                    </button>
+                    {opts.canEditFields && (
+                      <button onClick={() => openEditLead(l)} title="Edit lead" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {opts.canDelete && (
+                      <button onClick={() => removeLead(l)} title="Delete lead" className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  );
 
   const openProfile = () => {
-    setProfileTab(isCompetitive ? 'overview' : 'account');
+    const leadsFirst = user?.role === 'sales' || user?.role === 'customer_support';
+    setProfileTab(leadsFirst ? 'workspace' : isCompetitive ? 'overview' : 'account');
     setNewPw(''); setConfirmPw(''); setShowPw(false);
     setShowProfile(true);
   };
@@ -461,7 +562,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.96, opacity: 0, y: 8 }}
               transition={{ duration: 0.2 }}
-              className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden"
+              className={`relative bg-white rounded-3xl shadow-2xl w-full overflow-hidden transition-[max-width] duration-200 ${profileTab === 'workspace' && hasLeads ? 'max-w-4xl' : 'max-w-xl'}`}
             >
               {/* Header banner */}
               <div className="h-24 bg-gradient-to-r from-amber-500 to-orange-500 relative">
@@ -541,7 +642,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
               {/* Tabs */}
               <div className="flex border-b border-gray-100 px-6 mt-2">
-                {(isCompetitive ? (['overview', 'leaderboard', 'account'] as const) : (['account'] as const)).map(tab => (
+                {(isCompetitive ? (['overview', 'leaderboard', 'workspace', 'account'] as const) : (['workspace', 'account'] as const)).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setProfileTab(tab)}
@@ -554,7 +655,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 ))}
               </div>
 
-              <div className="p-6 max-h-72 overflow-y-auto custom-scrollbar">
+              <div className="p-6 max-h-[62vh] overflow-y-auto custom-scrollbar">
                 {profileTab === 'overview' && (
                   <div className="space-y-4">
                     <div>
@@ -629,6 +730,64 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {profileTab === 'workspace' && (
+                  <div className="space-y-5">
+                    {hasLeads ? (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-black text-gray-900">My Leads</p>
+                            <p className="text-xs text-gray-400">WhatsApp & direct prospects you're nurturing.</p>
+                          </div>
+                          <button
+                            onClick={leadFormOpen ? () => setLeadFormOpen(false) : openAddLead}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 transition-colors shrink-0"
+                          >
+                            {leadFormOpen ? <><CloseIcon className="w-4 h-4" /> Close</> : <><Plus className="w-4 h-4" /> Add lead</>}
+                          </button>
+                        </div>
+
+                        {leadFormOpen && (
+                          <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
+                            <div className="grid sm:grid-cols-2 gap-3">
+                              <input value={leadDraft.name} onChange={(e) => setLeadDraft(d => ({ ...d, name: e.target.value }))} placeholder="Name" className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20" />
+                              <input value={leadDraft.phone} onChange={(e) => setLeadDraft(d => ({ ...d, phone: e.target.value }))} placeholder="Phone (WhatsApp)" className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20" />
+                              <input value={leadDraft.email} onChange={(e) => setLeadDraft(d => ({ ...d, email: e.target.value }))} placeholder="Email" className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20" />
+                              <input value={leadDraft.country} onChange={(e) => setLeadDraft(d => ({ ...d, country: e.target.value }))} placeholder="Country" className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20" />
+                              <input value={leadDraft.universityInterested} onChange={(e) => setLeadDraft(d => ({ ...d, universityInterested: e.target.value }))} placeholder="University interested in" className="sm:col-span-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20" />
+                            </div>
+                            <div className="flex justify-end gap-2 mt-3">
+                              <button onClick={() => setLeadFormOpen(false)} className="px-3 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                              <button onClick={saveLead} disabled={leadSaving} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 disabled:opacity-60">
+                                <Save className="w-4 h-4" /> {leadEditId ? 'Save changes' : 'Add lead'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {leadsTable(myLeads, { canEditFields: true, canDelete: true })}
+
+                        {canMonitorLeads && (
+                          <div className="pt-2">
+                            <p className="text-sm font-black text-gray-900 mb-2">
+                              Sales Leads <span className="text-xs font-medium text-gray-400">· monitoring all reps ({monitoredLeads.length})</span>
+                            </p>
+                            {leadsTable(monitoredLeads, { showOwner: true, canEditFields: false, canDelete: false })}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center mx-auto mb-4">
+                          <Briefcase className="w-7 h-7 text-gray-300" />
+                        </div>
+                        <p className="text-sm font-bold text-gray-900">Your {meta.label} workspace</p>
+                        <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto">Role-specific tools will live here. We're rolling these out per role — more coming soon.</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -722,6 +881,38 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     </button>
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Lead notes card ── */}
+      <AnimatePresence>
+        {noteLeadId && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setNoteLeadId(null)} />
+            <motion.div initial={{ scale: 0.96, opacity: 0, y: 8 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.96, opacity: 0, y: 8 }} transition={{ duration: 0.18 }} className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                  <p className="text-sm font-bold text-gray-900">Lead notes</p>
+                </div>
+                <button onClick={() => setNoteLeadId(null)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"><CloseIcon className="w-4 h-4" /></button>
+              </div>
+              <div className="p-5">
+                <textarea
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  rows={6}
+                  autoFocus
+                  placeholder="Type notes about this lead — interests, budget, follow-up date, objections…"
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
+                />
+                <div className="flex justify-end gap-2 mt-3">
+                  <button onClick={() => setNoteLeadId(null)} className="px-3 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={saveNote} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 transition-colors"><Save className="w-4 h-4" /> Save note</button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

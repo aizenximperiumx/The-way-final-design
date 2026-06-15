@@ -185,7 +185,7 @@ export default async function handler(req, res) {
         const role = asString(body.role).trim();
         const name = asString(body.name).trim();
         void asString(body.phone).trim();
-        const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency']);
+        const allowedRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'customer_support']);
         if (!email || !role || !name) {
             res.status(400).json({ error: 'Missing fields' });
             return;

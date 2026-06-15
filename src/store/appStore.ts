@@ -4,7 +4,24 @@ import { sendMail } from '../lib/mailer';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
 
 
-export type UserRole = 'ceo' | 'sales' | 'ops' | 'staff' | 'agency_staff' | 'student' | 'agency';
+export type UserRole = 'ceo' | 'sales' | 'ops' | 'staff' | 'agency_staff' | 'student' | 'agency' | 'customer_support';
+
+// Manually-tracked WhatsApp / direct leads owned by a sales (or customer-support)
+// rep. Separate from public Applications — these are early prospects a rep is
+// nurturing before a formal application exists.
+export interface Lead {
+  id: string;
+  ownerId: string;          // sales/support user who owns this lead
+  ownerName: string;
+  name: string;
+  phone: string;
+  email: string;
+  country: string;
+  universityInterested: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface User {
   id: string;
@@ -186,6 +203,7 @@ export interface AppStoreState {
   chatMessages: ChatMessage[];
   chatThreadReadAt: Record<string, string>;
   documentRequests: DocumentRequest[];
+  leads: Lead[];
   language: 'en' | 'ar';
   backendHydrated: boolean;
 
@@ -196,6 +214,9 @@ export interface AppStoreState {
   markNotificationsRead: (ids?: string[]) => void;
   markAllNotificationsRead: () => void;
   updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => void;
+  addLead: (lead: Pick<Lead, 'name' | 'phone' | 'email' | 'country' | 'universityInterested' | 'notes'>) => { duplicate: boolean };
+  updateLead: (id: string, updates: Partial<Pick<Lead, 'name' | 'phone' | 'email' | 'country' | 'universityInterested' | 'notes'>>) => void;
+  deleteLead: (id: string) => void;
   restoreSession: () => Promise<void>;
   refreshUsersFromBackend: () => Promise<void>;
   loadBackendState: () => Promise<void>;
@@ -309,6 +330,7 @@ const useAppStore = create<AppStoreState>()(
         chatThreadReadAt: {},
         appointments: [],
         documentRequests: [],
+        leads: [],
         language: 'en',
         backendHydrated: false,
 
@@ -398,7 +420,7 @@ const useAppStore = create<AppStoreState>()(
         const supabase = tryGetSupabase();
         if (supabase) void supabase.auth.signOut();
         localStorage.removeItem('the-way-storage');
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, documentRequests: [] });
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, documentRequests: [], leads: [] });
       },
 
       changePassword: async (newPassword: string) => {
@@ -430,6 +452,58 @@ const useAppStore = create<AppStoreState>()(
         set((state) => ({
           appointments: state.appointments.map(a => a.id === appointmentId ? { ...a, status } : a),
         }));
+        queueBackendSave(get);
+      },
+
+      addLead: (lead) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['sales', 'customer_support', 'ceo']);
+        const email = (lead.email || '').trim().toLowerCase();
+        const phone = (lead.phone || '').replace(/\s+/g, '');
+        const duplicate = get().leads.some(l => l.ownerId === actor.id && (
+          (!!email && l.email.trim().toLowerCase() === email) ||
+          (!!phone && l.phone.replace(/\s+/g, '') === phone)
+        ));
+        const now = new Date().toISOString();
+        const newLead: Lead = {
+          id: `lead-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+          ownerId: actor.id,
+          ownerName: actor.name,
+          name: (lead.name || '').trim(),
+          phone: (lead.phone || '').trim(),
+          email: (lead.email || '').trim(),
+          country: (lead.country || '').trim(),
+          universityInterested: (lead.universityInterested || '').trim(),
+          notes: lead.notes ?? '',
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({ leads: [newLead, ...state.leads] }));
+        queueBackendSave(get);
+        return { duplicate };
+      },
+
+      updateLead: (id, updates) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['sales', 'customer_support', 'ceo']);
+        const lead = get().leads.find(l => l.id === id);
+        if (!lead) throw new Error('Lead not found');
+        // Owners edit their own leads; support/ceo may also edit (monitoring notes).
+        const canEdit = lead.ownerId === actor.id || actor.role === 'ceo' || actor.role === 'customer_support';
+        if (!canEdit) throw new Error('You can only edit your own leads');
+        set((state) => ({
+          leads: state.leads.map(l => l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l),
+        }));
+        queueBackendSave(get);
+      },
+
+      deleteLead: (id) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['sales', 'customer_support', 'ceo']);
+        const lead = get().leads.find(l => l.id === id);
+        if (!lead) return;
+        if (lead.ownerId !== actor.id && actor.role !== 'ceo') throw new Error('You can only delete your own leads');
+        set((state) => ({ leads: state.leads.filter(l => l.id !== id) }));
         queueBackendSave(get);
       },
 
@@ -511,6 +585,7 @@ const useAppStore = create<AppStoreState>()(
           chatMessages: Array.isArray(s.chatMessages) ? (s.chatMessages as ChatMessage[]) : [],
           chatThreadReadAt: (s.chatThreadReadAt && typeof s.chatThreadReadAt === 'object') ? (s.chatThreadReadAt as Record<string, string>) : {},
           documentRequests: Array.isArray(s.documentRequests) ? (s.documentRequests as DocumentRequest[]) : [],
+          leads: Array.isArray(s.leads) ? (s.leads as Lead[]) : [],
           backendHydrated: true,
         });
         await get().refreshUsersFromBackend();
@@ -532,6 +607,7 @@ const useAppStore = create<AppStoreState>()(
           chatMessages: get().chatMessages,
           chatThreadReadAt: get().chatThreadReadAt,
           documentRequests: get().documentRequests,
+          leads: get().leads,
         };
         await fetch('/api/state-save', {
           method: 'POST',
@@ -1498,6 +1574,7 @@ const useAppStore = create<AppStoreState>()(
         appointments: state.appointments,
         chatMessages: state.chatMessages,
         chatThreadReadAt: state.chatThreadReadAt,
+        leads: state.leads,
       }),
       migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out', users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} }, version: 5 } as unknown),
     }

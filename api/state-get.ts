@@ -67,6 +67,7 @@ type AppState = {
   chatMessages: unknown[];
   chatThreadReadAt: Record<string, string>;
   documentRequests: unknown[];
+  leads: unknown[];
 };
 
 const asRecord = (value: unknown) => (value && typeof value === 'object') ? (value as Record<string, unknown>) : null;
@@ -82,10 +83,11 @@ const asState = (value: unknown): AppState => {
     chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
     chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? (v.chatThreadReadAt as Record<string, string>) : {},
     documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
+    leads: Array.isArray(v.leads) ? v.leads : [],
   };
 };
 
-const isInternal = (role: string) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(role);
+const isInternal = (role: string) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(role);
 
 const safeParseJson = (line: string) => {
   try {
