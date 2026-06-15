@@ -2,17 +2,20 @@ import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
-  Search, Plus, Pencil, Trash2, FileText, Save, X, Users, Headset,
+  Search, Plus, Pencil, Trash2, FileText, Save, X, Users,
   Phone, Mail, Globe, GraduationCap, StickyNote, UserCircle2,
+  CalendarClock, Send, CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useAppStore, type Lead } from '../store/appStore';
+import { useAppStore, type Lead, type LeadStatus } from '../store/appStore';
+import { STATUS_ORDER, statusMeta, isLeadDue as isDue } from '../lib/leads';
 
 const blankLead = { name: '', phone: '', email: '', country: '', universityInterested: '', notes: '' };
 
 const SupportDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { leads, users, addLead, updateLead, deleteLead } = useAppStore();
+  const { leads, users, addLead, updateLead, deleteLead, convertLeadToApplication } = useAppStore();
+  const [converting, setConverting] = useState<string | null>(null);
 
   const [tab, setTab] = useState<'team' | 'mine'>('team');
   const [query, setQuery] = useState('');
@@ -75,13 +78,32 @@ const SupportDashboard: React.FC = () => {
     try { deleteLead(l.id); toast.success('Lead deleted'); }
     catch (e) { toast.error(e instanceof Error ? e.message : 'Could not delete'); }
   };
+  const setStatus = (l: Lead, status: LeadStatus) => {
+    try { updateLead(l.id, { status }); } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not update'); }
+  };
+  const setFollowUp = (l: Lead, followUpDate: string) => {
+    try { updateLead(l.id, { followUpDate }); } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not update'); }
+  };
+  const convert = async (l: Lead) => {
+    if (!window.confirm(`Convert "${l.name || l.email}" into a real application? It will appear in the Sales pipeline.`)) return;
+    setConverting(l.id);
+    try { await convertLeadToApplication(l.id); toast.success('Lead converted to an application'); }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'Could not convert'); }
+    finally { setConverting(null); }
+  };
+
+  // Follow-ups due today or overdue (across everything this user can see).
+  const dueLeads = useMemo(
+    () => [...myLeads, ...teamLeads].filter(isDue).sort((a, b) => (a.followUpDate || '').localeCompare(b.followUpDate || '')),
+    [myLeads, teamLeads],
+  );
 
   const repName = (id: string) => users.find(u => u.id === id)?.name ?? 'Unknown';
 
   const stats = [
     { label: 'My Leads', value: myLeads.length, icon: UserCircle2, color: 'text-amber-600', bg: 'bg-amber-50' },
     { label: 'Team Leads', value: teamLeads.length, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Sales Reps', value: salesReps.length, icon: Headset, color: 'text-teal-600', bg: 'bg-teal-50' },
+    { label: 'Follow-ups Due', value: dueLeads.length, icon: CalendarClock, color: 'text-red-600', bg: 'bg-red-50' },
     { label: 'Leads w/ Notes', value: [...teamLeads, ...myLeads].filter(l => l.notes.trim()).length, icon: StickyNote, color: 'text-purple-600', bg: 'bg-purple-50' },
   ];
 
@@ -106,8 +128,10 @@ const SupportDashboard: React.FC = () => {
                 <th className="text-left font-bold px-4 py-3">Email</th>
                 <th className="text-left font-bold px-4 py-3">Country</th>
                 <th className="text-left font-bold px-4 py-3">University</th>
+                <th className="text-left font-bold px-4 py-3">Status</th>
+                <th className="text-left font-bold px-4 py-3">Follow-up</th>
                 {!mine && <th className="text-left font-bold px-4 py-3">Rep</th>}
-                <th className="text-right font-bold px-4 py-3">Notes / Actions</th>
+                <th className="text-right font-bold px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -118,12 +142,32 @@ const SupportDashboard: React.FC = () => {
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{l.email || '—'}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{l.country || '—'}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{l.universityInterested || '—'}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={l.status ?? 'new'}
+                      onChange={(e) => setStatus(l, e.target.value as LeadStatus)}
+                      className={`text-xs font-semibold rounded-full border px-2.5 py-1 cursor-pointer focus:outline-none ${statusMeta[l.status ?? 'new'].cls}`}
+                    >
+                      {STATUS_ORDER.map(s => <option key={s} value={s}>{statusMeta[s].label}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <input
+                      type="date"
+                      value={l.followUpDate || ''}
+                      onChange={(e) => setFollowUp(l, e.target.value)}
+                      className={`text-xs rounded-lg border px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500/20 ${isDue(l) ? 'border-red-300 bg-red-50 text-red-700 font-semibold' : 'border-gray-200 text-gray-600'}`}
+                    />
+                  </td>
                   {!mine && <td className="px-4 py-3 whitespace-nowrap"><span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">{repName(l.ownerId)}</span></td>}
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => { setNoteLeadId(l.id); setNoteDraft(l.notes); }} className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${l.notes ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                        <FileText className="w-3.5 h-3.5" /> {l.notes ? 'Notes' : 'Add note'}
-                      </button>
+                      <button onClick={() => { setNoteLeadId(l.id); setNoteDraft(l.notes); }} title="Notes" className={`p-1.5 rounded-lg border transition-colors ${l.notes ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' : 'bg-white text-gray-400 border-gray-200 hover:bg-gray-50'}`}><FileText className="w-3.5 h-3.5" /></button>
+                      {l.convertedApplicationId ? (
+                        <span title="Already converted" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-green-50 text-green-700 text-xs font-semibold border border-green-100"><CheckCircle2 className="w-3.5 h-3.5" /> App</span>
+                      ) : (
+                        <button onClick={() => void convert(l)} disabled={converting === l.id} title="Convert to application" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 disabled:opacity-60"><Send className="w-3.5 h-3.5" /> Convert</button>
+                      )}
                       {mine && <button onClick={() => openEdit(l)} title="Edit" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Pencil className="w-3.5 h-3.5" /></button>}
                       {mine && <button onClick={() => remove(l)} title="Delete" className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>}
                     </div>
@@ -153,6 +197,17 @@ const SupportDashboard: React.FC = () => {
                 {l.email && <span className="flex items-center gap-1.5"><Mail className="w-3 h-3 text-gray-400" />{l.email}</span>}
                 {l.country && <span className="flex items-center gap-1.5"><Globe className="w-3 h-3 text-gray-400" />{l.country}</span>}
                 {l.universityInterested && <span className="flex items-center gap-1.5"><GraduationCap className="w-3 h-3 text-gray-400" />{l.universityInterested}</span>}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <select value={l.status ?? 'new'} onChange={(e) => setStatus(l, e.target.value as LeadStatus)} className={`text-xs font-semibold rounded-full border px-2.5 py-1 ${statusMeta[l.status ?? 'new'].cls}`}>
+                  {STATUS_ORDER.map(s => <option key={s} value={s}>{statusMeta[s].label}</option>)}
+                </select>
+                <input type="date" value={l.followUpDate || ''} onChange={(e) => setFollowUp(l, e.target.value)} className={`text-xs rounded-lg border px-2 py-1 ${isDue(l) ? 'border-red-300 bg-red-50 text-red-700 font-semibold' : 'border-gray-200 text-gray-600'}`} />
+                {l.convertedApplicationId ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-green-50 text-green-700 text-xs font-semibold border border-green-100"><CheckCircle2 className="w-3.5 h-3.5" /> Converted</span>
+                ) : (
+                  <button onClick={() => void convert(l)} disabled={converting === l.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 disabled:opacity-60"><Send className="w-3.5 h-3.5" /> Convert</button>
+                )}
               </div>
             </div>
           ))}
@@ -184,6 +239,34 @@ const SupportDashboard: React.FC = () => {
           </div>
         ))}
       </section>
+
+      {/* Follow-ups due today / overdue */}
+      {dueLeads.length > 0 && (
+        <section className="bg-white rounded-2xl border border-red-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-red-100 bg-red-50/60 flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-red-600" />
+            <p className="text-sm font-bold text-red-700">Follow-ups due ({dueLeads.length})</p>
+            <span className="text-xs text-red-500/80">today or overdue</span>
+          </div>
+          <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto custom-scrollbar">
+            {dueLeads.map((l) => (
+              <div key={l.id} className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-gray-50/60">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{l.name || l.phone || 'Untitled lead'}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {l.phone || l.email || '—'}{l.ownerId !== user?.id ? ` · ${repName(l.ownerId)}` : ''} · due {l.followUpDate}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${statusMeta[l.status ?? 'new'].cls}`}>{statusMeta[l.status ?? 'new'].label}</span>
+                  <button onClick={() => { setNoteLeadId(l.id); setNoteDraft(l.notes); }} className="p-1.5 rounded-lg text-gray-400 hover:bg-amber-50 hover:text-amber-600 border border-gray-200" title="Open notes"><FileText className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setFollowUp(l, '')} className="text-xs font-semibold text-gray-500 hover:text-green-600 px-2 py-1 rounded-lg hover:bg-green-50" title="Clear follow-up (mark handled)">Done</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Main panel */}
       <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

@@ -15,6 +15,8 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useAppStore } from '../store/appStore';
 import { getAvatar, setAvatar, clearAvatar, onAvatarChange, fileToAvatarDataUrl } from '../lib/avatar';
+import { STATUS_ORDER, statusMeta, isLeadDue } from '../lib/leads';
+import type { LeadStatus } from '../store/appStore';
 // Dark-text wordmark — the previous logo had white text that was invisible on
 // the white sidebar, leaving only the orange marks with an empty gap.
 import logoUrl from '../../thewaynewlogo-removebg-preview.png';
@@ -76,7 +78,8 @@ const howToEarn = [
 
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
-  const { notifications, users, applications, leads, addLead, updateLead, deleteLead, changePassword, markNotificationsRead, markAllNotificationsRead } = useAppStore();
+  const { notifications, users, applications, leads, addLead, updateLead, deleteLead, convertLeadToApplication, changePassword, markNotificationsRead, markAllNotificationsRead } = useAppStore();
+  const [leadConverting, setLeadConverting] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -241,6 +244,20 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
     try { deleteLead(l.id); toast.success('Lead deleted'); }
     catch (e) { toast.error(e instanceof Error ? e.message : 'Could not delete'); }
   };
+  const setLeadStatus = (l: typeof leads[number], status: LeadStatus) => {
+    try { updateLead(l.id, { status }); } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not update'); }
+  };
+  const setLeadFollow = (l: typeof leads[number], followUpDate: string) => {
+    try { updateLead(l.id, { followUpDate }); } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not update'); }
+  };
+  const convertLead = async (l: typeof leads[number]) => {
+    if (!window.confirm(`Convert "${l.name || l.email}" into a real application? It will enter the Sales pipeline.`)) return;
+    setLeadConverting(l.id);
+    try { await convertLeadToApplication(l.id); toast.success('Lead converted to an application'); }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'Could not convert'); }
+    finally { setLeadConverting(null); }
+  };
+  const dueLeadsCount = myLeads.filter(isLeadDue).length;
 
   // Render helper (no typed inputs inside, so safe to recreate each render).
   const leadsTable = (list: typeof leads, opts: { showOwner?: boolean; canEditFields?: boolean; canDelete?: boolean }) => (
@@ -250,7 +267,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
       </div>
     ) : (
       <div className="overflow-x-auto rounded-2xl border border-gray-100">
-        <table className="w-full text-sm min-w-[640px]">
+        <table className="w-full text-sm min-w-[860px]">
           <thead>
             <tr className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-400">
               <th className="text-left font-bold px-3 py-2.5">Name</th>
@@ -258,8 +275,10 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
               <th className="text-left font-bold px-3 py-2.5">Email</th>
               <th className="text-left font-bold px-3 py-2.5">Country</th>
               <th className="text-left font-bold px-3 py-2.5">University</th>
+              <th className="text-left font-bold px-3 py-2.5">Status</th>
+              <th className="text-left font-bold px-3 py-2.5">Follow-up</th>
               {opts.showOwner && <th className="text-left font-bold px-3 py-2.5">Rep</th>}
-              <th className="text-right font-bold px-3 py-2.5">Notes / Actions</th>
+              <th className="text-right font-bold px-3 py-2.5">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -270,16 +289,29 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{l.email || '—'}</td>
                 <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{l.country || '—'}</td>
                 <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{l.universityInterested || '—'}</td>
+                <td className="px-3 py-2.5">
+                  <select value={l.status ?? 'new'} onChange={(e) => setLeadStatus(l, e.target.value as LeadStatus)} className={`text-xs font-semibold rounded-full border px-2 py-1 cursor-pointer focus:outline-none ${statusMeta[l.status ?? 'new'].cls}`}>
+                    {STATUS_ORDER.map(s => <option key={s} value={s}>{statusMeta[s].label}</option>)}
+                  </select>
+                </td>
+                <td className="px-3 py-2.5 whitespace-nowrap">
+                  <input type="date" value={l.followUpDate || ''} onChange={(e) => setLeadFollow(l, e.target.value)} className={`text-xs rounded-lg border px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500/20 ${isLeadDue(l) ? 'border-red-300 bg-red-50 text-red-700 font-semibold' : 'border-gray-200 text-gray-600'}`} />
+                </td>
                 {opts.showOwner && <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{l.ownerName}</td>}
                 <td className="px-3 py-2.5">
                   <div className="flex items-center justify-end gap-1">
                     <button
                       onClick={() => { setNoteLeadId(l.id); setNoteDraft(l.notes); }}
                       title="Open notes"
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-colors ${l.notes ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                      className={`p-1.5 rounded-lg border transition-colors ${l.notes ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' : 'bg-white text-gray-400 border-gray-200 hover:bg-gray-50'}`}
                     >
-                      <FileText className="w-3.5 h-3.5" /> {l.notes ? 'Notes' : 'Add note'}
+                      <FileText className="w-3.5 h-3.5" />
                     </button>
+                    {l.convertedApplicationId ? (
+                      <span title="Already converted" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-green-50 text-green-700 text-xs font-semibold border border-green-100"><BadgeCheck className="w-3.5 h-3.5" /> App</span>
+                    ) : (
+                      <button onClick={() => void convertLead(l)} disabled={leadConverting === l.id} title="Convert to application" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 disabled:opacity-60"><ArrowUpRight className="w-3.5 h-3.5" /> Convert</button>
+                    )}
                     {opts.canEditFields && (
                       <button onClick={() => openEditLead(l)} title="Edit lead" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
                         <Pencil className="w-3.5 h-3.5" />
@@ -741,8 +773,15 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                       <>
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-sm font-black text-gray-900">My Leads</p>
-                            <p className="text-xs text-gray-400">WhatsApp & direct prospects you're nurturing.</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-black text-gray-900">My Leads</p>
+                              {dueLeadsCount > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">
+                                  {dueLeadsCount} follow-up{dueLeadsCount > 1 ? 's' : ''} due
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400">WhatsApp & direct prospects you're nurturing — set a status &amp; follow-up date.</p>
                           </div>
                           <button
                             onClick={leadFormOpen ? () => setLeadFormOpen(false) : openAddLead}
