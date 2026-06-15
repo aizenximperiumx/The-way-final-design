@@ -8,7 +8,7 @@ import {
   Award, ChevronRight, Mail, Zap,
   KeyRound, Phone, Eye, EyeOff, Loader2, BadgeCheck, AtSign,
   Home, Globe, Camera, Trash2, CheckCheck, ArrowUpRight,
-  Plus, Pencil, Briefcase, Save
+  Plus, Pencil, Briefcase, Save, Headset
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -41,6 +41,7 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Agency Leads', icon: FileText, path: '/ops', roles: ['ops', 'ceo'] },
   { label: 'Agencies', icon: Building2, path: '/agencies', roles: ['agency', 'ceo'] },
   { label: 'Students', icon: Users, path: '/staff', roles: ['staff', 'agency_staff', 'ceo'] },
+  { label: 'Support Desk', icon: Headset, path: '/support', roles: ['customer_support', 'ceo'] },
   { label: 'Analytics', icon: BarChart3, path: '/admin', roles: ['ceo'] },
   { label: 'Appointments', icon: Calendar, path: '/appointments', roles: ['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo', 'customer_support'] },
   { label: 'Messages', icon: MessageSquare, path: '/messages', roles: ['student', 'staff', 'agency_staff', 'sales', 'ops', 'agency', 'ceo', 'customer_support'] },
@@ -299,7 +300,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
 
   const openProfile = () => {
-    const leadsFirst = user?.role === 'sales' || user?.role === 'customer_support';
+    const leadsFirst = user?.role === 'sales';
     setProfileTab(leadsFirst ? 'workspace' : isCompetitive ? 'overview' : 'account');
     setNewPw(''); setConfirmPw(''); setShowPw(false);
     setShowProfile(true);

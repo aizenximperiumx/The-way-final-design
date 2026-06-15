@@ -11,6 +11,7 @@ const StudentDashboard = React.lazy(() => import('./pages/StudentDashboard'));
 const SalesDashboard = React.lazy(() => import('./pages/SalesDashboard'));
 const StaffDashboard = React.lazy(() => import('./pages/StaffDashboard'));
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
+const SupportDashboard = React.lazy(() => import('./pages/SupportDashboard'));
 const Appointments = React.lazy(() => import('./pages/Appointments'));
 const Messages = React.lazy(() => import('./pages/Messages'));
 import NotFound from './pages/NotFound';
@@ -69,6 +70,7 @@ const getHomePath = (role: UserRole) => {
   if (role === 'ops') return '/ops';
   if (role === 'staff' || role === 'agency_staff') return '/staff';
   if (role === 'agency') return '/agencies';
+  if (role === 'customer_support') return '/support';
   if (role === 'ceo') return '/admin';
   return '/';
 };
@@ -206,6 +208,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['ceo']}>
             <React.Suspense fallback={<div className="p-8 text-center font-bold">Loading admin...</div>}><AdminDashboard /></React.Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/support"
+        element={
+          <ProtectedRoute allowedRoles={['customer_support', 'ceo']}>
+            <React.Suspense fallback={<div className="p-8 text-center font-bold">Loading...</div>}><SupportDashboard /></React.Suspense>
           </ProtectedRoute>
         }
       />

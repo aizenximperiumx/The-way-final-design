@@ -24,6 +24,7 @@ const LoginPage: React.FC = () => {
     if (role === 'ops') return '/ops';
     if (role === 'staff' || role === 'agency_staff') return '/staff';
     if (role === 'agency') return '/agencies';
+    if (role === 'customer_support') return '/support';
     if (role === 'ceo') return '/admin';
     return '/';
   };
