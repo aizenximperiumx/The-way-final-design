@@ -1,9 +1,16 @@
 # 📱 The Way — Mobile App (iOS & Android)
 
-The mobile apps are built with **Capacitor**. They wrap the same React app and run
-the **live site (`https://theway.ge`)** inside a native shell, plus real native
-features: branded splash + status bar, offline detection, the Android back button,
-and **local notifications for lead follow-up reminders**.
+The mobile apps are built with **Capacitor**. They are a **student companion app**
+with their own dark, premium mobile-native design (under the `/app` routes — *not*
+a reskin of the website). The native shell boots into **`https://theway.ge/app`**,
+so students log in with the account Sales gave them and run their enrollment:
+progress journey, document upload (camera or file), advisor chat, and a digital
+**Student ID + QR** for future partner discounts. Plus native features: branded
+splash + status bar, offline detection, Android back button, and local
+notifications.
+
+> The app is **student-only** — staff/admin use the website. A non-student who logs
+> in sees a "this app is for students" screen.
 
 > Because the shell loads the live site, **any web change you deploy to Render shows
 > up in the app automatically** — no app-store resubmission needed for UI/logic

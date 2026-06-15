@@ -56,10 +56,10 @@ let debounce: ReturnType<typeof setTimeout> | null = null;
 export async function initNative() {
   if (!isNative()) return;
 
-  // Branded status bar.
+  // Branded status bar (light icons on the dark navy app).
   try {
-    await StatusBar.setStyle({ style: Style.Dark });        // dark icons on light header
-    if (Capacitor.getPlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#FFFFFF' });
+    await StatusBar.setStyle({ style: Style.Light });
+    if (Capacitor.getPlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#0A1628' });
   } catch { /* ignore */ }
 
   // Android hardware back button: go back in history, else exit at root.

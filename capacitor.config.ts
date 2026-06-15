@@ -10,7 +10,8 @@ const config: CapacitorConfig = {
   // changes). To ship a fully self-contained build instead, remove `server.url`
   // and point the app's `/api` calls at https://theway.ge.
   server: {
-    url: 'https://theway.ge',
+    // The native shell boots straight into the dedicated student app.
+    url: 'https://theway.ge/app',
     androidScheme: 'https',
     cleartext: false,
   },
@@ -25,8 +26,8 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       overlaysWebView: false,
-      style: 'DARK',
-      backgroundColor: '#FFFFFF',
+      style: 'LIGHT',
+      backgroundColor: '#0A1628',
     },
     LocalNotifications: {
       smallIcon: 'ic_stat_icon_config_sample',
