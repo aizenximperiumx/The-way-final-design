@@ -26,8 +26,9 @@ const HomePage: React.FC = () => {
       case 'ops':
         return '/ops';
       case 'staff':
-      case 'agency_staff':
         return '/staff';
+      case 'agency_staff':
+        return '/agency-staff';
       case 'agency':
         return '/agencies';
       case 'customer_support':
