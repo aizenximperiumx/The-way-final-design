@@ -14,7 +14,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const { currentUser, authStatus, login: storeLogin, logout: storeLogout, restoreSession, saveBackendState, backendHydrated } = useAppStore();
+  const { currentUser, authStatus, login: storeLogin, logout: storeLogout, restoreSession, saveBackendState, loadBackendState, backendHydrated } = useAppStore();
   const [isHydrated, setIsHydrated] = useState(useAppStore.persist.hasHydrated());
   const saveTimer = useRef<number | null>(null);
   const lastSnapshot = useRef<string>('');
@@ -60,6 +60,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       unsub();
     };
   }, [isHydrated, authStatus, backendHydrated, saveBackendState]);
+
+  // Internal staff share one backend state but only pull it at login. Re-fetch
+  // when they return to the tab so a teammate's freshly-saved intake/documents
+  // appear without a full re-login. Any pending local edit is flushed first so
+  // the refresh can't race a save in flight.
+  const internalRole = currentUser?.role === 'ceo' || currentUser?.role === 'sales'
+    || currentUser?.role === 'ops' || currentUser?.role === 'staff' || currentUser?.role === 'agency_staff';
+  useEffect(() => {
+    if (!isHydrated || authStatus !== 'signed_in' || !backendHydrated || !internalRole) return;
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing || document.visibilityState !== 'visible') return;
+      refreshing = true;
+      try {
+        if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null; await saveBackendState(); }
+        await loadBackendState();
+      } catch { /* offline / transient — ignore */ }
+      finally { refreshing = false; }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [isHydrated, authStatus, backendHydrated, internalRole, saveBackendState, loadBackendState]);
 
   const login = async (username: string, password: string) => {
     try {

@@ -11,7 +11,11 @@ import {
   Filter,
   ArrowUpRight,
   UserPlus,
-  FileText
+  FileText,
+  Check,
+  Eye,
+  Pencil,
+  MessageSquareWarning
 } from 'lucide-react';
 import { useAppStore, type Application } from '../store/appStore';
 import { useAuth } from '../context/AuthContext';
@@ -734,10 +738,10 @@ Video: ${intake.videoUrl}`;
                       </div>
                     </div>
 
-                    {/* Right: status badges + actions */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* Intake doc status badges */}
-                      <div className="hidden md:flex items-center gap-1">
+                    {/* Right: readiness + actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 lg:justify-end">
+                      {/* Intake readiness — compact check/x pills */}
+                      <div className="flex items-center gap-1.5">
                         {[
                           { label: 'Video', ok: Boolean(application.intakeVideoUrl) },
                           { label: 'Passport', ok: Boolean(application.intakePassportCopy) },
@@ -746,105 +750,118 @@ Video: ${intake.videoUrl}`;
                         ].map(b => (
                           <span
                             key={b.label}
-                            className={`rounded-full text-xs font-semibold px-2.5 py-0.5 ${
-                              b.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                            title={`${b.label}: ${b.ok ? 'received' : 'missing'}`}
+                            className={`inline-flex items-center gap-1 rounded-md text-[11px] font-semibold px-1.5 py-0.5 border ${
+                              b.ok ? 'bg-green-50 text-green-700 border-green-100' : 'bg-gray-50 text-gray-400 border-gray-100'
                             }`}
                           >
-                            {b.label}
+                            {b.ok ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                            <span className="hidden md:inline">{b.label}</span>
                           </span>
                         ))}
                       </div>
 
-                      {/* Ops missing checklist */}
+                      {/* Ops missing checklist + Needs Info */}
                       {mode === 'ops' && opsChecklist(application).length > 0 && (
-                        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 border border-red-100">
+                        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 border border-red-100">
                           <span className="text-[10px] text-red-600 uppercase tracking-wider font-semibold">Missing:</span>
                           <span className="text-[10px] text-red-600 font-semibold">{opsChecklist(application).join(' · ')}</span>
                         </div>
                       )}
-
-                      {/* Needs Info badge */}
                       {mode === 'ops' && application.hold && (
-                        <span className="rounded-full text-xs font-semibold px-2.5 py-0.5 bg-orange-50 text-orange-600 border border-orange-100">
+                        <span className="self-start sm:self-auto rounded-full text-xs font-semibold px-2.5 py-0.5 bg-orange-50 text-orange-600 border border-orange-100">
                           Needs Info
                         </span>
                       )}
 
-                      {/* Fill Intake (sales) */}
-                      {mode === 'sales' && (
-                        <button
-                          onClick={() => openIntake(application)}
-                          className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-                        >
-                          Fill Intake
-                          {!application.intakeDetails && (
-                            <span className="rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-0.5">
-                              Required
-                            </span>
-                          )}
-                        </button>
-                      )}
+                      {/* Action bar: secondary (ghost) actions then primary CTA */}
+                      <div className="flex items-center gap-1.5">
+                        {/* Fill Intake (sales) */}
+                        {mode === 'sales' && (
+                          <button
+                            onClick={() => openIntake(application)}
+                            title="Fill intake"
+                            className={`relative inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold border transition-colors ${
+                              application.intakeDetails
+                                ? 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                            }`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                            <span className="hidden sm:inline">{application.intakeDetails ? 'Edit Intake' : 'Fill Intake'}</span>
+                            {!application.intakeDetails && (
+                              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+                            )}
+                          </button>
+                        )}
 
-                      {/* View Intake */}
-                      {(application.intakeDetails || application.intakeVideoUrl || (application.intakeAttachments && application.intakeAttachments.length > 0)) && (
-                        <button
-                          onClick={() => setPreviewModal({ open: true, app: application })}
-                          className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
-                        >
-                          View Intake
-                        </button>
-                      )}
+                        {/* View Intake */}
+                        {(application.intakeDetails || application.intakeVideoUrl || (application.intakeAttachments && application.intakeAttachments.length > 0)) && (
+                          <button
+                            onClick={() => setPreviewModal({ open: true, app: application })}
+                            title="View intake"
+                            className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span className="hidden lg:inline">View</span>
+                          </button>
+                        )}
 
-                      {/* Claim Lead (ops) */}
-                      {mode === 'ops' && !application.salesOwnerId && (
+                        {/* Claim Lead (ops) */}
+                        {mode === 'ops' && !application.salesOwnerId && (
+                          <button
+                            onClick={() => {
+                              try { salesClaimLead(application.id); toast.success('Lead claimed'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to claim'); }
+                            }}
+                            className="inline-flex items-center gap-1.5 bg-white border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-amber-50 transition-colors"
+                          >
+                            <UserPlus className="w-4 h-4" />
+                            <span className="hidden sm:inline">Claim</span>
+                          </button>
+                        )}
+
+                        {/* Request Info (ops) */}
+                        {mode === 'ops' && (
+                          <button
+                            onClick={() => setRequestModal({ open: true, app: application, message: application.hold?.message ?? '' })}
+                            title="Request more info"
+                            className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                          >
+                            <MessageSquareWarning className="w-4 h-4" />
+                            <span className="hidden lg:inline">Request</span>
+                          </button>
+                        )}
+
+                        {/* Reject */}
+                        <button
+                          onClick={() => handleReject(application.id)}
+                          title="Reject application"
+                          className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-500 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span className="hidden lg:inline">Reject</span>
+                        </button>
+
+                        {/* Approve — primary CTA */}
                         <button
                           onClick={() => {
-                            try { salesClaimLead(application.id); toast.success('Lead claimed'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to claim'); }
+                            if (mode === 'sales' && !application.intakeDetails) {
+                              openIntake(application);
+                              return;
+                            }
+                            handleApprove(application);
                           }}
-                          className="bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors"
+                          disabled={mode === 'ops' && opsChecklist(application).length > 0}
+                          className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all shadow-sm ${
+                            mode === 'ops' && opsChecklist(application).length > 0
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-amber-600 text-white hover:bg-amber-700 hover:shadow'
+                          }`}
                         >
-                          Claim Lead
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span className="whitespace-nowrap">Approve<span className="hidden xl:inline"> &amp; Create</span></span>
                         </button>
-                      )}
-
-                      {/* Request Info (ops) */}
-                      {mode === 'ops' && (
-                        <button
-                          onClick={() => setRequestModal({ open: true, app: application, message: application.hold?.message ?? '' })}
-                          className="bg-white border border-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-colors"
-                        >
-                          Request Info
-                        </button>
-                      )}
-
-                      {/* Reject */}
-                      <button
-                        onClick={() => handleReject(application.id)}
-                        className="bg-white border border-gray-200 text-gray-500 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors flex items-center gap-1.5"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Reject
-                      </button>
-
-                      {/* Approve */}
-                      <button
-                        onClick={() => {
-                          if (mode === 'sales' && !application.intakeDetails) {
-                            openIntake(application);
-                            return;
-                          }
-                          handleApprove(application);
-                        }}
-                        disabled={mode === 'ops' && opsChecklist(application).length > 0}
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-1.5 ${
-                          mode === 'ops' && opsChecklist(application).length > 0
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-amber-600 text-white hover:bg-amber-700'
-                        }`}
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Approve & Create Account
-                      </button>
+                      </div>
                     </div>
                   </div>
                 </motion.div>

@@ -364,8 +364,8 @@ const AdminDashboard: React.FC = () => {
                   <h3 className="text-base font-bold text-gray-900">Growth Trajectory</h3>
                   <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Live</span>
                 </div>
-                <div className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280} debounce={1}>
                     <AreaChart data={applications.map((_, i) => ({ idx: i + 1, apps: i + 1, enrollment: applications.slice(0, i + 1).filter(x => isComplete(x.studentId)).length }))}>
                       <defs>
                         <linearGradient id="colorApps" x1="0" y1="0" x2="0" y2="1">
@@ -389,8 +389,8 @@ const AdminDashboard: React.FC = () => {
 
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h3 className="text-base font-bold text-gray-900 mb-6">Funnel Distribution</h3>
-                <div className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280} debounce={1}>
                     <PieChart>
                       <Pie
                         data={stageData}

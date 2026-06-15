@@ -5,12 +5,16 @@ import {
   LayoutDashboard, Users, FileText, LogOut, Bell, Menu,
   Search, Calendar, MessageSquare, BarChart3, GraduationCap,
   Building2, X as CloseIcon, Trophy, Star,
-  Award, ChevronRight, Mail, Zap
+  Award, ChevronRight, Mail, Zap,
+  KeyRound, Phone, Eye, EyeOff, Loader2, BadgeCheck, AtSign
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useAppStore } from '../store/appStore';
-import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
+// Dark-text wordmark — the previous logo had white text that was invisible on
+// the white sidebar, leaving only the orange marks with an empty gap.
+import logoUrl from '../../thewaynewlogo-removebg-preview.png';
 
 interface SidebarItem {
   label: string;
@@ -59,14 +63,19 @@ const howToEarn = [
 
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
-  const { notifications, users } = useAppStore();
+  const { notifications, users, changePassword } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [profileTab, setProfileTab] = useState<'overview' | 'leaderboard'>('overview');
+  const [profileTab, setProfileTab] = useState<'overview' | 'leaderboard' | 'account'>('overview');
+  // Self-service password change (available to every role)
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
   const notifsRef = useRef<HTMLDivElement>(null);
   const lastNotifCountRef = useRef(0);
 
@@ -104,6 +113,32 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const meta = roleMeta[user?.role ?? 'student'] ?? roleMeta.student;
   const medal = rankMedal(myRank);
 
+  // Internal/competitive roles see points + leaderboard; everyone gets Account.
+  const isCompetitive = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(user?.role ?? '');
+
+  const openProfile = () => {
+    setProfileTab(isCompetitive ? 'overview' : 'account');
+    setNewPw(''); setConfirmPw(''); setShowPw(false);
+    setShowProfile(true);
+  };
+
+  const handleChangePassword = async () => {
+    if (newPw.length < 8) { toast.error('Password must be at least 8 characters'); return; }
+    if (newPw !== confirmPw) { toast.error('Passwords do not match'); return; }
+    setPwSaving(true);
+    try {
+      await changePassword(newPw);
+      toast.success('Password updated');
+      setNewPw(''); setConfirmPw('');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update password');
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const memberSince = user?.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }) : '—';
+
   return (
     <div className="min-h-screen bg-[#FAFAF9] flex overflow-hidden tw-mobile-shell">
 
@@ -140,7 +175,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         {/* User footer */}
         <div className="p-3 border-t border-gray-100 space-y-1">
           <button
-            onClick={() => setShowProfile(true)}
+            onClick={openProfile}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-all text-left ${!isSidebarOpen ? 'justify-center' : ''}`}
           >
             <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
@@ -239,7 +274,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
             {/* Profile trigger */}
             <button
-              onClick={() => setShowProfile(true)}
+              onClick={openProfile}
               className="flex items-center gap-2.5 pl-1 pr-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm">
@@ -287,14 +322,21 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     <div className="w-20 h-20 rounded-2xl bg-white border-4 border-white shadow-xl flex items-center justify-center text-3xl font-black text-amber-600 bg-amber-50">
                       {user.name.charAt(0)}
                     </div>
-                    {myRank > 0 && myRank <= 3 && (
+                    {isCompetitive && myRank > 0 && myRank <= 3 && (
                       <span className="absolute -bottom-2 -right-2 text-xl">{medal.emoji}</span>
                     )}
                   </div>
-                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-bold ${medal.bg} ${medal.color}`}>
-                    <Trophy className="w-3.5 h-3.5" />
-                    {myRank > 0 ? `Rank #${myRank}` : 'Unranked'}
-                  </div>
+                  {isCompetitive ? (
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-bold ${medal.bg} ${medal.color}`}>
+                      <Trophy className="w-3.5 h-3.5" />
+                      {myRank > 0 ? `Rank #${myRank}` : 'Unranked'}
+                    </div>
+                  ) : (
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-100 text-sm font-bold ${meta.bg} ${meta.color}`}>
+                      <BadgeCheck className="w-3.5 h-3.5" />
+                      {meta.label}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-start justify-between gap-4">
@@ -305,14 +347,16 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                       <span className="text-xs text-gray-400 flex items-center gap-1"><Mail className="w-3 h-3" />{user.email}</span>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-3xl font-black text-gray-900">{(user.points ?? 0).toLocaleString()}</div>
-                    <div className="text-xs text-gray-400 font-medium">total points</div>
-                  </div>
+                  {isCompetitive && (
+                    <div className="text-right shrink-0">
+                      <div className="text-3xl font-black text-gray-900">{(user.points ?? 0).toLocaleString()}</div>
+                      <div className="text-xs text-gray-400 font-medium">total points</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Points progress bar */}
-                {peers.length > 1 && myRank > 1 && (
+                {isCompetitive && peers.length > 1 && myRank > 1 && (
                   <div className="mt-4">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs text-gray-500">Progress to #{myRank - 1}</span>
@@ -328,7 +372,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     </div>
                   </div>
                 )}
-                {myRank === 1 && (
+                {isCompetitive && myRank === 1 && (
                   <div className="mt-4 flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2">
                     <span className="text-base">🏆</span>
                     <p className="text-xs font-bold text-yellow-700">You're #1 on the leaderboard! Keep it up.</p>
@@ -338,7 +382,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
               {/* Tabs */}
               <div className="flex border-b border-gray-100 px-6 mt-2">
-                {(['overview', 'leaderboard'] as const).map(tab => (
+                {(isCompetitive ? (['overview', 'leaderboard', 'account'] as const) : (['account'] as const)).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setProfileTab(tab)}
@@ -428,6 +472,82 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     })}
                   </div>
                 )}
+
+                {profileTab === 'account' && (
+                  <div className="space-y-5">
+                    {/* Identity grid */}
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Account details</p>
+                      <div className="grid sm:grid-cols-2 gap-2.5">
+                        {[
+                          { icon: BadgeCheck, label: 'Role', value: meta.label },
+                          { icon: AtSign, label: 'Username', value: user.username || '—' },
+                          { icon: Mail, label: 'Email', value: user.email || '—' },
+                          { icon: Phone, label: 'Phone', value: user.phone || '—' },
+                          { icon: Calendar, label: 'Member since', value: memberSince },
+                          { icon: Star, label: 'Points', value: String(user.points ?? 0) },
+                        ].map((row) => (
+                          <div key={row.label} className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 flex items-center justify-center shrink-0">
+                              <row.icon className="w-4 h-4 text-amber-600" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{row.label}</p>
+                              <p className="text-sm font-semibold text-gray-900 truncate">{row.value}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Change password */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <KeyRound className="w-4 h-4 text-gray-400" />
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Change password</p>
+                      </div>
+                      <div className="space-y-2.5">
+                        <div className="relative">
+                          <input
+                            type={showPw ? 'text' : 'password'}
+                            value={newPw}
+                            onChange={(e) => setNewPw(e.target.value)}
+                            placeholder="New password"
+                            autoComplete="new-password"
+                            className="w-full pl-3 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300 transition-all"
+                          />
+                          <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
+                            {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        <input
+                          type={showPw ? 'text' : 'password'}
+                          value={confirmPw}
+                          onChange={(e) => setConfirmPw(e.target.value)}
+                          placeholder="Confirm new password"
+                          autoComplete="new-password"
+                          className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300 transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleChangePassword()}
+                          disabled={pwSaving || !newPw || !confirmPw}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        >
+                          {pwSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Updating…</> : 'Update password'}
+                        </button>
+                        <p className="text-[11px] text-gray-400">Minimum 8 characters. You'll stay signed in on this device.</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all"
+                    >
+                      <LogOut className="w-4 h-4" /> Log out
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -463,7 +583,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 })}
               </nav>
               <div className="p-3 border-t border-gray-100 space-y-1">
-                <button onClick={() => { setShowProfile(true); setIsMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                <button onClick={() => { openProfile(); setIsMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left">
                   <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">{user?.name?.charAt(0)}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>

@@ -192,6 +192,7 @@ export interface AppStoreState {
   setLanguage: (lang: 'en' | 'ar') => void;
   login: (username: string, password: string) => Promise<User | null>;
   logout: () => void;
+  changePassword: (newPassword: string) => Promise<void>;
   restoreSession: () => Promise<void>;
   refreshUsersFromBackend: () => Promise<void>;
   loadBackendState: () => Promise<void>;
@@ -395,6 +396,15 @@ const useAppStore = create<AppStoreState>()(
         if (supabase) void supabase.auth.signOut();
         localStorage.removeItem('the-way-storage');
         set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, documentRequests: [] });
+      },
+
+      changePassword: async (newPassword: string) => {
+        const pw = (newPassword ?? '').trim();
+        if (pw.length < 8) throw new Error('Password must be at least 8 characters');
+        const supabase = tryGetSupabase();
+        if (!supabase) throw new Error('Account service is not available right now');
+        const { error } = await supabase.auth.updateUser({ password: pw });
+        if (error) throw new Error(error.message || 'Could not update password');
       },
 
       restoreSession: async () => {

@@ -85,6 +85,129 @@ const uniqueBy = (items, keyFn) => {
     }
     return out;
 };
+// ── Non-destructive merge helpers ────────────────────────────────────────────
+// Internal users save the WHOLE shared state from their own (possibly stale)
+// client. A naive full overwrite means whoever saves last wins and silently
+// erases data another teammate just added — e.g. Sales uploads intake files,
+// then an Admin with an older snapshot saves and the intake URLs vanish.
+// These helpers merge additively so concurrent edits never clobber each other.
+const isNonEmpty = (v) => {
+    if (v === null || v === undefined)
+        return false;
+    if (typeof v === 'string')
+        return v.trim().length > 0;
+    if (Array.isArray(v))
+        return v.length > 0;
+    return true;
+};
+const itemKey = (item, idx) => {
+    if (typeof item === 'string')
+        return `s:${item}`;
+    const r = asRecord(item);
+    const id = r ? getString(r, 'id') : '';
+    if (id)
+        return `id:${id}`;
+    try {
+        return `j:${JSON.stringify(item)}`;
+    }
+    catch {
+        return `n:${idx}`;
+    }
+};
+// Union two arrays, de-duplicating by id (objects) or value (strings).
+// `current` first preserves original order; only truly new items are appended.
+const unionArray = (currentVal, incomingVal, cap = 1000) => {
+    const cur = Array.isArray(currentVal) ? currentVal : [];
+    const inc = Array.isArray(incomingVal) ? incomingVal : [];
+    const seen = new Set();
+    const out = [];
+    let i = 0;
+    for (const item of [...cur, ...inc]) {
+        const k = itemKey(item, i++);
+        if (seen.has(k))
+            continue;
+        seen.add(k);
+        out.push(item);
+    }
+    return out.slice(0, cap);
+};
+// Overlay a collection by id: keep every current item, let incoming items with
+// the same id win (legitimate edits like document verification or "mark read"),
+// and never drop an item the saving client simply hadn't loaded yet.
+const mergeCollection = (currentVal, incomingVal, cap) => {
+    const byKey = new Map();
+    const order = [];
+    let i = 0;
+    const put = (arr) => {
+        for (const item of arr) {
+            const k = itemKey(item, i++);
+            if (!byKey.has(k))
+                order.push(k);
+            byKey.set(k, item); // incoming applied last => wins for same key
+        }
+    };
+    put(Array.isArray(currentVal) ? currentVal : []);
+    put(Array.isArray(incomingVal) ? incomingVal : []);
+    return order.map((k) => byKey.get(k)).slice(0, cap);
+};
+// Per-key latest-wins for chat read receipts.
+const mergeReadAt = (currentVal, incomingVal) => {
+    const out = { ...(currentVal || {}) };
+    Object.entries(incomingVal || {}).forEach(([k, v]) => {
+        if (typeof v !== 'string')
+            return;
+        if (!out[k] || v > out[k])
+            out[k] = v;
+    });
+    return out;
+};
+// Application fields that must never be downgraded from a real value back to
+// empty by a stale snapshot. Re-uploads (a new non-empty URL) still win.
+const PROTECTED_STR_FIELDS = [
+    'intakeDetails', 'intakeVideoUrl', 'intakePassportCopy', 'intakeHighSchoolCertificate',
+    'intakeHighSchoolMissingNote', 'intakeBirthCertificate', 'intakeMotherPassport',
+    'intakeFatherPassport', 'dob',
+];
+// Application list fields that accumulate (attachments, audit trail, notes).
+const PROTECTED_ARR_FIELDS = ['intakeAttachments', 'intakeExtraDocs', 'events', 'internalNotes'];
+const mergeApplication = (cur, inc) => {
+    const merged = { ...cur, ...inc }; // last-write-wins baseline
+    for (const f of PROTECTED_STR_FIELDS) {
+        if (!isNonEmpty(inc[f]) && isNonEmpty(cur[f]))
+            merged[f] = cur[f];
+    }
+    for (const f of PROTECTED_ARR_FIELDS) {
+        merged[f] = unionArray(cur[f], inc[f], f === 'internalNotes' || f === 'events' ? 2000 : 400);
+    }
+    if (cur.intakeSLARewarded === true)
+        merged.intakeSLARewarded = true; // never un-reward
+    return merged;
+};
+const mergeApplications = (currentApps, incomingApps) => {
+    const curById = new Map();
+    (Array.isArray(currentApps) ? currentApps : []).forEach((a) => {
+        const id = getString(asRecord(a), 'id');
+        if (id)
+            curById.set(id, a);
+    });
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(incomingApps) ? incomingApps : []).forEach((a) => {
+        const r = asRecord(a);
+        const id = r ? getString(r, 'id') : '';
+        if (!id) {
+            out.push(a);
+            return;
+        }
+        seen.add(id);
+        const cur = asRecord(curById.get(id));
+        out.push(cur && r ? mergeApplication(cur, r) : a);
+    });
+    // keep applications the saving client never loaded (created by teammates)
+    curById.forEach((a, id) => { if (!seen.has(id))
+        out.push(a); });
+    return out;
+};
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -139,14 +262,17 @@ export default async function handler(req, res) {
         let next = current;
         const now = new Date().toISOString();
         if (isInternal(role)) {
+            // Additive merge (see helpers above) instead of full overwrite, so a
+            // teammate's freshly-uploaded intake / documents / notes are never wiped
+            // by another internal user saving an older snapshot.
             next = {
-                applications: incoming.applications.slice(0, 50_000),
-                documents: incoming.documents.slice(0, 50_000),
-                notifications: incoming.notifications.slice(0, 100_000),
-                appointments: incoming.appointments.slice(0, 50_000),
-                chatMessages: incoming.chatMessages.slice(0, 200_000),
-                chatThreadReadAt: incoming.chatThreadReadAt || {},
-                documentRequests: incoming.documentRequests.slice(0, 50_000),
+                applications: mergeApplications(current.applications, incoming.applications).slice(0, 50_000),
+                documents: mergeCollection(current.documents, incoming.documents, 50_000),
+                notifications: mergeCollection(current.notifications, incoming.notifications, 100_000),
+                appointments: mergeCollection(current.appointments, incoming.appointments, 50_000),
+                chatMessages: mergeCollection(current.chatMessages, incoming.chatMessages, 200_000),
+                chatThreadReadAt: mergeReadAt(current.chatThreadReadAt, incoming.chatThreadReadAt),
+                documentRequests: mergeCollection(current.documentRequests, incoming.documentRequests, 50_000),
             };
         }
         else if (role === 'student') {
