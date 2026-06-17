@@ -16,7 +16,11 @@ import {
   Edit3,
   X,
   Copy,
-  Check
+  Check,
+  Trash2,
+  RotateCcw,
+  Archive,
+  Inbox
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -51,9 +55,15 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 const AdminDashboard: React.FC = () => {
   useAuth();
-  const { users, applications, ceoCreateAgencyAccount, ceoResetCredentials, assignStaffAdmin, ceoCreateUser, ceoUpdateUser } = useAppStore();
+  const {
+    users, applications, futureLeads, trashedApplications, trashedUsers,
+    ceoCreateAgencyAccount, ceoResetCredentials, assignStaffAdmin, ceoCreateUser, ceoUpdateUser,
+    ceoTrashApplication, ceoRestoreApplication, ceoPurgeApplication,
+    ceoRestoreFutureLead, ceoDeleteFutureLead,
+    ceoDisableUser, ceoRestoreUser, ceoPurgeUser,
+  } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'security'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'forms' | 'trash' | 'security'>('analytics');
   const [health, setHealth] = useState<{ loading: boolean; ok: boolean | null; checks: Array<{ name: string; ok: boolean; details?: string }> }>({ loading: true, ok: null, checks: [] });
   const [audit, setAudit] = useState<{ loading: boolean; ok: boolean | null; issueCount: number; issues: Array<{ severity: 'high' | 'medium' | 'low'; code: string; message: string }> }>({ loading: false, ok: null, issueCount: 0, issues: [] });
   const [showAgencyModal, setShowAgencyModal] = useState(false);
@@ -93,6 +103,8 @@ const AdminDashboard: React.FC = () => {
   const tabs = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'forms', label: 'Forms', icon: FileText },
+    { id: 'trash', label: 'Trash', icon: Trash2 },
     { id: 'security', label: 'Security', icon: ShieldAlert },
   ] as const;
 
@@ -119,10 +131,13 @@ const AdminDashboard: React.FC = () => {
 
   const COLORS = ['#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EF4444', '#000000'];
 
+  const trashedUserIds = new Set(trashedUsers.map(u => u.id));
   const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.username.toLowerCase().includes(searchTerm.toLowerCase())
+    !trashedUserIds.has(u.id) && (
+      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.username.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   const stats = [
@@ -716,6 +731,18 @@ const AdminDashboard: React.FC = () => {
                       >
                         <Ban className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Delete ${u.name}'s account?\n\nThey will be moved to Trash and blocked from logging in. You can restore them or delete permanently from the Trash tab.`)) return;
+                          void ceoDisableUser(u.id)
+                            .then(() => toast.success(`${u.name} moved to Trash`))
+                            .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed'));
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        aria-label="Delete account"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1034,6 +1061,209 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </ModalShell>
             )}
+          </motion.div>
+        )}
+
+        {activeTab === 'forms' && (
+          <motion.div
+            key="forms"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            {/* Active forms */}
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-500" />
+                <h3 className="text-base font-bold text-gray-900">Active Forms</h3>
+                <span className="ml-auto text-xs font-semibold text-gray-400">{applications.length}</span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {applications.map((a) => (
+                  <div key={a.id} className="group flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-900 truncate">{a.name || 'Unnamed'}</p>
+                      <p className="text-xs text-gray-400 truncate">{a.program || a.university || a.studentEmail || a.email || '—'}</p>
+                    </div>
+                    <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider shrink-0 bg-gray-100 text-gray-600">{a.source ?? 'public'}</span>
+                    <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider shrink-0 bg-amber-50 text-amber-700">{a.status}</span>
+                    <span className="hidden lg:block text-xs text-gray-400 shrink-0 w-24 text-right">{new Date(a.createdAt).toLocaleDateString()}</span>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Delete this form (${a.name || 'Unnamed'})?\n\nIt will be moved to Trash. You can restore it or delete permanently from the Trash tab.`)) return;
+                          try { ceoTrashApplication(a.id); toast.success('Form moved to Trash'); }
+                          catch (e) { toast.error(e instanceof Error ? e.message : 'Failed'); }
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        aria-label="Delete form"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {applications.length === 0 && (
+                  <div className="py-12 text-center text-gray-400 text-sm">No active forms.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Future leads (archived rejected forms) */}
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                <Archive className="w-4 h-4 text-blue-500" />
+                <h3 className="text-base font-bold text-gray-900">Future Leads</h3>
+                <span className="ml-auto text-xs font-semibold text-gray-400">{futureLeads.length}</span>
+              </div>
+              <p className="px-5 pt-3 text-xs text-gray-400">Rejected forms are archived here for later re-contact (e.g. if country rules change).</p>
+              <div className="divide-y divide-gray-50">
+                {futureLeads.map((a) => (
+                  <div key={a.id} className="group flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-900 truncate">{a.name || 'Unnamed'}</p>
+                      <p className="text-xs text-gray-400 truncate">{a.studentEmail || a.email || a.phone || '—'}{a.program ? ` · ${a.program}` : ''}</p>
+                    </div>
+                    <span className="hidden lg:block text-xs text-gray-400 shrink-0 w-28 text-right">
+                      {a.rejectedAt ? `rejected ${new Date(a.rejectedAt).toLocaleDateString()}` : ''}
+                    </span>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => {
+                          try { ceoRestoreFutureLead(a.id); toast.success('Re-opened as an active form'); }
+                          catch (e) { toast.error(e instanceof Error ? e.message : 'Failed'); }
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
+                        aria-label="Re-open lead"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Permanently delete this lead (${a.name || 'Unnamed'})? This cannot be undone.`)) return;
+                          try { ceoDeleteFutureLead(a.id); toast.success('Lead deleted'); }
+                          catch (e) { toast.error(e instanceof Error ? e.message : 'Failed'); }
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        aria-label="Delete lead permanently"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {futureLeads.length === 0 && (
+                  <div className="py-12 text-center text-gray-400 text-sm">No future leads yet.</div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'trash' && (
+          <motion.div
+            key="trash"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            {/* Trashed accounts */}
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                <Users className="w-4 h-4 text-red-500" />
+                <h3 className="text-base font-bold text-gray-900">Deleted Accounts</h3>
+                <span className="ml-auto text-xs font-semibold text-gray-400">{trashedUsers.length}</span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {trashedUsers.map((u) => (
+                  <div key={u.id} className="group flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-900 truncate">{u.name}</p>
+                      <p className="text-xs text-gray-400 truncate">@{u.username} · {u.email}</p>
+                    </div>
+                    <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider shrink-0 bg-gray-100 text-gray-600">{u.role}</span>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => {
+                          void ceoRestoreUser(u.id)
+                            .then(() => toast.success(`${u.name} restored`))
+                            .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed'));
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
+                        aria-label="Restore account"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Permanently delete ${u.name}'s account?\n\nThis removes them from Supabase and CANNOT be undone.`)) return;
+                          void ceoPurgeUser(u.id)
+                            .then(() => toast.success(`${u.name} permanently deleted`))
+                            .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed'));
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        aria-label="Delete account permanently"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {trashedUsers.length === 0 && (
+                  <div className="py-12 text-center text-gray-400 text-sm">No deleted accounts.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Trashed forms */}
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                <Inbox className="w-4 h-4 text-red-500" />
+                <h3 className="text-base font-bold text-gray-900">Deleted Forms</h3>
+                <span className="ml-auto text-xs font-semibold text-gray-400">{trashedApplications.length}</span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {trashedApplications.map((a) => (
+                  <div key={a.id} className="group flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-900 truncate">{a.name || 'Unnamed'}</p>
+                      <p className="text-xs text-gray-400 truncate">{a.program || a.university || a.studentEmail || a.email || '—'}</p>
+                    </div>
+                    <span className="hidden lg:block text-xs text-gray-400 shrink-0 w-28 text-right">
+                      {a.trashedAt ? `deleted ${new Date(a.trashedAt).toLocaleDateString()}` : ''}
+                    </span>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => {
+                          try { ceoRestoreApplication(a.id); toast.success('Form restored'); }
+                          catch (e) { toast.error(e instanceof Error ? e.message : 'Failed'); }
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
+                        aria-label="Restore form"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Permanently delete this form (${a.name || 'Unnamed'})? This cannot be undone.`)) return;
+                          try { ceoPurgeApplication(a.id); toast.success('Form permanently deleted'); }
+                          catch (e) { toast.error(e instanceof Error ? e.message : 'Failed'); }
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        aria-label="Delete form permanently"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {trashedApplications.length === 0 && (
+                  <div className="py-12 text-center text-gray-400 text-sm">No deleted forms.</div>
+                )}
+              </div>
+            </div>
           </motion.div>
         )}
 

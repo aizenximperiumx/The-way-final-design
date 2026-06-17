@@ -1,0 +1,178 @@
+type ApiRequest = { method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> };
+type ApiResponse = { status: (code: number) => ApiResponse; json: (body: unknown) => void };
+
+type LifecycleBody = {
+  userId?: unknown;
+  action?: unknown;
+};
+
+const asString = (v: unknown) => (typeof v === 'string' ? v : '');
+
+const getBearer = (req: ApiRequest) => {
+  const raw = req.headers?.authorization || req.headers?.Authorization;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return '';
+  const m = value.match(/^Bearer\s+(.+)$/i);
+  return m?.[1] ?? '';
+};
+
+const fetchJson = async (url: string, init: RequestInit) => {
+  const resp = await fetch(url, init);
+  const text = await resp.text();
+  const json = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
+  return { ok: resp.ok, status: resp.status, text, json };
+};
+
+const validateSupabaseEnv = (supabaseUrl?: string, serviceKey?: string) => {
+  if (!supabaseUrl || !serviceKey) return 'Supabase admin is not configured';
+  if (!/^https?:\/\//i.test(supabaseUrl)) {
+    return 'SUPABASE_URL is invalid. It must be the Supabase Project URL (https://xxxxx.supabase.co). You likely pasted a key by mistake.';
+  }
+  if (serviceKey.startsWith('sb_publishable_')) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is wrong. You pasted the publishable (public) key. It must be the secret key.';
+  }
+  if (serviceKey.startsWith('sb_secret_')) {
+    return 'SUPABASE_SERVICE_ROLE_KEY must be the JWT service_role key (starts with eyJ...). The sb_secret_* key cannot be used for Supabase Auth admin user management.';
+  }
+  if (/^https?:\/\//i.test(serviceKey)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It must be the Supabase service role key.';
+  }
+  if (/\s/.test(serviceKey)) {
+    return 'SUPABASE_SERVICE_ROLE_KEY is invalid. It contains whitespace/new lines. Paste the key as a single line.';
+  }
+  return '';
+};
+
+const authAdminHeaders = (adminKey: string): Record<string, string> => {
+  const key = adminKey.trim();
+  if (!key) return {};
+  return { apikey: key, Authorization: `Bearer ${key}` };
+};
+
+const postgrestHeaderCandidates = (adminKey: string): Array<Record<string, string>> => {
+  const key = adminKey.trim();
+  if (!key) return [{}];
+  const isJwtLike = key.startsWith('eyJ') && key.split('.').length === 3;
+  const isSbSecret = key.startsWith('sb_secret_');
+  if (isJwtLike) return [{ apikey: key, Authorization: `Bearer ${key}` }];
+  if (isSbSecret) return [{ apikey: key }, { apikey: key, Authorization: `Bearer ${key}` }];
+  return [{ apikey: key }];
+};
+
+const fetchPostgrest = async (candidates: Array<Record<string, string>>, url: string, init: RequestInit) => {
+  let last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[0] ?? {}) } });
+  for (let i = 1; i < candidates.length; i += 1) {
+    if (last.ok) return last;
+    if (last.status !== 401 && last.status !== 403) return last;
+    last = await fetchJson(url, { ...init, headers: { ...(init.headers ?? {}), ...(candidates[i] ?? {}) } });
+  }
+  return last;
+};
+
+const getRoleFromProfiles = async (base: string, pgCandidates: Array<Record<string, string>>, userId: string) => {
+  const r = await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, { method: 'GET' });
+  const role =
+    (r.ok && Array.isArray(r.json) && r.json[0] && typeof r.json[0] === 'object' && typeof r.json[0].role === 'string')
+      ? String(r.json[0].role).trim().toLowerCase()
+      : '';
+  return role;
+};
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
+  try {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+    const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
+    if (envError) {
+      res.status(500).json({ error: envError });
+      return;
+    }
+    const base = (supabaseUrl as string).replace(/\/$/, '');
+    const adminKey = String(serviceKey || '').trim();
+    const pgCandidates = postgrestHeaderCandidates(adminKey);
+    const authHeaders = authAdminHeaders(adminKey);
+
+    const token = getBearer(req);
+    if (!token) {
+      res.status(401).json({ error: 'Missing token' });
+      return;
+    }
+
+    const who = await fetchJson(`${base}/auth/v1/user`, {
+      method: 'GET',
+      headers: { apikey: adminKey, Authorization: `Bearer ${token}` },
+    });
+    if (!who.ok || !who.json || typeof who.json.id !== 'string') {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
+
+    const appMeta = who.json.app_metadata && typeof who.json.app_metadata === 'object' ? (who.json.app_metadata as Record<string, unknown>) : null;
+    const callerId = who.json.id as string;
+    const callerRole = appMeta && typeof appMeta.role === 'string'
+      ? String(appMeta.role).trim().toLowerCase()
+      : await getRoleFromProfiles(base, pgCandidates, callerId);
+    if (callerRole !== 'ceo') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const body = (req.body && typeof req.body === 'object') ? (req.body as LifecycleBody) : {};
+    const userId = asString(body.userId).trim();
+    const action = asString(body.action).trim().toLowerCase();
+
+    if (!userId) {
+      res.status(400).json({ error: 'Missing userId' });
+      return;
+    }
+    if (!['disable', 'enable', 'delete'].includes(action)) {
+      res.status(400).json({ error: 'Invalid action' });
+      return;
+    }
+    if (userId === callerId) {
+      res.status(400).json({ error: 'You cannot modify your own account' });
+      return;
+    }
+
+    if (action === 'delete') {
+      // Hard delete the auth user. The profiles row is removed via the
+      // ON DELETE CASCADE foreign key (profiles.id -> auth.users.id).
+      const deleted = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      });
+      if (!deleted.ok && deleted.status !== 404) {
+        res.status(500).json({ error: 'Failed to delete account', details: deleted.text });
+        return;
+      }
+      // Best-effort: ensure the profile row is gone even if no cascade exists.
+      await fetchPostgrest(pgCandidates, `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers: { Prefer: 'return=minimal' },
+      });
+      res.status(200).json({ ok: true, action });
+      return;
+    }
+
+    // disable -> ban for ~100 years; enable -> lift the ban.
+    const banDuration = action === 'disable' ? '876000h' : 'none';
+    const updated = await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+      method: 'PUT',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ban_duration: banDuration }),
+    });
+    if (!updated.ok) {
+      res.status(500).json({ error: action === 'disable' ? 'Failed to disable account' : 'Failed to restore account', details: updated.text });
+      return;
+    }
+    res.status(200).json({ ok: true, action });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error';
+    res.status(500).json({ error: message });
+  }
+}
