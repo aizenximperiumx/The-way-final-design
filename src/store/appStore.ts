@@ -133,6 +133,21 @@ export interface Application {
   intakeSLARewarded?: boolean;
   arrived?: boolean;
   intakeExtraDocs?: string[];
+  rejectedAt?: string;
+  rejectedReason?: string;
+  archivedAt?: string;
+  trashedAt?: string;
+  trashedByName?: string;
+}
+
+export interface TrashedUser {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  role: string;
+  trashedAt: string;
+  trashedByName: string;
 }
 
 export type DocumentStatus = 'pending' | 'verified' | 'rejected';
@@ -209,6 +224,9 @@ export interface AppStoreState {
   chatThreadReadAt: Record<string, string>;
   documentRequests: DocumentRequest[];
   leads: Lead[];
+  futureLeads: Application[];
+  trashedApplications: Application[];
+  trashedUsers: TrashedUser[];
   language: 'en' | 'ar';
   backendHydrated: boolean;
 
@@ -267,6 +285,15 @@ export interface AppStoreState {
   ceoUpdateUser: (userId: string, updates: Partial<User>) => void;
   ceoResetCredentials: (userId: string, updates: Partial<Pick<User, 'username' | 'password' | 'email'>>) => Promise<void>;
   ceoCreateAgencyAccount: (name: string, email: string) => Promise<User>;
+
+  ceoTrashApplication: (applicationId: string) => void;
+  ceoRestoreApplication: (applicationId: string) => void;
+  ceoPurgeApplication: (applicationId: string) => void;
+  ceoRestoreFutureLead: (applicationId: string) => void;
+  ceoDeleteFutureLead: (applicationId: string) => void;
+  ceoDisableUser: (userId: string) => Promise<void>;
+  ceoRestoreUser: (userId: string) => Promise<void>;
+  ceoPurgeUser: (userId: string) => Promise<void>;
 
   addAppointment: (appt: Omit<Appointment, 'id'>) => void;
   addChatMessage: (toUserId: string, text: string, applicationId?: string) => void;
@@ -337,6 +364,9 @@ const useAppStore = create<AppStoreState>()(
         appointments: [],
         documentRequests: [],
         leads: [],
+        futureLeads: [],
+        trashedApplications: [],
+        trashedUsers: [],
         language: 'en',
         backendHydrated: false,
 
@@ -426,7 +456,7 @@ const useAppStore = create<AppStoreState>()(
         const supabase = tryGetSupabase();
         if (supabase) void supabase.auth.signOut();
         localStorage.removeItem('the-way-storage');
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, documentRequests: [], leads: [] });
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [] });
       },
 
       changePassword: async (newPassword: string) => {
@@ -624,6 +654,9 @@ const useAppStore = create<AppStoreState>()(
           chatThreadReadAt: (s.chatThreadReadAt && typeof s.chatThreadReadAt === 'object') ? (s.chatThreadReadAt as Record<string, string>) : {},
           documentRequests: Array.isArray(s.documentRequests) ? (s.documentRequests as DocumentRequest[]) : [],
           leads: Array.isArray(s.leads) ? (s.leads as Lead[]) : [],
+          futureLeads: Array.isArray(s.futureLeads) ? (s.futureLeads as Application[]) : [],
+          trashedApplications: Array.isArray(s.trashedApplications) ? (s.trashedApplications as Application[]) : [],
+          trashedUsers: Array.isArray(s.trashedUsers) ? (s.trashedUsers as TrashedUser[]) : [],
           backendHydrated: true,
         });
         await get().refreshUsersFromBackend();
@@ -646,6 +679,9 @@ const useAppStore = create<AppStoreState>()(
           chatThreadReadAt: get().chatThreadReadAt,
           documentRequests: get().documentRequests,
           leads: get().leads,
+          futureLeads: get().futureLeads,
+          trashedApplications: get().trashedApplications,
+          trashedUsers: get().trashedUsers,
         };
         await fetch('/api/state-save', {
           method: 'POST',
@@ -880,16 +916,23 @@ const useAppStore = create<AppStoreState>()(
         if (source === 'agency') requireRole(actor, ['ops', 'ceo']);
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
 
+        const nowIso = new Date().toISOString();
+        const rejectedApp: Application = {
+          ...app,
+          status: 'rejected',
+          stage: 'rejected',
+          rejectedAt: nowIso,
+          archivedAt: nowIso,
+          events: [
+            ...(app.events ?? []),
+            { id: `${app.id}-rejected-${Date.now()}`, type: 'rejected' as const, byId: actor.id, byName: actor.name, time: nowIso },
+          ],
+        };
+        // Rejected forms leave the active board and are archived as Future Leads
+        // (re-contactable later if rules change).
         set((state) => ({
-          applications: state.applications.map(a => a.id === applicationId ? {
-            ...a,
-            status: 'rejected',
-            stage: 'rejected',
-            events: [
-              ...(a.events ?? []),
-              { id: `${a.id}-rejected-${Date.now()}`, type: 'rejected' as const, byId: actor.id, byName: actor.name, time: new Date().toISOString() },
-            ],
-          } : a)
+          applications: state.applications.filter(a => a.id !== applicationId),
+          futureLeads: [rejectedApp, ...state.futureLeads.filter(a => a.id !== applicationId)],
         }));
         const hasNotes = (app.internalNotes ?? []).length > 0;
         if (!hasNotes) {
@@ -1347,6 +1390,142 @@ const useAppStore = create<AppStoreState>()(
         return created;
       },
 
+      ceoTrashApplication: (applicationId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app) throw new Error('Application not found');
+        const trashed: Application = { ...app, trashedAt: new Date().toISOString(), trashedByName: actor.name };
+        set((state) => ({
+          applications: state.applications.filter(a => a.id !== applicationId),
+          trashedApplications: [trashed, ...state.trashedApplications.filter(a => a.id !== applicationId)],
+        }));
+        queueBackendSave(get);
+      },
+
+      ceoRestoreApplication: (applicationId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const app = get().trashedApplications.find(a => a.id === applicationId);
+        if (!app) throw new Error('Application not found in trash');
+        const restored: Application = { ...app, trashedAt: undefined, trashedByName: undefined };
+        set((state) => ({
+          trashedApplications: state.trashedApplications.filter(a => a.id !== applicationId),
+          applications: [restored, ...state.applications.filter(a => a.id !== applicationId)],
+        }));
+        queueBackendSave(get);
+      },
+
+      ceoPurgeApplication: (applicationId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        set((state) => ({
+          trashedApplications: state.trashedApplications.filter(a => a.id !== applicationId),
+        }));
+        queueBackendSave(get);
+      },
+
+      ceoRestoreFutureLead: (applicationId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const app = get().futureLeads.find(a => a.id === applicationId);
+        if (!app) throw new Error('Lead not found');
+        const restored: Application = {
+          ...app,
+          status: 'submitted',
+          stage: 'applied',
+          rejectedAt: undefined,
+          rejectedReason: undefined,
+          archivedAt: undefined,
+        };
+        set((state) => ({
+          futureLeads: state.futureLeads.filter(a => a.id !== applicationId),
+          applications: [restored, ...state.applications.filter(a => a.id !== applicationId)],
+        }));
+        queueBackendSave(get);
+      },
+
+      ceoDeleteFutureLead: (applicationId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        set((state) => ({
+          futureLeads: state.futureLeads.filter(a => a.id !== applicationId),
+        }));
+        queueBackendSave(get);
+      },
+
+      ceoDisableUser: async (userId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        if (userId === actor.id) throw new Error('You cannot disable your own account');
+        const target = get().users.find(u => u.id === userId);
+        const supabase = getSupabase();
+        const { data: session } = await supabase.auth.getSession();
+        const token = session.session?.access_token;
+        if (!token) throw new Error('Not authenticated');
+        const resp = await fetch('/api/admin-user-lifecycle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ userId, action: 'disable' }),
+        });
+        const json = (await resp.json()) as { ok?: unknown; error?: unknown };
+        if (!resp.ok) throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to disable account');
+        if (target) {
+          const snapshot: TrashedUser = {
+            id: target.id,
+            username: target.username,
+            name: target.name,
+            email: target.email,
+            role: target.role,
+            trashedAt: new Date().toISOString(),
+            trashedByName: actor.name,
+          };
+          set((state) => ({ trashedUsers: [snapshot, ...state.trashedUsers.filter(u => u.id !== userId)] }));
+        }
+        queueBackendSave(get);
+      },
+
+      ceoRestoreUser: async (userId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const supabase = getSupabase();
+        const { data: session } = await supabase.auth.getSession();
+        const token = session.session?.access_token;
+        if (!token) throw new Error('Not authenticated');
+        const resp = await fetch('/api/admin-user-lifecycle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ userId, action: 'enable' }),
+        });
+        const json = (await resp.json()) as { ok?: unknown; error?: unknown };
+        if (!resp.ok) throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to restore account');
+        set((state) => ({ trashedUsers: state.trashedUsers.filter(u => u.id !== userId) }));
+        await get().refreshUsersFromBackend();
+        queueBackendSave(get);
+      },
+
+      ceoPurgeUser: async (userId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        if (userId === actor.id) throw new Error('You cannot delete your own account');
+        const supabase = getSupabase();
+        const { data: session } = await supabase.auth.getSession();
+        const token = session.session?.access_token;
+        if (!token) throw new Error('Not authenticated');
+        const resp = await fetch('/api/admin-user-lifecycle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ userId, action: 'delete' }),
+        });
+        const json = (await resp.json()) as { ok?: unknown; error?: unknown };
+        if (!resp.ok) throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to delete account');
+        set((state) => ({
+          trashedUsers: state.trashedUsers.filter(u => u.id !== userId),
+          users: state.users.filter(u => u.id !== userId),
+        }));
+        queueBackendSave(get);
+      },
+
       addAppointment: (appt: Omit<Appointment, 'id'>) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         if (actor.role === 'student' && appt.userId !== actor.id) throw new Error('Forbidden');
@@ -1613,6 +1792,9 @@ const useAppStore = create<AppStoreState>()(
         chatMessages: state.chatMessages,
         chatThreadReadAt: state.chatThreadReadAt,
         leads: state.leads,
+        futureLeads: state.futureLeads,
+        trashedApplications: state.trashedApplications,
+        trashedUsers: state.trashedUsers,
       }),
       migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out', users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} }, version: 5 } as unknown),
     }
