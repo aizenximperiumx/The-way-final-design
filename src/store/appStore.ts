@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { sendMail } from '../lib/mailer';
 import { renderBrandedEmail } from '../lib/emailTemplate';
+import { getUniversityName } from '../lib/universities';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
 
 
@@ -349,6 +350,85 @@ const queueBackendSave = (() => {
     }, 600);
   };
 })();
+
+const SITE_URL = 'https://theway.ge';
+
+type NotifyEmail = {
+  subject: string;
+  title: string;
+  intro: string;
+  preheader?: string;
+  ctaLabel?: string;
+  ctaPath?: string;   // e.g. '/dashboard' — appended to SITE_URL
+  note?: string;
+  outro?: string;
+};
+
+// De-dupe identical emails fired in quick succession (e.g. bulk doc verifies).
+const recentEmailKeys = new Map<string, number>();
+
+// Resolve who actually receives a user-facing email and send the branded
+// template. For agency-sourced students, route to the agency contact instead
+// of the student (partner-agency students are not contacted directly).
+const emailNotifyUser = (
+  getState: () => AppStoreState,
+  recipientUserId: string,
+  email: NotifyEmail,
+  opts?: { dedupeKey?: string },
+) => {
+  try {
+    const state = getState();
+    const recipient = state.users.find(u => u.id === recipientUserId);
+    if (!recipient) return;
+
+    let toEmail = recipient.email;
+    let greetingName = recipient.name;
+
+    if (recipient.role === 'student') {
+      const studentApp = state.applications.find(a => a.studentId === recipientUserId)
+        ?? state.applications.find(a => a.studentId === recipientUserId && (a.source ?? 'public') === 'agency');
+      const isAgencySourced = studentApp && (studentApp.source ?? 'public') === 'agency' && studentApp.agencyId;
+      if (isAgencySourced) {
+        const agency = state.users.find(u => u.id === studentApp!.agencyId);
+        if (agency?.email) {
+          toEmail = agency.email;
+          greetingName = agency.name;
+          email = {
+            ...email,
+            intro: `${email.intro} (Student: ${recipient.name})`,
+          };
+        }
+      }
+    }
+
+    if (!toEmail) return;
+
+    if (opts?.dedupeKey) {
+      const key = `${toEmail}|${opts.dedupeKey}`;
+      const now = Date.now();
+      const last = recentEmailKeys.get(key);
+      if (last && now - last < 10_000) return;
+      recentEmailKeys.set(key, now);
+    }
+
+    const html = renderBrandedEmail({
+      title: email.title,
+      preheader: email.preheader ?? email.intro,
+      greeting: greetingName ? `Dear ${greetingName},` : undefined,
+      intro: email.intro,
+      ...(email.ctaLabel && email.ctaPath ? { ctaLabel: email.ctaLabel, ctaUrl: `${SITE_URL}${email.ctaPath}` } : {}),
+      ...(email.note ? { note: email.note } : {}),
+      ...(email.outro ? { outro: email.outro } : {}),
+    });
+    const textLines = [email.title, '', email.intro];
+    if (email.ctaLabel && email.ctaPath) textLines.push('', `${email.ctaLabel}: ${SITE_URL}${email.ctaPath}`);
+    if (email.outro) textLines.push('', email.outro);
+    textLines.push('', 'Warm regards,', 'The Way Team');
+    void sendMail({ to: toEmail, subject: email.subject, text: textLines.join('\n'), html });
+  } catch {
+    // Email is best-effort; never block the state update.
+  }
+};
 
 const useAppStore = create<AppStoreState>()(
   persist(
@@ -875,11 +955,14 @@ const useAppStore = create<AppStoreState>()(
         }));
 
         if (autoAssignedStaffId) {
-          const staff = get().users.find(u => u.id === autoAssignedStaffId);
-          if (staff?.email) {
-            const html = `<div style="font-family:Arial,sans-serif"><p>You have been assigned a new student: <b>${app.name}</b>.</p></div>`;
-            sendMail({ to: staff.email, subject: 'New Student Assigned', text: `New student assigned: ${app.name}`, html });
-          }
+          emailNotifyUser(get, autoAssignedStaffId, {
+            subject: 'New student assigned — The Way',
+            title: 'A new student was assigned to you',
+            intro: `You have been assigned a new student: ${app.name}.`,
+            ctaLabel: 'Open your dashboard',
+            ctaPath: '/staff',
+            outro: 'Log in to review their application and documents.',
+          }, { dedupeKey: `${studentId}-autoassign` });
         }
         await get().refreshUsersFromBackend();
         // Ensure the newly created student remains in the client users list
@@ -1071,11 +1154,14 @@ const useAppStore = create<AppStoreState>()(
         }));
 
         if (app.studentId) {
-          const student = get().users.find(u => u.id === app.studentId);
-          if (student?.email) {
-            const html = `<div style="font-family:Arial,sans-serif"><p>Dear <b>${app.name}</b>,</p><p>Your application status has been updated to: <b>${stageLabel}</b>.</p><p>Log in to your portal to see more details.</p></div>`;
-            sendMail({ to: student.email, subject: `Application Update: ${stageLabel} — The Way Georgia`, text: `Your application is now at stage: ${stageLabel}`, html });
-          }
+          emailNotifyUser(get, app.studentId, {
+            subject: `Application Update: ${stageLabel} — The Way`,
+            title: 'Your application was updated',
+            intro: `Your application has moved to a new stage: ${stageLabel}.`,
+            ctaLabel: 'View your application',
+            ctaPath: '/dashboard',
+            outro: 'Log in to your portal to see the latest details and next steps.',
+          }, { dedupeKey: `${applicationId}-stage-${stage}` });
         }
         queueBackendSave(get);
       },
@@ -1126,6 +1212,10 @@ const useAppStore = create<AppStoreState>()(
         set((state) => ({
           documents: [...state.documents, { ...newDoc, id: docId }],
           users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
+          notifications: [
+            ...state.notifications,
+            { id: `${docId}-upload-notif`, userId: doc.studentId, title: 'New Document Added', message: doc.title, type: 'info' as const, time: new Date().toISOString(), read: false },
+          ],
           applications: state.applications.map(a => a.studentId === doc.studentId ? {
             ...a,
             events: [
@@ -1134,6 +1224,14 @@ const useAppStore = create<AppStoreState>()(
             ],
           } : a),
         }));
+        emailNotifyUser(get, doc.studentId, {
+          subject: `New document added: ${doc.title} — The Way`,
+          title: 'A new document was added',
+          intro: `A new document — "${doc.title}" — has been added to your account.`,
+          ctaLabel: 'Open your dashboard',
+          ctaPath: '/dashboard',
+          outro: 'Log in to your dashboard to view and download it.',
+        }, { dedupeKey: `${docId}-upload` });
         queueBackendSave(get);
       },
 
@@ -1165,11 +1263,14 @@ const useAppStore = create<AppStoreState>()(
             { id: `${documentId}-notif`, userId: doc.studentId, title: 'Document Verified', message: doc.title, type: 'success', time: now, read: false }
           ],
         }));
-        const student = get().users.find(u => u.id === doc.studentId);
-        if (student?.email) {
-          const html = `<div style="font-family:Arial,sans-serif"><p>Your document <b>${doc.title}</b> has been verified.</p></div>`;
-          sendMail({ to: student.email, subject: 'Document verified', text: `Your document "${doc.title}" has been verified.`, html });
-        }
+        emailNotifyUser(get, doc.studentId, {
+          subject: `Document ready: ${doc.title} — The Way`,
+          title: 'Your document is ready',
+          intro: `Good news — your document "${doc.title}" has been verified and is ready.`,
+          ctaLabel: 'Download from your dashboard',
+          ctaPath: '/dashboard',
+          outro: 'Log in to your dashboard to download your document.',
+        }, { dedupeKey: `${documentId}-verified` });
         queueBackendSave(get);
       },
 
@@ -1196,11 +1297,14 @@ const useAppStore = create<AppStoreState>()(
             { id: `${studentUserId}-uni`, userId: studentUserId, title: 'University Assigned', message: universityId, type: 'info', time: new Date().toISOString(), read: false }
           ],
         }));
-        const s = get().users.find(u => u.id === studentUserId);
-        if (s?.email) {
-          const html = `<div style="font-family:Arial,sans-serif"><p>Your university has been set to <b>${universityId}</b>.</p></div>`;
-          sendMail({ to: s.email, subject: 'University Assigned', text: `Your university has been set to ${universityId}.`, html });
-        }
+        emailNotifyUser(get, studentUserId, {
+          subject: 'University Assigned — The Way',
+          title: 'Your university has been assigned',
+          intro: `Your university has been set to ${getUniversityName(universityId)}.`,
+          ctaLabel: 'View your application',
+          ctaPath: '/dashboard',
+          outro: 'Log in to your portal to see your university and next steps.',
+        }, { dedupeKey: `${studentUserId}-uni-${universityId}` });
         if (firstAssign) {
           set((state) => ({
             users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
@@ -1228,11 +1332,14 @@ const useAppStore = create<AppStoreState>()(
             { id: `${studentUserId}-assign`, userId: staffUserId, title: 'New Student Assigned', message: a?.name ?? 'New student', type: 'info', time: new Date().toISOString(), read: false }
           ],
         }));
-        const staff = get().users.find(u => u.id === staffUserId);
-        if (staff?.email) {
-          const html = `<div style="font-family:Arial,sans-serif"><p>You have been assigned a new student: <b>${a?.name ?? 'New student'}</b>.</p></div>`;
-          sendMail({ to: staff.email, subject: 'New Student Assigned', text: `New student assigned: ${a?.name ?? 'New student'}`, html });
-        }
+        emailNotifyUser(get, staffUserId, {
+          subject: 'New student assigned — The Way',
+          title: 'A new student was assigned to you',
+          intro: `You have been assigned a new student: ${a?.name ?? 'New student'}.`,
+          ctaLabel: 'Open your dashboard',
+          ctaPath: '/staff',
+          outro: 'Log in to review their application and documents.',
+        }, { dedupeKey: `${studentUserId}-assign-${staffUserId}` });
       },
 
       salesAssignAdmin: (studentUserId: string, staffUserId: string) => {
@@ -1536,7 +1643,20 @@ const useAppStore = create<AppStoreState>()(
       addAppointment: (appt: Omit<Appointment, 'id'>) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         if (actor.role === 'student' && appt.userId !== actor.id) throw new Error('Forbidden');
-        set((state) => ({ appointments: [...state.appointments, { ...appt, id: Date.now().toString() }] }));
+        const apptId = Date.now().toString();
+        set((state) => ({ appointments: [...state.appointments, { ...appt, id: apptId }] }));
+        // Notify the person the appointment is for (skip if they created it themselves).
+        if (appt.userId && appt.userId !== actor.id) {
+          const whenLabel = [appt.date, appt.time].filter(Boolean).join(' at ');
+          emailNotifyUser(get, appt.userId, {
+            subject: 'Your appointment is confirmed — The Way',
+            title: 'Your appointment is confirmed',
+            intro: `Your appointment${appt.title ? ` "${appt.title}"` : ''} has been scheduled${whenLabel ? ` for ${whenLabel}` : ''}.`,
+            ctaLabel: 'View your appointments',
+            ctaPath: '/appointments',
+            outro: 'Log in to your portal to view or manage your appointments.',
+          }, { dedupeKey: `${apptId}-appt` });
+        }
         queueBackendSave(get);
       },
 
@@ -1576,11 +1696,14 @@ const useAppStore = create<AppStoreState>()(
             { id: `${applicationId}-agency-needs-info`, userId: app.agencyId!, title: 'More info required', message, type: 'alert', time: now, read: false },
           ],
         }));
-        const agency = get().users.find(u => u.id === app.agencyId);
-        if (agency?.email) {
-          const html = `<div style="font-family:Arial,sans-serif"><p>Additional information is required for application <b>${app.name}</b>:</p><p>${message}</p><p>Please log in to your portal to respond.</p></div>`;
-          sendMail({ to: agency.email, subject: 'Action Required: More Info Needed — The Way Georgia', text: `More info required for ${app.name}: ${message}`, html });
-        }
+        emailNotifyUser(get, app.agencyId, {
+          subject: 'Action required: more info needed — The Way',
+          title: 'More information is required',
+          intro: `Additional information is required for the application of ${app.name}: ${message}`,
+          ctaLabel: 'Respond in your portal',
+          ctaPath: '/agencies',
+          note: 'Please respond as soon as possible so we can continue processing this application.',
+        }, { dedupeKey: `${applicationId}-needs-info` });
       },
 
       agencyAddExtraDocs: (applicationId: string, files: string[]) => {
@@ -1673,6 +1796,23 @@ const useAppStore = create<AppStoreState>()(
         const threadKey = `${applicationId ?? 'direct'}|${[actor.id, toUserId].sort().join('|')}`;
         const readKey = `${actor.id}|${threadKey}`;
         set((state) => ({ chatThreadReadAt: { ...state.chatThreadReadAt, [readKey]: msg.time } }));
+        // Email the recipient that they have a new message. De-duped per thread
+        // over a short window so a burst of messages doesn't flood the inbox.
+        const ctaPath = toUser.role === 'student' ? '/messages'
+          : toUser.role === 'agency' ? '/agencies'
+          : toUser.role === 'staff' ? '/staff'
+          : toUser.role === 'agency_staff' ? '/agency-staff'
+          : toUser.role === 'sales' ? '/sales'
+          : toUser.role === 'ops' ? '/ops'
+          : toUser.role === 'ceo' ? '/admin' : '/messages';
+        emailNotifyUser(get, toUserId, {
+          subject: 'You have a new message — The Way',
+          title: 'You have a new message',
+          intro: `${actor.name} sent you a new message on The Way platform.`,
+          ctaLabel: 'Open your messages',
+          ctaPath,
+          outro: 'Log in to read and reply to your messages.',
+        }, { dedupeKey: `chat-${threadKey}` });
       },
 
       checkExpiries: () => {
@@ -1705,14 +1845,34 @@ const useAppStore = create<AppStoreState>()(
         if (visaDays !== null && visaDays <= 60 && !alreadyNotified('Visa Expiry')) {
           const msg = `Your visa expires in ${visaDays} day${visaDays === 1 ? '' : 's'} (${current.visaExpiry}). Please renew as soon as possible.`;
           push('Visa Expiry Warning', msg);
-          if (current.email) sendMail({ to: current.email, subject: 'Visa Expiry Reminder — The Way Georgia', text: msg, html: `<div style="font-family:Arial,sans-serif"><p>${msg}</p></div>` });
+          if (current.email) {
+            const html = renderBrandedEmail({
+              title: 'Visa expiry reminder',
+              greeting: `Dear ${current.name},`,
+              intro: msg,
+              ctaLabel: 'Open your dashboard',
+              ctaUrl: `${SITE_URL}/dashboard`,
+              note: 'If you need help with your renewal, reply to this email and our team will assist you.',
+            });
+            void sendMail({ to: current.email, subject: 'Visa Expiry Reminder — The Way', text: msg, html });
+          }
         }
 
         const residenceDays = daysUntil(current.residenceExpiry);
         if (residenceDays !== null && residenceDays <= 60 && !alreadyNotified('Residence')) {
           const msg = `Your residence permit expires in ${residenceDays} day${residenceDays === 1 ? '' : 's'} (${current.residenceExpiry}). Please renew as soon as possible.`;
           push('Residence Permit Expiry Warning', msg);
-          if (current.email) sendMail({ to: current.email, subject: 'Residence Permit Reminder — The Way Georgia', text: msg, html: `<div style="font-family:Arial,sans-serif"><p>${msg}</p></div>` });
+          if (current.email) {
+            const html = renderBrandedEmail({
+              title: 'Residence permit reminder',
+              greeting: `Dear ${current.name},`,
+              intro: msg,
+              ctaLabel: 'Open your dashboard',
+              ctaUrl: `${SITE_URL}/dashboard`,
+              note: 'If you need help with your renewal, reply to this email and our team will assist you.',
+            });
+            void sendMail({ to: current.email, subject: 'Residence Permit Reminder — The Way', text: msg, html });
+          }
         }
       },
 
@@ -1745,15 +1905,14 @@ const useAppStore = create<AppStoreState>()(
             },
           ],
         }));
-        const student = get().users.find(u => u.id === studentId);
-        if (student?.email) {
-          sendMail({
-            to: student.email,
-            subject: 'Document Required — The Way Georgia',
-            text: `Your advisor has requested a document: "${title}". ${description ?? ''} Please log in to your portal to upload it.`,
-            html: `<div style="font-family:Arial,sans-serif"><p>Dear ${student.name},</p><p>Your advisor has requested the following document: <b>${title}</b>${description ? ` — ${description}` : ''}.</p><p>Please log in to your student portal to upload it.</p></div>`,
-          });
-        }
+        emailNotifyUser(get, studentId, {
+          subject: 'Action needed: document required — The Way',
+          title: 'A document was requested',
+          intro: `Your advisor has requested the following document: "${title}"${description ? ` — ${description}` : ''}.`,
+          ctaLabel: 'Upload in your portal',
+          ctaPath: '/dashboard',
+          note: 'Please upload this document as soon as possible so we can continue processing the application.',
+        }, { dedupeKey: `${req.id}-request` });
         queueBackendSave(get);
       },
 
@@ -1779,6 +1938,14 @@ const useAppStore = create<AppStoreState>()(
             },
           ],
         }));
+        emailNotifyUser(get, req.requestedBy, {
+          subject: 'Requested document uploaded — The Way',
+          title: 'A requested document was uploaded',
+          intro: `${actor.name} uploaded the document you requested: "${req.title}".`,
+          ctaLabel: 'Review in your dashboard',
+          ctaPath: '/staff',
+          outro: 'Log in to review and verify the document.',
+        }, { dedupeKey: `${requestId}-fulfilled` });
         queueBackendSave(get);
       },
     };
