@@ -11,7 +11,10 @@ import { getSupabase } from '../lib/supabase';
 
 export default function AgenciesPortal() {
   const { user, logout } = useAuth();
-  const { addApplication, applications, documents, users, chatMessages, addChatMessage, agencyAddExtraDocs } = useAppStore();
+  const { addApplication, applications, documents, users, chatMessages, addChatMessage, agencyAddExtraDocs, credentialRequests, agencyRequestCredentialChange } = useAppStore();
+  const [revealCred, setRevealCred] = useState(false);
+  const [credReqReason, setCredReqReason] = useState('');
+  const [credReqOpen, setCredReqOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'profile'>('dashboard');
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [pdfs, setPdfs] = useState<string[]>([]);
@@ -956,6 +959,71 @@ Underage: ${underage ? 'Yes' : 'No'}`;
               </div>
 
               <div className="px-6 py-6 space-y-6">
+                {/* Student login credentials (agency-managed) */}
+                {a.status === 'approved' && a.studentCredentials && (() => {
+                  const pendingReq = credentialRequests.find(r => r.applicationId === a.id && r.status === 'pending');
+                  return (
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-2">
+                          <Shield className="w-4 h-4 text-amber-600" />
+                          <p className="text-sm font-bold text-gray-900">Student Login Credentials</p>
+                        </div>
+                        <button onClick={() => setRevealCred(v => !v)} className="text-xs font-semibold text-amber-600 hover:text-amber-700">
+                          {revealCred ? 'Hide' : 'Reveal'}
+                        </button>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="bg-white border border-gray-100 rounded-xl px-3 py-2.5">
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Username</p>
+                          <p className="text-sm font-mono font-semibold text-gray-900 break-all">{a.studentCredentials.username}</p>
+                        </div>
+                        <div className="bg-white border border-gray-100 rounded-xl px-3 py-2.5">
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Password</p>
+                          <p className="text-sm font-mono font-semibold text-gray-900 break-all">{revealCred ? a.studentCredentials.password : '••••••••'}</p>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-2">Share these with your student securely. You can request a change below.</p>
+
+                      {pendingReq ? (
+                        <div className="mt-3 flex items-center gap-2 rounded-xl bg-white border border-amber-200 px-3 py-2">
+                          <Clock className="w-4 h-4 text-amber-500" />
+                          <p className="text-xs font-semibold text-amber-700">Change request pending CEO approval</p>
+                        </div>
+                      ) : credReqOpen ? (
+                        <div className="mt-3 space-y-2">
+                          <textarea
+                            value={credReqReason}
+                            onChange={(e) => setCredReqReason(e.target.value)}
+                            rows={3}
+                            placeholder="Why do these credentials need to change? (e.g. student lost access, suspected sharing…)"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => { setCredReqOpen(false); setCredReqReason(''); }} className="px-3 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                            <button
+                              onClick={() => {
+                                try {
+                                  agencyRequestCredentialChange(a.id, credReqReason);
+                                  toast.success('Request sent to the CEO');
+                                  setCredReqOpen(false); setCredReqReason('');
+                                } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not send request'); }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-bold hover:bg-amber-700"
+                            >
+                              <Send className="w-4 h-4" /> Send request
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setCredReqOpen(true)} className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-amber-200 text-amber-700 text-sm font-semibold hover:bg-amber-100 transition-colors">
+                          Request credential change
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Two columns: progress + video/docs */}
                 <div className="grid md:grid-cols-2 gap-6">
                   {/* Progress */}

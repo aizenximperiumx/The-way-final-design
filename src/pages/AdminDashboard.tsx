@@ -20,7 +20,9 @@ import {
   Trash2,
   RotateCcw,
   Archive,
-  Inbox
+  Inbox,
+  KeyRound,
+  Clock
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -61,9 +63,11 @@ const AdminDashboard: React.FC = () => {
     ceoTrashApplication, ceoRestoreApplication, ceoPurgeApplication,
     ceoRestoreFutureLead, ceoDeleteFutureLead,
     ceoDisableUser, ceoRestoreUser, ceoPurgeUser,
+    credentialRequests, ceoResolveCredentialRequest, ceoRejectCredentialRequest,
   } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'forms' | 'trash' | 'security'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'forms' | 'requests' | 'trash' | 'security'>('analytics');
+  const pendingCredRequests = credentialRequests.filter(r => r.status === 'pending');
   const [health, setHealth] = useState<{ loading: boolean; ok: boolean | null; checks: Array<{ name: string; ok: boolean; details?: string }> }>({ loading: true, ok: null, checks: [] });
   const [audit, setAudit] = useState<{ loading: boolean; ok: boolean | null; issueCount: number; issues: Array<{ severity: 'high' | 'medium' | 'low'; code: string; message: string }> }>({ loading: false, ok: null, issueCount: 0, issues: [] });
   const [showAgencyModal, setShowAgencyModal] = useState(false);
@@ -104,6 +108,7 @@ const AdminDashboard: React.FC = () => {
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'forms', label: 'Forms', icon: FileText },
+    { id: 'requests', label: 'Requests', icon: KeyRound },
     { id: 'trash', label: 'Trash', icon: Trash2 },
     { id: 'security', label: 'Security', icon: ShieldAlert },
   ] as const;
@@ -1158,6 +1163,84 @@ const AdminDashboard: React.FC = () => {
                 )}
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'requests' && (
+          <motion.div
+            key="requests"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-amber-500" />
+                <h3 className="text-base font-bold text-gray-900">Credential Change Requests</h3>
+                <span className="ml-auto text-xs font-semibold text-gray-400">{pendingCredRequests.length} pending</span>
+              </div>
+              <p className="px-5 pt-3 text-xs text-gray-400">Agencies can't contact their students directly, so they request credential changes here for your approval.</p>
+              <div className="divide-y divide-gray-50">
+                {pendingCredRequests.length === 0 && (
+                  <div className="py-12 text-center text-gray-400 text-sm">No pending requests.</div>
+                )}
+                {pendingCredRequests.map((r) => (
+                  <div key={r.id} className="px-5 py-4 flex flex-wrap items-start justify-between gap-4 hover:bg-gray-50/60 transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900">{r.studentName}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Requested by <span className="font-semibold text-gray-600">{r.agencyName}</span> · {new Date(r.createdAt).toLocaleString()}</p>
+                      <p className="text-sm text-gray-600 mt-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">{r.reason}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Approve and generate new credentials for ${r.studentName}? The new password will be emailed to ${r.agencyName}.`)) return;
+                          void ceoResolveCredentialRequest(r.id)
+                            .then(() => toast.success('New credentials generated and sent to the agency'))
+                            .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed'));
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors"
+                      >
+                        <Check className="w-4 h-4" /> Approve & reset
+                      </button>
+                      <button
+                        onClick={() => {
+                          const note = window.prompt(`Decline the request for ${r.studentName}? Optionally add a reason:`, '');
+                          if (note === null) return;
+                          try { ceoRejectCredentialRequest(r.id, note || undefined); toast.success('Request declined'); }
+                          catch (e) { toast.error(e instanceof Error ? e.message : 'Failed'); }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                      >
+                        <X className="w-4 h-4" /> Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recently handled */}
+            {credentialRequests.some(r => r.status !== 'pending') && (
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <h3 className="text-base font-bold text-gray-900">Recently Handled</h3>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {credentialRequests.filter(r => r.status !== 'pending').slice(0, 20).map((r) => (
+                    <div key={r.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{r.studentName} <span className="text-xs font-normal text-gray-400">· {r.agencyName}</span></p>
+                        <p className="text-xs text-gray-400">{r.resolvedAt ? new Date(r.resolvedAt).toLocaleString() : ''}{r.resolvedByName ? ` · by ${r.resolvedByName}` : ''}</p>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider shrink-0 ${r.status === 'resolved' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{r.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 
