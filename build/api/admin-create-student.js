@@ -26,7 +26,7 @@ const sendResend = async (apiKey, to, subject, html, text) => {
             Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-            from: 'The Way <no-reply@theway.ge>',
+            from: process.env.EMAIL_FROM || 'The Way <no-reply@info.theway.ge>',
             to: [to],
             subject,
             html,
@@ -198,9 +198,13 @@ export default async function handler(req, res) {
             body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role: 'student', username }, user_metadata: { username, name } }),
         });
         const createText = created.text || '';
+        const createTextLower = createText.toLowerCase();
         const duplicate = createText.includes('users_email_partial_key') ||
             createText.includes('"code":"23505"') ||
-            createText.toLowerCase().includes('duplicate');
+            createTextLower.includes('duplicate') ||
+            createTextLower.includes('email_exists') ||
+            createTextLower.includes('already been registered') ||
+            createTextLower.includes('already registered');
         const id = (created.ok && created.json && typeof created.json.id === 'string')
             ? created.json.id
             : '';
@@ -229,7 +233,34 @@ export default async function handler(req, res) {
                     res.status(500).json({ error: 'Student account exists but failed to create profile', details: inserted.text });
                     return;
                 }
-                res.status(200).json({ id: existing.id, email, username, name, emailSent: false, warning: 'Account already existed; password reset', password });
+                const dupHtml = `
+      <div style="font-family:Arial,sans-serif">
+        <h2 style="margin:0 0 12px">Welcome to The Way</h2>
+        <p>Your student account has been created. Use these credentials:</p>
+        <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
+      </div>`;
+                const dupText = `Username: ${username}\nPassword: ${password}`;
+                let dupEmailSent = false;
+                let dupEmailWarning = '';
+                if (resendKey) {
+                    try {
+                        await sendResend(resendKey, email, 'Your The Way student account', dupHtml, dupText);
+                        dupEmailSent = true;
+                    }
+                    catch (e) {
+                        dupEmailWarning = e instanceof Error ? e.message : 'Failed to send email';
+                    }
+                }
+                res.status(200).json({
+                    id: existing.id,
+                    email,
+                    username,
+                    name,
+                    emailSent: dupEmailSent,
+                    warning: dupEmailSent ? 'Account already existed; password reset and emailed' : 'Account already existed; password reset',
+                    ...(dupEmailWarning ? { emailError: dupEmailWarning.slice(0, 300) } : {}),
+                    ...(!dupEmailSent ? { password } : {}),
+                });
                 return;
             }
             if ((created.status === 401 || created.status === 403) && adminKey.startsWith('sb_secret_')) {
