@@ -46,7 +46,7 @@ const sendResend = async (apiKey: string, to: string, subject: string, html: str
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      from: 'The Way <no-reply@theway.ge>',
+      from: process.env.EMAIL_FROM || 'The Way <no-reply@info.theway.ge>',
       to: [to],
       subject,
       html,
