@@ -353,6 +353,113 @@ const bootstrapDefaultCeo = async () => {
   }
 };
 
+// Idempotently ensure a set of privileged accounts exist on deploy. Credentials
+// come ONLY from environment variables (set in Render) — never hardcoded — so no
+// secrets live in source/git history. Runs with the Render-side service key so
+// accounts can be (re)provisioned without Supabase dashboard access. Each account
+// is created only when its EMAIL + PASSWORD env vars are present. All accounts are
+// role 'ceo' = full access to the whole website ("developer" is functionally a
+// full-access account; CEO is already the all-access role).
+//
+// Env vars (set any subset in Render, then redeploy):
+//   BOOTSTRAP_CEO_EMAIL / BOOTSTRAP_CEO_USERNAME / BOOTSTRAP_CEO_PASSWORD / BOOTSTRAP_CEO_NAME
+//   BOOTSTRAP_DEV_EMAIL / BOOTSTRAP_DEV_USERNAME / BOOTSTRAP_DEV_PASSWORD / BOOTSTRAP_DEV_NAME
+const buildNamedAccounts = () => {
+  const env = process.env;
+  const out = [];
+  const add = (prefix, fallbackName) => {
+    const email = String(env[`${prefix}_EMAIL`] || '').trim();
+    const password = String(env[`${prefix}_PASSWORD`] || '').trim();
+    if (!email || !password) return;
+    const username = String(env[`${prefix}_USERNAME`] || email.split('@')[0]).trim();
+    const name = String(env[`${prefix}_NAME`] || fallbackName).trim();
+    out.push({ email, username, password, name, role: 'ceo' });
+  };
+  add('BOOTSTRAP_CEO', 'CEO');
+  add('BOOTSTRAP_DEV', 'Developer');
+  return out;
+};
+const NAMED_ACCOUNTS = buildNamedAccounts();
+
+const findAuthUserByEmail = async (base, authHeaders, email) => {
+  const target = email.toLowerCase();
+  const perPage = 200;
+  for (let page = 1; page <= 10; page += 1) {
+    const r = await fetchJson(`${base}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, { method: 'GET', headers: authHeaders });
+    if (!r.ok) return null;
+    const users = Array.isArray(r.json)
+      ? r.json
+      : (r.json && typeof r.json === 'object' && Array.isArray(r.json.users) ? r.json.users : []);
+    if (!Array.isArray(users) || users.length === 0) return null;
+    for (const u of users) {
+      const obj = (u && typeof u === 'object') ? u : null;
+      if (!obj) continue;
+      const uEmail = typeof obj.email === 'string' ? obj.email : '';
+      const id = typeof obj.id === 'string' ? obj.id : '';
+      if (id && uEmail && uEmail.toLowerCase() === target) return { id, email: uEmail };
+    }
+    if (users.length < perPage) return null;
+  }
+  return null;
+};
+
+const bootstrapNamedAccounts = async () => {
+  try {
+    const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
+    const adminKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '').trim();
+    if (!supabaseUrl || !adminKey || !/^https?:\/\//i.test(supabaseUrl)) {
+      globalThis.__namedAccountsLast = { at: new Date().toISOString(), ok: false, step: 'env', error: 'Missing/invalid Supabase env' };
+      return;
+    }
+    const base = supabaseUrl.replace(/\/$/, '');
+    const authHeaders = authAdminHeaders(adminKey);
+    const pgCandidates = postgrestHeaderCandidates(adminKey);
+    const results = [];
+
+    for (const acct of NAMED_ACCOUNTS) {
+      try {
+        const existing = await findAuthUserByEmail(base, authHeaders, acct.email);
+        let id = existing?.id || '';
+        if (!id) {
+          const created = await fetchJson(`${base}/auth/v1/admin/users`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: acct.email,
+              password: acct.password,
+              email_confirm: true,
+              app_metadata: { role: acct.role, username: acct.username },
+              user_metadata: { username: acct.username, name: acct.name },
+            }),
+          });
+          id = (created.ok && created.json && typeof created.json.id === 'string') ? created.json.id : '';
+          if (!id) { results.push({ email: acct.email, ok: false, step: 'create', error: (created.text || '').slice(0, 200) }); continue; }
+        } else {
+          // Re-assert password + role so a forgotten password can always be recovered via redeploy.
+          await fetchJson(`${base}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: acct.password,
+              email_confirm: true,
+              app_metadata: { role: acct.role, username: acct.username },
+              user_metadata: { username: acct.username, name: acct.name },
+            }),
+          });
+        }
+        const prof = await ensureSingleProfileRow(base, pgCandidates, id, { username: acct.username, role: acct.role, name: acct.name, email: acct.email });
+        results.push({ email: acct.email, ok: prof.ok, id, created: !existing });
+      } catch (e) {
+        results.push({ email: acct.email, ok: false, step: 'exception', error: (e instanceof Error ? e.message : String(e)).slice(0, 200) });
+      }
+    }
+    globalThis.__namedAccountsLast = { at: new Date().toISOString(), results };
+    console.log('Named accounts bootstrap:', JSON.stringify(results));
+  } catch (e) {
+    globalThis.__namedAccountsLast = { at: new Date().toISOString(), ok: false, step: 'exception', error: (e instanceof Error ? e.message : String(e)).slice(0, 300) };
+  }
+};
+
 const exists = async (p) => {
   try {
     await fs.access(p);
@@ -1115,4 +1222,5 @@ const port = Number(process.env.PORT ?? 4173);
 server.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
   void bootstrapDefaultCeo();
+  void bootstrapNamedAccounts();
 });
