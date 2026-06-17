@@ -224,6 +224,7 @@ export interface AppStoreState {
   appointments: Appointment[];
   chatMessages: ChatMessage[];
   chatThreadReadAt: Record<string, string>;
+  chatEmailNotify: Record<string, { firstAt: string; reminded: boolean }>;
   documentRequests: DocumentRequest[];
   leads: Lead[];
   futureLeads: Application[];
@@ -300,6 +301,7 @@ export interface AppStoreState {
   addAppointment: (appt: Omit<Appointment, 'id'>) => void;
   addChatMessage: (toUserId: string, text: string, applicationId?: string) => void;
   markChatThreadRead: (threadKey: string) => void;
+  checkChatReminders: () => void;
   requestMoreInfo: (applicationId: string, message: string) => void;
   agencyAddExtraDocs: (applicationId: string, files: string[]) => void;
   checkExpiries: () => void;
@@ -352,6 +354,15 @@ const queueBackendSave = (() => {
 })();
 
 const SITE_URL = 'https://theway.ge';
+
+const chatPathForRole = (role: string): string =>
+  role === 'student' ? '/messages'
+    : role === 'agency' ? '/agencies'
+    : role === 'staff' ? '/staff'
+    : role === 'agency_staff' ? '/agency-staff'
+    : role === 'sales' ? '/sales'
+    : role === 'ops' ? '/ops'
+    : role === 'ceo' ? '/admin' : '/messages';
 
 type NotifyEmail = {
   subject: string;
@@ -442,6 +453,7 @@ const useAppStore = create<AppStoreState>()(
         notifications: [],
         chatMessages: [],
         chatThreadReadAt: {},
+        chatEmailNotify: {},
         appointments: [],
         documentRequests: [],
         leads: [],
@@ -530,6 +542,7 @@ const useAppStore = create<AppStoreState>()(
         await get().refreshUsersFromBackend();
         await get().loadBackendState();
         get().checkExpiries();
+        get().checkChatReminders();
         return user;
       },
 
@@ -537,7 +550,7 @@ const useAppStore = create<AppStoreState>()(
         const supabase = tryGetSupabase();
         if (supabase) void supabase.auth.signOut();
         localStorage.removeItem('the-way-storage');
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [] });
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [] });
       },
 
       changePassword: async (newPassword: string) => {
@@ -686,6 +699,7 @@ const useAppStore = create<AppStoreState>()(
         await get().refreshUsersFromBackend();
         await get().loadBackendState();
         get().checkExpiries();
+        get().checkChatReminders();
       },
 
       refreshUsersFromBackend: async () => {
@@ -733,6 +747,7 @@ const useAppStore = create<AppStoreState>()(
           appointments: Array.isArray(s.appointments) ? (s.appointments as Appointment[]) : [],
           chatMessages: Array.isArray(s.chatMessages) ? (s.chatMessages as ChatMessage[]) : [],
           chatThreadReadAt: (s.chatThreadReadAt && typeof s.chatThreadReadAt === 'object') ? (s.chatThreadReadAt as Record<string, string>) : {},
+          chatEmailNotify: (s.chatEmailNotify && typeof s.chatEmailNotify === 'object') ? (s.chatEmailNotify as Record<string, { firstAt: string; reminded: boolean }>) : {},
           documentRequests: Array.isArray(s.documentRequests) ? (s.documentRequests as DocumentRequest[]) : [],
           leads: Array.isArray(s.leads) ? (s.leads as Lead[]) : [],
           futureLeads: Array.isArray(s.futureLeads) ? (s.futureLeads as Application[]) : [],
@@ -758,6 +773,7 @@ const useAppStore = create<AppStoreState>()(
           appointments: get().appointments,
           chatMessages: get().chatMessages,
           chatThreadReadAt: get().chatThreadReadAt,
+          chatEmailNotify: get().chatEmailNotify,
           documentRequests: get().documentRequests,
           leads: get().leads,
           futureLeads: get().futureLeads,
@@ -1663,9 +1679,65 @@ const useAppStore = create<AppStoreState>()(
       markChatThreadRead: (threadKey: string) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         const key = `${actor.id}|${threadKey}`;
-        set((state) => ({
-          chatThreadReadAt: { ...state.chatThreadReadAt, [key]: new Date().toISOString() },
-        }));
+        const notifyKey = `${threadKey}|${actor.id}`;
+        set((state) => {
+          const nextNotify = { ...state.chatEmailNotify };
+          delete nextNotify[notifyKey];
+          return {
+            chatThreadReadAt: { ...state.chatThreadReadAt, [key]: new Date().toISOString() },
+            chatEmailNotify: nextNotify,
+          };
+        });
+        queueBackendSave(get);
+      },
+
+      checkChatReminders: () => {
+        const DAY = 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const state = get();
+        const pending = state.chatEmailNotify ?? {};
+        const nextNotify: Record<string, { firstAt: string; reminded: boolean }> = { ...pending };
+        let changed = false;
+
+        for (const [key, info] of Object.entries(pending)) {
+          // key = `${threadKey}|${recipientId}` where threadKey itself contains '|'
+          const sep = key.lastIndexOf('|');
+          if (sep < 0) { delete nextNotify[key]; changed = true; continue; }
+          const recipientId = key.slice(sep + 1);
+          const threadKey = key.slice(0, sep);
+
+          // Latest message addressed to the recipient in this thread.
+          const latest = state.chatMessages
+            .filter(m => m.toUserId === recipientId &&
+              `${m.applicationId ?? 'direct'}|${[m.userId, m.toUserId].sort().join('|')}` === threadKey)
+            .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())[0];
+          if (!latest) { delete nextNotify[key]; changed = true; continue; }
+
+          const readAt = state.chatThreadReadAt[`${recipientId}|${threadKey}`];
+          const stillUnread = !readAt || new Date(latest.time).getTime() > new Date(readAt).getTime();
+          if (!stillUnread) { delete nextNotify[key]; changed = true; continue; }
+
+          if (!info.reminded && now - new Date(info.firstAt).getTime() >= DAY) {
+            const recipient = state.users.find(u => u.id === recipientId);
+            if (recipient) {
+              emailNotifyUser(get, recipientId, {
+                subject: 'Reminder: you have an unread message — The Way',
+                title: 'You still have an unread message',
+                intro: 'You have a message on The Way platform that you haven\'t read yet.',
+                ctaLabel: 'Open your messages',
+                ctaPath: chatPathForRole(recipient.role),
+                outro: 'This is a one-time reminder. Log in to read and reply.',
+              }, { dedupeKey: `chat-reminder-${key}` });
+            }
+            nextNotify[key] = { ...info, reminded: true };
+            changed = true;
+          }
+        }
+
+        if (changed) {
+          set({ chatEmailNotify: nextNotify });
+          queueBackendSave(get);
+        }
       },
 
       requestMoreInfo: (applicationId: string, message: string) => {
@@ -1796,23 +1868,28 @@ const useAppStore = create<AppStoreState>()(
         const threadKey = `${applicationId ?? 'direct'}|${[actor.id, toUserId].sort().join('|')}`;
         const readKey = `${actor.id}|${threadKey}`;
         set((state) => ({ chatThreadReadAt: { ...state.chatThreadReadAt, [readKey]: msg.time } }));
-        // Email the recipient that they have a new message. De-duped per thread
-        // over a short window so a burst of messages doesn't flood the inbox.
-        const ctaPath = toUser.role === 'student' ? '/messages'
-          : toUser.role === 'agency' ? '/agencies'
-          : toUser.role === 'staff' ? '/staff'
-          : toUser.role === 'agency_staff' ? '/agency-staff'
-          : toUser.role === 'sales' ? '/sales'
-          : toUser.role === 'ops' ? '/ops'
-          : toUser.role === 'ceo' ? '/admin' : '/messages';
-        emailNotifyUser(get, toUserId, {
-          subject: 'You have a new message — The Way',
-          title: 'You have a new message',
-          intro: `${actor.name} sent you a new message on The Way platform.`,
-          ctaLabel: 'Open your messages',
-          ctaPath,
-          outro: 'Log in to read and reply to your messages.',
-        }, { dedupeKey: `chat-${threadKey}` });
+        // Email the recipient ONCE per unread thread. Follow-up messages while
+        // the thread is still unread do not send more emails; a single reminder
+        // is sent ~1 day later (see checkChatReminders) if still unread. Reading
+        // the thread clears the state (in markChatThreadRead) so the next new
+        // message can notify again.
+        const notifyKey = `${threadKey}|${toUserId}`;
+        if (!get().chatEmailNotify[notifyKey]) {
+          const ctaPath = chatPathForRole(toUser.role);
+          emailNotifyUser(get, toUserId, {
+            subject: 'You have a new message — The Way',
+            title: 'You have a new message',
+            intro: `${actor.name} sent you a new message on The Way platform.`,
+            ctaLabel: 'Open your messages',
+            ctaPath,
+            outro: 'Log in to read and reply to your messages.',
+          }, { dedupeKey: `chat-${threadKey}` });
+          set((state) => ({
+            chatEmailNotify: { ...state.chatEmailNotify, [notifyKey]: { firstAt: msg.time, reminded: false } },
+          }));
+        }
+        get().checkChatReminders();
+        queueBackendSave(get);
       },
 
       checkExpiries: () => {
@@ -1965,6 +2042,7 @@ const useAppStore = create<AppStoreState>()(
         appointments: state.appointments,
         chatMessages: state.chatMessages,
         chatThreadReadAt: state.chatThreadReadAt,
+        chatEmailNotify: state.chatEmailNotify,
         leads: state.leads,
         futureLeads: state.futureLeads,
         trashedApplications: state.trashedApplications,
