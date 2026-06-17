@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { FC } from 'react';
+import { PageHeader, StatGrid, StatCard } from '../components/dashboard/ui';
 import { 
   Search, 
   FileText, 
@@ -229,36 +230,27 @@ const StaffDashboard: FC = () => {
     closed: closedCount,
   };
   const stats = [
-    { label: 'Processing', value: processingCount, icon: Clock, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: 'Enrolled', value: enrolledCount, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50' },
-    { label: 'Closed Cases', value: closedCount, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Processing', value: processingCount, icon: Clock, tone: 'purple' as const },
+    { label: 'Enrolled', value: enrolledCount, icon: CheckCircle2, tone: 'green' as const },
+    { label: 'Closed Cases', value: closedCount, icon: Users, tone: 'blue' as const },
   ];
 
   return (
     <div className="space-y-6 pb-12 bg-[#FAFAF9]">
       {/* Header */}
-      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Student Operations</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage student records, documents, and progress.</p>
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 self-start md:self-auto">
-          Staff Portal
-        </span>
-      </section>
+      <PageHeader
+        title="Student Operations"
+        subtitle="Manage student records, documents, and progress."
+        pill="Staff Portal"
+        icon={Users}
+      />
 
       {/* Stats Grid */}
-      <section className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <StatGrid cols={3}>
         {stats.map((stat, idx) => (
-          <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <div className={`w-9 h-9 ${stat.bg} ${stat.color} rounded-lg flex items-center justify-center mb-3`}>
-              <stat.icon className="w-4 h-4" />
-            </div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-0.5">{stat.label}</p>
-            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-          </div>
+          <StatCard key={idx} label={stat.label} value={stat.value} icon={stat.icon} tone={stat.tone} />
         ))}
-      </section>
+      </StatGrid>
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left: Student List */}

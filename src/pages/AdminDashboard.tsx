@@ -9,7 +9,6 @@ import {
   GraduationCap,
   Lock,
   Ban,
-  ArrowUpRight,
   CheckCircle2,
   BarChart3,
   ShieldAlert,
@@ -30,6 +29,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import toast from 'react-hot-toast';
 import { tryGetSupabase } from '../lib/supabase';
+import { PageHeader, StatGrid, StatCard, type StatTone } from '../components/dashboard/ui';
+
+const toneFromColor = (color: string): StatTone =>
+  color.includes('amber') ? 'amber'
+    : color.includes('green') ? 'green'
+    : color.includes('blue') ? 'blue'
+    : color.includes('purple') ? 'purple'
+    : color.includes('red') ? 'red'
+    : 'gray';
 
 /* ── Shared modal shell (module scope so typing in inputs doesn't remount them) ── */
 const ModalShell = ({ title, onClose, children, maxW = 'max-w-lg' }: { title: string; onClose: () => void; children: React.ReactNode; maxW?: string }) => (
@@ -263,15 +271,12 @@ const AdminDashboard: React.FC = () => {
     <div className="min-h-screen bg-[#FAFAF9] space-y-6 pb-12">
       {/* Page Header */}
       <section className="flex flex-col gap-1">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-700 mb-2">
-              Admin Portal
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Executive Overview</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Global platform performance and user management.</p>
-          </div>
-        </div>
+        <PageHeader
+          title="Executive Overview"
+          subtitle="Global platform performance and user management."
+          pill="Admin Portal"
+          icon={BarChart3}
+        />
 
         {/* Tab Bar */}
         <div className="mt-4 border-b border-gray-200">
@@ -304,25 +309,11 @@ const AdminDashboard: React.FC = () => {
             className="space-y-6"
           >
             {/* Stats Grid */}
-            <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatGrid cols={4}>
               {stats.map((stat, idx) => (
-                <div key={idx} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className={`w-10 h-10 ${stat.bg} rounded-xl flex items-center justify-center`}>
-                      <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                    </div>
-                    {stat.trend ? (
-                      <span className="text-[10px] font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-lg flex items-center gap-1">
-                        <ArrowUpRight className="w-3 h-3" />
-                        {stat.trend}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-0.5">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                </div>
+                <StatCard key={idx} label={stat.label} value={stat.value} icon={stat.icon} tone={toneFromColor(stat.color)} hint={stat.trend || undefined} />
               ))}
-            </section>
+            </StatGrid>
 
             {/* Backend Health */}
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">

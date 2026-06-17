@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { PageHeader, StatGrid, StatCard, type StatTone } from '../components/dashboard/ui';
 import {
   Search,
   CheckCircle2,
@@ -25,6 +26,14 @@ import { useLocation } from 'react-router-dom';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
 import { openStorageUrl } from '../lib/storage';
+
+const toneFromColor = (color: string): StatTone =>
+  color.includes('amber') ? 'amber'
+    : color.includes('green') ? 'green'
+    : color.includes('blue') ? 'blue'
+    : color.includes('purple') ? 'purple'
+    : color.includes('red') ? 'red'
+    : 'gray';
 
 const SalesDashboard: React.FC = () => {
   const { applications, users, salesApproveApplication, salesRejectApplication, assignUniversity, salesClaimLead, salesAddExtraDocs, salesAssignAdmin, requestMoreInfo, setApplicationUniversity, setApplicationMeta } = useAppStore();
@@ -479,32 +488,21 @@ Video: ${intake.videoUrl}`;
     <div className="min-h-screen bg-[#FAFAF9] space-y-6 pb-12 px-4 md:px-6">
 
       {/* Page Header */}
-      <div className="pt-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            {mode === 'ops' ? 'Agency Applications' : 'Application Pipeline'}
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">Review and manage incoming student applications.</p>
-        </div>
-        <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-100 px-3 py-1 text-[10px] text-amber-700 uppercase tracking-wider font-semibold">
-          {mode === 'ops' ? 'Agency Portal' : 'Sales Portal'}
-        </span>
+      <div className="pt-6">
+        <PageHeader
+          title={mode === 'ops' ? 'Agency Applications' : 'Application Pipeline'}
+          subtitle="Review and manage incoming student applications."
+          pill={mode === 'ops' ? 'Agency Portal' : 'Sales Portal'}
+          icon={FileText}
+        />
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatGrid cols={4}>
         {stats.map((s, i) => (
-          <div key={i} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 flex items-center gap-3">
-            <div className={`w-10 h-10 ${s.bg} ${s.color} rounded-xl flex items-center justify-center shrink-0`}>
-              <s.icon className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900 leading-none">{s.value}</p>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mt-0.5">{s.label}</p>
-            </div>
-          </div>
+          <StatCard key={i} label={s.label} value={s.value} icon={s.icon} tone={toneFromColor(s.color)} />
         ))}
-      </div>
+      </StatGrid>
 
       {/* Filter + Actions Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
