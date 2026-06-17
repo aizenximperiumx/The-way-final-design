@@ -280,12 +280,12 @@ const AdminDashboard: React.FC = () => {
 
         {/* Tab Bar */}
         <div className="mt-4 border-b border-gray-200">
-          <nav className="flex gap-0">
+          <nav className="flex gap-0 overflow-x-auto custom-scrollbar -mb-px">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all -mb-px ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3 text-sm font-semibold border-b-2 transition-all whitespace-nowrap shrink-0 ${
                   activeTab === tab.id
                     ? 'border-amber-500 text-amber-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

@@ -25,8 +25,8 @@ export const PageHeader: React.FC<{
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-2xl font-black tracking-tight text-gray-900 truncate">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-gray-900 truncate">{title}</h1>
+          {subtitle && <p className="mt-0.5 text-[13px] sm:text-sm text-gray-500">{subtitle}</p>}
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -62,12 +62,12 @@ export const StatCard: React.FC<{
 }> = ({ label, value, icon: Icon, tone = 'amber', hint }) => {
   const t = toneMap[tone];
   return (
-    <div className="group rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
-      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg ${t.bg} ${t.text}`}>
+    <div className="group rounded-2xl border border-gray-100 bg-white p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
+      <div className={`mb-2.5 sm:mb-3 flex h-9 w-9 items-center justify-center rounded-lg ${t.bg} ${t.text}`}>
         <Icon className="h-4 w-4" />
       </div>
-      <p className="mb-0.5 text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <p className="mb-0.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</p>
+      <p className="text-xl sm:text-2xl font-bold text-gray-900">{value}</p>
       {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
     </div>
   );
