@@ -333,10 +333,9 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
 
   const openProfile = () => {
-    const leadsFirst = user?.role === 'sales';
-    setProfileTab(leadsFirst ? 'workspace' : isCompetitive ? 'overview' : 'account');
-    setNewPw(''); setConfirmPw(''); setShowPw(false);
-    setShowProfile(true);
+    // Every role on the website gets the full-page profile (a dedicated growth
+    // surface). The old modal below is kept only as a harmless fallback.
+    navigate('/profile');
   };
 
   const handleChangePassword = async () => {
