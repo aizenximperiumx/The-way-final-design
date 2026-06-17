@@ -140,6 +140,25 @@ export interface Application {
   archivedAt?: string;
   trashedAt?: string;
   trashedByName?: string;
+  // Login credentials for the created student account. Stored so a partner
+  // agency (and CEO) can see/manage access for students they can't contact
+  // directly. Only the owning agency and CEO can view these in the UI.
+  studentCredentials?: { username: string; password: string; updatedAt: string };
+}
+
+export interface CredentialRequest {
+  id: string;
+  applicationId: string;
+  studentId: string;
+  studentName: string;
+  agencyId: string;
+  agencyName: string;
+  reason: string;
+  status: 'pending' | 'resolved' | 'rejected';
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedByName?: string;
+  resolutionNote?: string;
 }
 
 export interface TrashedUser {
@@ -230,6 +249,7 @@ export interface AppStoreState {
   futureLeads: Application[];
   trashedApplications: Application[];
   trashedUsers: TrashedUser[];
+  credentialRequests: CredentialRequest[];
   language: 'en' | 'ar';
   backendHydrated: boolean;
 
@@ -297,6 +317,10 @@ export interface AppStoreState {
   ceoDisableUser: (userId: string) => Promise<void>;
   ceoRestoreUser: (userId: string) => Promise<void>;
   ceoPurgeUser: (userId: string) => Promise<void>;
+
+  agencyRequestCredentialChange: (applicationId: string, reason: string) => void;
+  ceoResolveCredentialRequest: (requestId: string) => Promise<void>;
+  ceoRejectCredentialRequest: (requestId: string, note?: string) => void;
 
   addAppointment: (appt: Omit<Appointment, 'id'>) => void;
   addChatMessage: (toUserId: string, text: string, applicationId?: string) => void;
@@ -460,6 +484,7 @@ const useAppStore = create<AppStoreState>()(
         futureLeads: [],
         trashedApplications: [],
         trashedUsers: [],
+        credentialRequests: [],
         language: 'en',
         backendHydrated: false,
 
@@ -550,7 +575,7 @@ const useAppStore = create<AppStoreState>()(
         const supabase = tryGetSupabase();
         if (supabase) void supabase.auth.signOut();
         localStorage.removeItem('the-way-storage');
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [] });
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [] });
       },
 
       changePassword: async (newPassword: string) => {
@@ -753,6 +778,7 @@ const useAppStore = create<AppStoreState>()(
           futureLeads: Array.isArray(s.futureLeads) ? (s.futureLeads as Application[]) : [],
           trashedApplications: Array.isArray(s.trashedApplications) ? (s.trashedApplications as Application[]) : [],
           trashedUsers: Array.isArray(s.trashedUsers) ? (s.trashedUsers as TrashedUser[]) : [],
+          credentialRequests: Array.isArray(s.credentialRequests) ? (s.credentialRequests as CredentialRequest[]) : [],
           backendHydrated: true,
         });
         await get().refreshUsersFromBackend();
@@ -779,6 +805,7 @@ const useAppStore = create<AppStoreState>()(
           futureLeads: get().futureLeads,
           trashedApplications: get().trashedApplications,
           trashedUsers: get().trashedUsers,
+          credentialRequests: get().credentialRequests,
         };
         await fetch('/api/state-save', {
           method: 'POST',
@@ -947,6 +974,7 @@ const useAppStore = create<AppStoreState>()(
             ownerId: actor.id,
             salesOwnerId: actor.id,
             assignedStaffId: autoAssignedStaffId ?? a.assignedStaffId,
+            studentCredentials: { username: creds.username, password: creds.password, updatedAt: new Date().toISOString() },
             hold: undefined,
             events: [
               ...(a.events ?? []),
@@ -1656,6 +1684,126 @@ const useAppStore = create<AppStoreState>()(
         queueBackendSave(get);
       },
 
+      agencyRequestCredentialChange: (applicationId: string, reason: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['agency']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app) throw new Error('Application not found');
+        if ((app.source ?? 'public') !== 'agency' || app.agencyId !== actor.id) throw new Error('Forbidden');
+        if (!app.studentId) throw new Error('Student account not created yet');
+        const trimmed = reason.trim();
+        if (!trimmed) throw new Error('Please add a reason for the change');
+        const existingPending = get().credentialRequests.find(r => r.applicationId === applicationId && r.status === 'pending');
+        if (existingPending) throw new Error('A request for this student is already pending');
+        const now = new Date().toISOString();
+        const req: CredentialRequest = {
+          id: `credreq-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          applicationId,
+          studentId: app.studentId,
+          studentName: app.name,
+          agencyId: actor.id,
+          agencyName: actor.name,
+          reason: trimmed,
+          status: 'pending',
+          createdAt: now,
+        };
+        const ceoUsers = get().users.filter(u => u.role === 'ceo');
+        set((state) => ({
+          credentialRequests: [req, ...state.credentialRequests],
+          notifications: [
+            ...state.notifications,
+            ...ceoUsers.map(u => ({
+              id: `${req.id}-notify-${u.id}`,
+              userId: u.id,
+              title: 'Credential change requested',
+              message: `${actor.name} requested new login credentials for ${app.name}`,
+              type: 'alert' as const,
+              time: now,
+              read: false,
+            })),
+          ],
+        }));
+        ceoUsers.forEach(u => emailNotifyUser(get, u.id, {
+          subject: 'Credential change requested — The Way',
+          title: 'An agency requested a credential change',
+          intro: `${actor.name} requested new login credentials for their student "${app.name}". Reason: ${trimmed}`,
+          ctaLabel: 'Review in admin',
+          ctaPath: '/admin',
+          outro: 'Open the admin dashboard to approve or decline the request.',
+        }, { dedupeKey: `${req.id}-ceo-${u.id}` }));
+        queueBackendSave(get);
+      },
+
+      ceoResolveCredentialRequest: async (requestId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const req = get().credentialRequests.find(r => r.id === requestId);
+        if (!req) throw new Error('Request not found');
+        if (req.status !== 'pending') throw new Error('Request already handled');
+        const app = get().applications.find(a => a.id === req.applicationId);
+        const username = app?.studentCredentials?.username
+          ?? get().users.find(u => u.id === req.studentId)?.username
+          ?? '';
+        const newPassword = generateStudentCredentials().password;
+        // Reset the student's password via the admin endpoint (keeps username).
+        await get().ceoResetCredentials(req.studentId, { password: newPassword });
+        const now = new Date().toISOString();
+        set((state) => ({
+          applications: state.applications.map(a => a.id === req.applicationId
+            ? { ...a, studentCredentials: { username, password: newPassword, updatedAt: now } }
+            : a),
+          credentialRequests: state.credentialRequests.map(r => r.id === requestId
+            ? { ...r, status: 'resolved' as const, resolvedAt: now, resolvedByName: actor.name }
+            : r),
+          notifications: [
+            ...state.notifications,
+            { id: `${requestId}-resolved`, userId: req.agencyId, title: 'Credentials updated', message: `New login credentials are ready for ${req.studentName}`, type: 'success' as const, time: now, read: false },
+          ],
+        }));
+        // Email the agency the new credentials (the agency manages the student's access).
+        const agency = get().users.find(u => u.id === req.agencyId);
+        if (agency?.email) {
+          const html = renderBrandedEmail({
+            title: 'Updated student credentials',
+            greeting: `Dear ${agency.name},`,
+            intro: `The login credentials for your student "${req.studentName}" have been updated as requested.`,
+            credentials: { username, password: newPassword },
+            ctaLabel: 'Open your portal',
+            ctaUrl: `${SITE_URL}/agencies`,
+            note: 'Please share these with your student securely. The previous password no longer works.',
+          });
+          const text = `Updated credentials for ${req.studentName}\nUsername: ${username}\nPassword: ${newPassword}`;
+          void sendMail({ to: agency.email, subject: 'Updated student credentials — The Way', text, html });
+        }
+        queueBackendSave(get);
+      },
+
+      ceoRejectCredentialRequest: (requestId: string, note?: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const req = get().credentialRequests.find(r => r.id === requestId);
+        if (!req) throw new Error('Request not found');
+        if (req.status !== 'pending') throw new Error('Request already handled');
+        const now = new Date().toISOString();
+        set((state) => ({
+          credentialRequests: state.credentialRequests.map(r => r.id === requestId
+            ? { ...r, status: 'rejected' as const, resolvedAt: now, resolvedByName: actor.name, resolutionNote: note?.trim() || undefined }
+            : r),
+          notifications: [
+            ...state.notifications,
+            { id: `${requestId}-rejected`, userId: req.agencyId, title: 'Credential request declined', message: `Your credential change request for ${req.studentName} was declined${note ? `: ${note}` : ''}`, type: 'info' as const, time: now, read: false },
+          ],
+        }));
+        emailNotifyUser(get, req.agencyId, {
+          subject: 'Credential request declined — The Way',
+          title: 'Your credential request was declined',
+          intro: `Your request to change the login credentials for "${req.studentName}" was declined${note?.trim() ? `: ${note.trim()}` : '.'}`,
+          ctaLabel: 'Open your portal',
+          ctaPath: '/agencies',
+        }, { dedupeKey: `${requestId}-rejected` });
+        queueBackendSave(get);
+      },
+
       addAppointment: (appt: Omit<Appointment, 'id'>) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         if (actor.role === 'student' && appt.userId !== actor.id) throw new Error('Forbidden');
@@ -2047,6 +2195,7 @@ const useAppStore = create<AppStoreState>()(
         futureLeads: state.futureLeads,
         trashedApplications: state.trashedApplications,
         trashedUsers: state.trashedUsers,
+        credentialRequests: state.credentialRequests,
       }),
       migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out', users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} }, version: 5 } as unknown),
     }
