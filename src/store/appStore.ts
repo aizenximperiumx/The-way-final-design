@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { sendMail } from '../lib/mailer';
+import { renderBrandedEmail } from '../lib/emailTemplate';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
 
 
@@ -942,8 +943,14 @@ const useAppStore = create<AppStoreState>()(
         }
         const applicantEmail = app.studentEmail ?? app.email;
         if (applicantEmail) {
-          const html = `<div style="font-family:Arial,sans-serif"><p>Dear <b>${app.name}</b>,</p><p>Unfortunately your application has not been approved at this time. Please contact us if you have any questions.</p></div>`;
-          sendMail({ to: applicantEmail, subject: 'Application Update — The Way Georgia', text: `Dear ${app.name}, unfortunately your application has not been approved at this time.`, html });
+          const html = renderBrandedEmail({
+            title: 'Application Update',
+            greeting: `Dear ${app.name},`,
+            intro: 'Thank you for your interest in studying in Georgia with The Way. After careful review, we are unable to approve your application at this time.',
+            outro: 'Eligibility rules can change, and we may reach out again if your situation or the requirements change in the future. If you have any questions, please reply to this email — we are happy to help.',
+          });
+          const text = `Dear ${app.name},\n\nThank you for your interest in studying in Georgia with The Way. After careful review, we are unable to approve your application at this time.\n\nEligibility rules can change, and we may reach out again in the future. If you have any questions, please reply to this email.\n\nWarm regards,\nThe Way Team`;
+          sendMail({ to: applicantEmail, subject: 'Application Update — The Way', text, html });
         }
         queueBackendSave(get);
       },
