@@ -8,6 +8,7 @@ import logoUrl from '../../thewaynewlogo-removebg-preview.png';
 import toast from 'react-hot-toast';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
+import { StatGrid, StatCard } from '../components/dashboard/ui';
 
 export default function AgenciesPortal() {
   const { user, logout } = useAuth();
@@ -364,24 +365,16 @@ Underage: ${underage ? 'Yes' : 'No'}`;
               className="space-y-8"
             >
               {/* Stats row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: 'Total Students', value: myApps.length, icon: FileText, iconColor: 'text-blue-500', iconBg: 'bg-blue-50' },
-                  { label: 'Approved', value: myApps.filter(a => a.status === 'approved').length, icon: CheckCircle2, iconColor: 'text-green-500', iconBg: 'bg-green-50' },
-                  { label: 'Pending', value: myApps.filter(a => a.status === 'submitted').length, icon: Clock, iconColor: 'text-amber-500', iconBg: 'bg-amber-50' },
-                  { label: 'Documents', value: documents.filter(d => applications.some(a => a.studentId === d.studentId && a.agencyId === user?.id)).length, icon: Shield, iconColor: 'text-purple-500', iconBg: 'bg-purple-50' },
-                ].map((stat, i) => (
-                  <div key={i} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5 flex items-center gap-4">
-                    <div className={`w-10 h-10 ${stat.iconBg} ${stat.iconColor} rounded-xl flex items-center justify-center shrink-0`}>
-                      <stat.icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 font-medium">{stat.label}</p>
-                      <p className="text-2xl font-bold text-gray-900 leading-tight">{stat.value}</p>
-                    </div>
-                  </div>
+              <StatGrid cols={4}>
+                {([
+                  { label: 'Total Students', value: myApps.length, icon: FileText, tone: 'blue' as const },
+                  { label: 'Approved', value: myApps.filter(a => a.status === 'approved').length, icon: CheckCircle2, tone: 'green' as const },
+                  { label: 'Pending', value: myApps.filter(a => a.status === 'submitted').length, icon: Clock, tone: 'amber' as const },
+                  { label: 'Documents', value: documents.filter(d => applications.some(a => a.studentId === d.studentId && a.agencyId === user?.id)).length, icon: Shield, tone: 'purple' as const },
+                ]).map((stat, i) => (
+                  <StatCard key={i} label={stat.label} value={stat.value} icon={stat.icon} tone={stat.tone} />
                 ))}
-              </div>
+              </StatGrid>
 
               {/* My Students list */}
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">

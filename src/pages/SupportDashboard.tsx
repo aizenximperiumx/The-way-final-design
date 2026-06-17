@@ -4,11 +4,20 @@ import toast from 'react-hot-toast';
 import {
   Search, Plus, Pencil, Trash2, FileText, Save, X, Users,
   Phone, Mail, Globe, GraduationCap, StickyNote, UserCircle2,
-  CalendarClock, Send, CheckCircle2,
+  CalendarClock, Send, CheckCircle2, Headset,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppStore, type Lead, type LeadStatus } from '../store/appStore';
 import { STATUS_ORDER, statusMeta, isLeadDue as isDue } from '../lib/leads';
+import { PageHeader, StatGrid, StatCard, type StatTone } from '../components/dashboard/ui';
+
+const toneFromColor = (color: string): StatTone =>
+  color.includes('amber') ? 'amber'
+    : color.includes('green') ? 'green'
+    : color.includes('blue') ? 'blue'
+    : color.includes('purple') ? 'purple'
+    : color.includes('red') ? 'red'
+    : 'gray';
 
 const blankLead = { name: '', phone: '', email: '', country: '', universityInterested: '', notes: '' };
 
@@ -219,26 +228,23 @@ const SupportDashboard: React.FC = () => {
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
-      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Support Desk</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Monitor the sales team's leads and manage your own.</p>
-        </div>
-        <button onClick={openAdd} className="inline-flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm self-start md:self-auto">
-          <Plus className="w-4 h-4" /> Add lead
-        </button>
-      </section>
+      <PageHeader
+        title="Support Desk"
+        subtitle="Monitor the sales team's leads and manage your own."
+        icon={Headset}
+        actions={
+          <button onClick={openAdd} className="inline-flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> Add lead
+          </button>
+        }
+      />
 
       {/* Stats */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatGrid cols={4}>
         {stats.map((s) => (
-          <div key={s.label} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <div className={`w-9 h-9 ${s.bg} ${s.color} rounded-lg flex items-center justify-center mb-3`}><s.icon className="w-4 h-4" /></div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-0.5">{s.label}</p>
-            <p className="text-2xl font-bold text-gray-900">{s.value}</p>
-          </div>
+          <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} tone={toneFromColor(s.color)} />
         ))}
-      </section>
+      </StatGrid>
 
       {/* Follow-ups due today / overdue */}
       {dueLeads.length > 0 && (
