@@ -1,3 +1,4 @@
+import { renderEmail } from './_email-template.js';
 import { randomBytes } from 'crypto';
 const asString = (v) => (typeof v === 'string' ? v : '');
 const getHeader = (req, name) => {
@@ -236,12 +237,17 @@ export default async function handler(req, res) {
         let emailSent = false;
         let emailWarning = '';
         if (resendKey) {
-            const html = `
-        <div style="font-family:Arial,sans-serif">
-          <h2 style="margin:0 0 12px">Your account is ready</h2>
-          <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
-        </div>`;
-            const text = `Username: ${username}\nPassword: ${password}`;
+            const roleLabel = role.replace(/_/g, ' ');
+            const { html, text } = renderEmail({
+                title: 'Your account is ready',
+                preheader: 'Your The Way team account has been created.',
+                greeting: `Dear ${name},`,
+                intro: `A ${roleLabel} account has been created for you on The Way platform. Use the credentials below to sign in.`,
+                credentials: { username, password },
+                ctaLabel: 'Sign in to the portal',
+                ctaUrl: 'https://theway.ge/login',
+                note: 'Keep these details private. We recommend changing your password after your first sign-in.',
+            });
             try {
                 await sendResend(resendKey, email, 'Your account credentials', html, text);
                 emailSent = true;

@@ -1,3 +1,5 @@
+import { renderEmail } from './_email-template.js';
+
 type ApiRequest = { method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> };
 type ApiResponse = { status: (code: number) => ApiResponse; json: (body: unknown) => void };
 
@@ -238,13 +240,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     let emailWarning = '';
     if (email && resendKey) {
       const subject = role === 'student' ? 'Your student account credentials updated' : 'Your account credentials updated';
-      const html = `
-        <div style="font-family:Arial,sans-serif">
-          <h2 style="margin:0 0 12px">Credentials updated</h2>
-          <p><b>Name:</b> ${name}</p>
-          <p><b>Username:</b> ${finalUsername}${password ? `<br/><b>Password:</b> ${password}` : ''}</p>
-        </div>`;
-      const text = `Name: ${name}\nUsername: ${finalUsername}${password ? `\nPassword: ${password}` : ''}`;
+      const { html, text } = renderEmail({
+        title: 'Your credentials were updated',
+        preheader: 'Your The Way account credentials have changed.',
+        greeting: name ? `Dear ${name},` : undefined,
+        intro: 'Your account credentials have been updated. Here are your latest sign-in details.',
+        credentials: { username: finalUsername, ...(password ? { password } : {}) },
+        ctaLabel: 'Sign in to your account',
+        ctaUrl: 'https://theway.ge/login',
+        note: 'If you did not request this change, please contact us immediately.',
+      });
       try {
         await sendResend(resendKey, email, subject, html, text);
         emailSent = true;

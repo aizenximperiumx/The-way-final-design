@@ -1,3 +1,4 @@
+import { renderEmail } from './_email-template.js';
 const asString = (v) => (typeof v === 'string' ? v : '');
 const getBearer = (req) => {
     const raw = req.headers?.authorization || req.headers?.Authorization;
@@ -233,13 +234,17 @@ export default async function handler(req, res) {
                     res.status(500).json({ error: 'Student account exists but failed to create profile', details: inserted.text });
                     return;
                 }
-                const dupHtml = `
-      <div style="font-family:Arial,sans-serif">
-        <h2 style="margin:0 0 12px">Welcome to The Way</h2>
-        <p>Your student account has been created. Use these credentials:</p>
-        <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
-      </div>`;
-                const dupText = `Username: ${username}\nPassword: ${password}`;
+                const { html: dupHtml, text: dupText } = renderEmail({
+                    title: 'Your The Way account',
+                    preheader: 'Your student account credentials have been updated.',
+                    greeting: `Dear ${name},`,
+                    intro: 'Your student account is ready. Use the credentials below to sign in and track your application to study in Georgia.',
+                    credentials: { username, password },
+                    ctaLabel: 'Sign in to your account',
+                    ctaUrl: 'https://theway.ge/login',
+                    note: 'Keep these details private. We recommend changing your password after your first sign-in.',
+                    outro: 'If you have any questions, just reply to this email.',
+                });
                 let dupEmailSent = false;
                 let dupEmailWarning = '';
                 if (resendKey) {
@@ -281,13 +286,17 @@ export default async function handler(req, res) {
             headers: { ...authHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({ app_metadata: { role: 'student', username }, user_metadata: { username, name } }),
         });
-        const html = `
-      <div style="font-family:Arial,sans-serif">
-        <h2 style="margin:0 0 12px">Welcome to The Way</h2>
-        <p>Your student account has been created. Use these credentials:</p>
-        <p><b>Username:</b> ${username}<br/><b>Password:</b> ${password}</p>
-      </div>`;
-        const text = `Username: ${username}\nPassword: ${password}`;
+        const { html, text } = renderEmail({
+            title: 'Welcome to The Way',
+            preheader: 'Your student account is ready — here are your login details.',
+            greeting: `Dear ${name},`,
+            intro: 'Your student account has been created successfully. Use the credentials below to sign in and start tracking your application to study in Georgia.',
+            credentials: { username, password },
+            ctaLabel: 'Sign in to your account',
+            ctaUrl: 'https://theway.ge/login',
+            note: 'Keep these details private. We recommend changing your password after your first sign-in.',
+            outro: 'We are excited to support you on your journey. If you have any questions, just reply to this email.',
+        });
         let emailSent = false;
         let emailWarning = '';
         if (resendKey) {
