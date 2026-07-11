@@ -2,8 +2,26 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { sendMail } from '../lib/mailer';
 import { renderBrandedEmail } from '../lib/emailTemplate';
-import { getUniversityName } from '../lib/universities';
+import { getUniversityName, DEFAULT_STAFF_ASSIGNMENTS, DEFAULT_SLA_GROUPS, type UniversitySlaGroup } from '../lib/universities';
+import {
+  PIPELINE_ORDER,
+  getStageMeta,
+  getSlaWindow,
+  nextStageOf,
+  slaPointsForCompletion,
+  slaDeadline,
+  slaLedgerId,
+  ledgerTotals,
+  legacyStageToPipeline,
+  VISA_RESIDENCY_POINTS,
+  type ApplicationPipeline,
+  type PipelineStageId,
+  type PointsEntry,
+  type UniversityConfig,
+} from '../lib/pipeline';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
+
+export type { ApplicationPipeline, PipelineStageId, PointsEntry, UniversityConfig } from '../lib/pipeline';
 
 
 export type UserRole = 'ceo' | 'sales' | 'ops' | 'staff' | 'agency_staff' | 'student' | 'agency' | 'customer_support';
@@ -140,6 +158,10 @@ export interface Application {
   archivedAt?: string;
   trashedAt?: string;
   trashedByName?: string;
+  /** New case pipeline (Processing/Closed/Cancelled + document stages). */
+  pipeline?: ApplicationPipeline;
+  /** Student service rating collected after residency upload. */
+  rating?: { stars: number; comment?: string; at: string };
   // Login credentials for the created student account. Stored so a partner
   // agency (and CEO) can see/manage access for students they can't contact
   // directly. Only the owning agency and CEO can view these in the UI.
@@ -210,6 +232,15 @@ export interface Appointment {
 
 export type AuthStatus = 'signed_out' | 'signed_in';
 
+/**
+ * A requested document. Target 'student' → the student uploads it in their
+ * portal; target 'agency' → the owning agency (agent) uploads it.
+ * Lifecycle: pending → uploaded → approved | rejected (rejected → re-upload
+ * puts it back to pending with the reviewer's note attached).
+ * Legacy status 'fulfilled' (pre-2026) is treated as 'uploaded'.
+ */
+export type DocumentRequestStatus = 'pending' | 'uploaded' | 'approved' | 'rejected' | 'fulfilled';
+
 export interface DocumentRequest {
   id: string;
   studentId: string;
@@ -219,9 +250,17 @@ export interface DocumentRequest {
   requestedBy: string;
   requestedByName: string;
   createdAt: string;
-  status: 'pending' | 'fulfilled';
+  status: DocumentRequestStatus;
+  target?: 'student' | 'agency';
+  agencyId?: string;
   fulfilledFile?: string;
   fulfilledAt?: string;
+  uploadedByName?: string;
+  reviewNote?: string;
+  reviewedAt?: string;
+  reviewedByName?: string;
+  /** How many times a re-upload was requested. */
+  reuploadCount?: number;
 }
 
 export interface ChatMessage {
@@ -250,6 +289,13 @@ export interface AppStoreState {
   trashedApplications: Application[];
   trashedUsers: TrashedUser[];
   credentialRequests: CredentialRequest[];
+  /** Persistent staff-performance points ledger (single source of truth for points). */
+  pointsLedger: PointsEntry[];
+  /** CEO-editable university → staff assignment + SLA groups (null → defaults). */
+  universityConfig: UniversityConfig | null;
+  /** Tombstones so purged applications / restored users never resurrect on merge. */
+  purgedApplicationIds: string[];
+  unTrashedUserIds: string[];
   language: 'en' | 'ar';
   backendHydrated: boolean;
 
@@ -329,8 +375,24 @@ export interface AppStoreState {
   requestMoreInfo: (applicationId: string, message: string) => void;
   agencyAddExtraDocs: (applicationId: string, files: string[]) => void;
   checkExpiries: () => void;
-  staffRequestDocument: (studentId: string, applicationId: string | undefined, title: string, description?: string) => void;
+  staffRequestDocument: (studentId: string, applicationId: string | undefined, title: string, description?: string, target?: 'student' | 'agency') => void;
   studentFulfillRequest: (requestId: string, fileUrl: string) => void;
+  agentFulfillRequest: (requestId: string, fileUrl: string) => void;
+  reviewDocumentRequest: (requestId: string, decision: 'approved' | 'rejected' | 'reupload', note?: string) => void;
+
+  // ── Case pipeline (Processing/Closed/Cancelled + document stages) ──
+  grantStagePermission: (applicationId: string, stage: PipelineStageId) => void;
+  completePipelineStage: (applicationId: string, stage: PipelineStageId) => void;
+  ceoCancelApplication: (applicationId: string, reason?: string) => void;
+  studentRateService: (applicationId: string, stars: number, comment?: string) => void;
+
+  // ── Staff performance points ──
+  ceoAdjustPoints: (userId: string, delta: number, reason: string) => void;
+  evaluateSlaDeadlines: () => void;
+
+  // ── University configuration (CEO) ──
+  ceoSetUniversityStaff: (universityId: string, staffUsername: string | null) => void;
+  ceoSetUniversitySlaGroup: (universityId: string, group: UniversitySlaGroup) => void;
 }
 
 const ensureSignedIn = (user: User | null, authStatus: AuthStatus) => {
@@ -340,6 +402,57 @@ const ensureSignedIn = (user: User | null, authStatus: AuthStatus) => {
 
 const requireRole = (user: User, roles: UserRole[]) => {
   if (!roles.includes(user.role)) throw new Error('Forbidden');
+};
+
+// ── Points / assignment helpers ──────────────────────────────────────────────
+
+/** Merged university → staff-username assignments (CEO config wins over defaults). */
+const effectiveAssignments = (config: UniversityConfig | null): Record<string, string> => ({
+  ...DEFAULT_STAFF_ASSIGNMENTS,
+  ...(config?.assignments ?? {}),
+});
+
+const effectiveSlaGroup = (config: UniversityConfig | null, universityId?: string): UniversitySlaGroup => {
+  if (!universityId) return 'none';
+  const fromConfig = config?.slaGroups?.[universityId];
+  return fromConfig ?? DEFAULT_SLA_GROUPS[universityId] ?? 'none';
+};
+
+/** Resolve the staff user auto-assigned for a university (by configured username). */
+const resolveAutoStaff = (users: User[], config: UniversityConfig | null, universityId?: string): User | undefined => {
+  if (!universityId) return undefined;
+  const username = effectiveAssignments(config)[universityId];
+  if (!username) return undefined;
+  return users.find(u => u.role === 'staff' && u.username.toLowerCase() === username.toLowerCase());
+};
+
+/** Recompute every user's points total from the persistent ledger. */
+const withLedgerPoints = (users: User[], ledger: PointsEntry[]): User[] => {
+  const totals = ledgerTotals(ledger);
+  return users.map(u => ({ ...u, points: totals.get(u.id) ?? 0 }));
+};
+
+/**
+ * State patch that applies ledger totals to BOTH the users list and the
+ * signed-in user object (they are separate store fields — updating only
+ * `users` left the header/profile points chip stuck at 0).
+ */
+const ledgerPatch = (
+  state: Pick<AppStoreState, 'users' | 'currentUser'>,
+  pointsLedger: PointsEntry[],
+): Pick<AppStoreState, 'users' | 'currentUser' | 'pointsLedger'> => ({
+  pointsLedger,
+  users: withLedgerPoints(state.users, pointsLedger),
+  currentUser: state.currentUser
+    ? { ...state.currentUser, points: ledgerTotals(pointsLedger).get(state.currentUser.id) ?? 0 }
+    : state.currentUser,
+});
+
+/** Append ledger entries, skipping ids that already exist (idempotent by design). */
+const appendLedger = (ledger: PointsEntry[], entries: PointsEntry[]): PointsEntry[] => {
+  const existing = new Set(ledger.map(e => e.id));
+  const fresh = entries.filter(e => !existing.has(e.id));
+  return fresh.length ? [...ledger, ...fresh] : ledger;
 };
 
 const parseDate = (value: string) => {
@@ -367,15 +480,28 @@ const generateStudentCredentials = () => {
   return { username, password };
 };
 
-const queueBackendSave = (() => {
-  let timer: number | null = null;
-  return (getState: () => AppStoreState) => {
-    if (timer) window.clearTimeout(timer);
-    timer = window.setTimeout(() => {
-      getState().saveBackendState().catch(() => {});
-    }, 600);
-  };
-})();
+// Debounced backend save with a flushable pending flag. loadBackendState MUST
+// flush any pending save first — otherwise a background refresh could pull the
+// server's older snapshot over fresh local mutations (approve, intake, …) and
+// the debounced save would then persist the reverted data. That exact race
+// silently reverted a sales approval during end-to-end testing.
+const pendingSave = { timer: null as number | null };
+
+const queueBackendSave = (getState: () => AppStoreState) => {
+  if (pendingSave.timer) window.clearTimeout(pendingSave.timer);
+  pendingSave.timer = window.setTimeout(() => {
+    pendingSave.timer = null;
+    getState().saveBackendState().catch(() => {});
+  }, 600);
+};
+
+/** Flush a pending debounced save NOW (used before any backend load). */
+const flushBackendSave = async (getState: () => AppStoreState) => {
+  if (pendingSave.timer === null) return;
+  window.clearTimeout(pendingSave.timer);
+  pendingSave.timer = null;
+  await getState().saveBackendState().catch(() => {});
+};
 
 const SITE_URL = 'https://theway.ge';
 
@@ -465,9 +591,152 @@ const emailNotifyUser = (
   }
 };
 
+// Document types (as used by the staff upload UI) that complete pipeline stages.
+export const STAGE_TO_DOC_TYPES: Record<PipelineStageId, string[]> = {
+  translated_documents: ['translation'],
+  university_approval: ['university-approval'],
+  recognition_letter: ['recognition-letter'],
+  ministry_order: ['ministry-order'],
+  visa_documents: ['visa-documents'],
+  visa_residency: ['visa', 'residency'],
+};
+
 const useAppStore = create<AppStoreState>()(
   persist(
     (set, get) => {
+
+      // ── Pipeline core ───────────────────────────────────────────────────
+      // Completes `stage` on an application: stamps completedAt, awards SLA
+      // points to the assigned staff member (deterministic ledger id — can
+      // never double-score), advances to the next stage (starting its timer
+      // unless it waits for permission), and closes the case after
+      // visa+residency (+2, Processing → Closed, student rating prompt).
+      const completeStageCore = (applicationId: string, stage: PipelineStageId, byId: string, byName: string): boolean => {
+        const app = get().applications.find(a => a.id === applicationId);
+        const pipeline = app?.pipeline;
+        if (!app || !pipeline || pipeline.status !== 'processing') return false;
+        if (pipeline.current !== stage) return false;
+        const track = pipeline.stages[stage] ?? {};
+        if (track.completedAt) return false;
+        const meta = getStageMeta(stage);
+        if (meta.permissionGated && !track.permissionAt) return false;
+        // PRD §2: Recognition is blocked until the high-school certificate exists.
+        if (stage === 'recognition_letter' && !app.intakeHighSchoolCertificate) return false;
+
+        const now = new Date().toISOString();
+        const isFinal = stage === 'visa_residency';
+        const next = isFinal ? null : nextStageOf(stage);
+        const nextMeta = next ? getStageMeta(next) : null;
+
+        // SLA scoring for the assigned staff member.
+        const group = effectiveSlaGroup(get().universityConfig, app.university);
+        const window = getSlaWindow(stage, group);
+        const startedAt = track.startedAt;
+        const entries: PointsEntry[] = [];
+        if (app.assignedStaffId) {
+          if (isFinal) {
+            entries.push({
+              id: slaLedgerId(applicationId, stage),
+              userId: app.assignedStaffId,
+              delta: VISA_RESIDENCY_POINTS,
+              reason: `Visa & residency completed — ${app.name}`,
+              kind: 'sla', at: now, applicationId, applicationName: app.name, stage,
+            });
+          } else if (window && startedAt) {
+            const delta = slaPointsForCompletion(window, startedAt, now);
+            entries.push({
+              id: slaLedgerId(applicationId, stage),
+              userId: app.assignedStaffId,
+              delta,
+              reason: `${meta.label} ${delta > 0 ? 'completed on time' : 'completed late'} — ${app.name}`,
+              kind: 'sla', at: now, applicationId, applicationName: app.name, stage,
+            });
+          }
+        }
+
+        set((state) => {
+          const pointsLedger = appendLedger(state.pointsLedger, entries);
+          return {
+            applications: state.applications.map(a => {
+              if (a.id !== applicationId || !a.pipeline) return a;
+              const nextPipeline: ApplicationPipeline = {
+                ...a.pipeline,
+                stages: {
+                  ...a.pipeline.stages,
+                  [stage]: { ...track, completedAt: now, completedById: byId, completedByName: byName },
+                  ...(next ? { [next]: { ...(a.pipeline.stages[next] ?? {}), ...(nextMeta?.permissionGated ? {} : { startedAt: (a.pipeline.stages[next]?.startedAt) ?? now }) } } : {}),
+                },
+                current: isFinal ? 'done' : (next as PipelineStageId),
+                ...(isFinal ? { status: 'closed' as const, closedAt: now } : {}),
+              };
+              return {
+                ...a,
+                pipeline: nextPipeline,
+                ...(isFinal ? { stage: 'enrolled' as const } : {}),
+                events: [
+                  ...(a.events ?? []),
+                  { id: `${a.id}-pipeline-${stage}-${Date.now()}`, type: 'document_verified' as const, byId, byName, time: now, details: `${meta.label} completed${isFinal ? ' — case closed' : ''}` },
+                ],
+              };
+            }),
+            ...ledgerPatch(state, pointsLedger),
+            notifications: [
+              ...state.notifications,
+              ...(app.studentId ? [{
+                id: `${applicationId}-stage-${stage}-done`,
+                userId: app.studentId,
+                title: isFinal ? 'Congratulations — your case is complete!' : 'Application progress',
+                message: isFinal
+                  ? 'Your visa & residency are ready. We would love to hear your feedback!'
+                  : `${meta.label} has been completed. Next: ${nextMeta?.label ?? ''}`,
+                type: (isFinal ? 'success' : 'info') as NotificationType,
+                time: now, read: false,
+              }] : []),
+              ...(entries.length && app.assignedStaffId ? [{
+                id: `${applicationId}-stage-${stage}-pts`,
+                userId: app.assignedStaffId,
+                title: entries[0].delta >= 0 ? `+${entries[0].delta} performance points` : `${entries[0].delta} performance points`,
+                message: `${meta.label} — ${app.name}`,
+                type: (entries[0].delta >= 0 ? 'success' : 'alert') as NotificationType,
+                time: now, read: false,
+              }] : []),
+            ],
+          };
+        });
+
+        if (isFinal && app.studentId) {
+          emailNotifyUser(get, app.studentId, {
+            subject: 'Your case is complete — The Way',
+            title: 'Congratulations!',
+            intro: 'Your visa and residency documents are ready and your case is now complete.',
+            ctaLabel: 'Open your dashboard',
+            ctaPath: '/dashboard',
+            outro: 'We would love to hear about your experience — please leave us a rating in your portal.',
+          }, { dedupeKey: `${applicationId}-closed` });
+        }
+        queueBackendSave(get);
+        return true;
+      };
+
+      // Auto-complete every stage whose documents are already uploaded (runs
+      // after uploads, verifications and permission grants). Chains forward:
+      // e.g. permission arrives after the letter was uploaded early.
+      const autoCompleteFromDocuments = (applicationId: string, byId: string, byName: string) => {
+        for (let guard = 0; guard < PIPELINE_ORDER.length; guard += 1) {
+          const app = get().applications.find(a => a.id === applicationId);
+          const pipeline = app?.pipeline;
+          if (!app || !pipeline || pipeline.status !== 'processing' || pipeline.current === 'done') return;
+          const stage = pipeline.current as PipelineStageId;
+          const requiredTypes = STAGE_TO_DOC_TYPES[stage];
+          const docs = get().documents;
+          const allPresent = requiredTypes.every(t =>
+            docs.some(d => d.studentId === app.studentId && d.type === t)
+          );
+          if (!allPresent) return;
+          if (!completeStageCore(applicationId, stage, byId, byName)) return;
+        }
+      };
+
       return {
         users: [],
         currentUser: null,
@@ -485,6 +754,10 @@ const useAppStore = create<AppStoreState>()(
         trashedApplications: [],
         trashedUsers: [],
         credentialRequests: [],
+        pointsLedger: [],
+        universityConfig: null,
+        purgedApplicationIds: [],
+        unTrashedUserIds: [],
         language: 'en',
         backendHydrated: false,
 
@@ -575,7 +848,7 @@ const useAppStore = create<AppStoreState>()(
         const supabase = tryGetSupabase();
         if (supabase) void supabase.auth.signOut();
         localStorage.removeItem('the-way-storage');
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [] });
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [], pointsLedger: [], universityConfig: null, purgedApplicationIds: [], unTrashedUserIds: [] });
       },
 
       changePassword: async (newPassword: string) => {
@@ -718,7 +991,15 @@ const useAppStore = create<AppStoreState>()(
         };
         const existing = get().currentUser;
         const existingStatus = get().authStatus;
-        if (existing?.id === user.id && existingStatus !== 'signed_out') return;
+        if (existing?.id === user.id && existingStatus !== 'signed_out') {
+          // Session already restored from localStorage — but a page refresh
+          // must still pull FRESH backend data (PRD §7), otherwise the user
+          // keeps seeing the persisted snapshot until the next poll.
+          await get().loadBackendState();
+          get().checkExpiries();
+          get().checkChatReminders();
+          return;
+        }
         const authStatus: AuthStatus = 'signed_in';
         set({ currentUser: user, authStatus });
         await get().refreshUsersFromBackend();
@@ -750,12 +1031,20 @@ const useAppStore = create<AppStoreState>()(
             points: 0,
           };
         });
-        set({ users });
+        // Points live in the persistent ledger, not in profiles — reapply totals.
+        set((state) => ({
+          users: withLedgerPoints(users, state.pointsLedger),
+          currentUser: state.currentUser
+            ? { ...state.currentUser, points: ledgerTotals(state.pointsLedger).get(state.currentUser.id) ?? 0 }
+            : state.currentUser,
+        }));
       },
 
       loadBackendState: async () => {
         const { authStatus } = get();
         if (authStatus !== 'signed_in') return;
+        // Never pull the server snapshot over unsaved local changes.
+        await flushBackendSave(get);
         const supabase = tryGetSupabase();
         if (!supabase) return;
         const { data: sessionData } = await supabase.auth.getSession();
@@ -779,9 +1068,32 @@ const useAppStore = create<AppStoreState>()(
           trashedApplications: Array.isArray(s.trashedApplications) ? (s.trashedApplications as Application[]) : [],
           trashedUsers: Array.isArray(s.trashedUsers) ? (s.trashedUsers as TrashedUser[]) : [],
           credentialRequests: Array.isArray(s.credentialRequests) ? (s.credentialRequests as CredentialRequest[]) : [],
+          pointsLedger: Array.isArray(s.pointsLedger) ? (s.pointsLedger as PointsEntry[]) : [],
+          universityConfig: (s.universityConfig && typeof s.universityConfig === 'object') ? (s.universityConfig as UniversityConfig) : null,
+          purgedApplicationIds: Array.isArray(s.purgedApplicationIds) ? (s.purgedApplicationIds as string[]) : [],
+          unTrashedUserIds: Array.isArray(s.unTrashedUserIds) ? (s.unTrashedUserIds as string[]) : [],
           backendHydrated: true,
         });
         await get().refreshUsersFromBackend();
+
+        // Internal roles keep the shared state healthy: migrate legacy-stage
+        // applications onto the new pipeline and apply any overdue SLA
+        // penalties (idempotent — deterministic ledger ids).
+        const me = get().currentUser;
+        if (me && ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(me.role)) {
+          const nowIso = new Date().toISOString();
+          let migrated = false;
+          set((state) => {
+            const applications = state.applications.map(a => {
+              if (a.pipeline || a.status !== 'approved') return a;
+              migrated = true;
+              return { ...a, pipeline: legacyStageToPipeline(a.stage, nowIso) };
+            });
+            return migrated ? { applications } : {};
+          });
+          get().evaluateSlaDeadlines();
+          if (migrated) queueBackendSave(get);
+        }
       },
 
       saveBackendState: async () => {
@@ -806,6 +1118,10 @@ const useAppStore = create<AppStoreState>()(
           trashedApplications: get().trashedApplications,
           trashedUsers: get().trashedUsers,
           credentialRequests: get().credentialRequests,
+          pointsLedger: get().pointsLedger,
+          universityConfig: get().universityConfig,
+          purgedApplicationIds: get().purgedApplicationIds,
+          unTrashedUserIds: get().unTrashedUserIds,
         };
         await fetch('/api/state-save', {
           method: 'POST',
@@ -914,6 +1230,10 @@ const useAppStore = create<AppStoreState>()(
         const studentEmail = app.studentEmail ?? app.email;
         const autoAssignedStaffId = (() => {
           if (!app.university) return undefined;
+          // Primary: the configurable university → staff mapping (PRD §9).
+          const configured = resolveAutoStaff(get().users, get().universityConfig, app.university);
+          if (configured) return configured.id;
+          // Fallback: legacy per-staff university lists (load-balanced).
           const candidates = get().users.filter(u => u.role === 'staff' && (u.staffUniversities ?? []).includes(app.university!));
           if (candidates.length === 0) return undefined;
           const counts = new Map<string, number>();
@@ -976,6 +1296,12 @@ const useAppStore = create<AppStoreState>()(
             assignedStaffId: autoAssignedStaffId ?? a.assignedStaffId,
             studentCredentials: { username: creds.username, password: creds.password, updatedAt: new Date().toISOString() },
             hold: undefined,
+            // Approval opens the case: Processing, first stage timer running.
+            pipeline: a.pipeline ?? {
+              status: 'processing' as const,
+              current: 'translated_documents' as const,
+              stages: { translated_documents: { startedAt: new Date().toISOString() } },
+            },
             events: [
               ...(a.events ?? []),
               { id: `${a.id}-approved-${Date.now()}`, type: 'approved' as const, byId: actor.id, byName: actor.name, time: new Date().toISOString(), details: source === 'agency' ? 'Approved by Ops' : 'Approved by Sales' },
@@ -988,15 +1314,17 @@ const useAppStore = create<AppStoreState>()(
             ...(autoAssignedStaffId ? [{ id: `${studentId}-auto-assign`, userId: autoAssignedStaffId, title: 'New Student Assigned', message: app.name, type: 'info' as const, time: new Date().toISOString(), read: false }] : [])
           ],
         }));
-        set((state) => ({
-          users: state.users.map(u => {
-            if (u.id === actor.id) return { ...u, points: (u.points ?? 0) + 1 };
-            if (source === 'agency' && app.agencyId && u.id === app.agencyId) {
-              return { ...u, points: (u.points ?? 0) + 1 };
-            }
-            return u;
-          }),
-        }));
+        set((state) => {
+          const at = new Date().toISOString();
+          const entries: PointsEntry[] = [
+            { id: `act-${applicationId}-approved`, userId: actor.id, delta: 1, reason: `Approved application — ${app.name}`, kind: 'activity', at, applicationId, applicationName: app.name },
+            ...(source === 'agency' && app.agencyId
+              ? [{ id: `act-${applicationId}-agency-approved`, userId: app.agencyId, delta: 1, reason: `Student approved — ${app.name}`, kind: 'activity' as const, at, applicationId, applicationName: app.name }]
+              : []),
+          ];
+          const pointsLedger = appendLedger(state.pointsLedger, entries);
+          return ledgerPatch(state, pointsLedger);
+        });
 
         if (autoAssignedStaffId) {
           emailNotifyUser(get, autoAssignedStaffId, {
@@ -1064,9 +1392,19 @@ const useAppStore = create<AppStoreState>()(
         }));
         const hasNotes = (app.internalNotes ?? []).length > 0;
         if (!hasNotes) {
-          set((state) => ({
-            users: state.users.map(u => u.id === actor.id ? { ...u, points: Math.max(0, (u.points ?? 0) - 1) } : u),
-          }));
+          set((state) => {
+            const pointsLedger = appendLedger(state.pointsLedger, [{
+              id: `act-${applicationId}-rejected-nonotes`,
+              userId: actor.id,
+              delta: -1,
+              reason: `Rejected without internal notes — ${app.name}`,
+              kind: 'activity',
+              at: nowIso,
+              applicationId,
+              applicationName: app.name,
+            }]);
+            return ledgerPatch(state, pointsLedger);
+          });
         }
         const applicantEmail = app.studentEmail ?? app.email;
         if (applicantEmail) {
@@ -1100,15 +1438,37 @@ const useAppStore = create<AppStoreState>()(
           } : a)
         }));
         if (firstTime) {
-          set((state) => ({
-            users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
-          }));
+          set((state) => {
+            const pointsLedger = appendLedger(state.pointsLedger, [{
+              id: `act-${applicationId}-intake`,
+              userId: actor.id,
+              delta: 1,
+              reason: `Filled intake — ${app.name}`,
+              kind: 'activity',
+              at: new Date().toISOString(),
+              applicationId,
+              applicationName: app.name,
+            }]);
+            return ledgerPatch(state, pointsLedger);
+          });
         }
         if (within24h && !app?.intakeSLARewarded) {
-          set((state) => ({
-            users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
-            applications: state.applications.map(a => a.id === applicationId ? { ...a, intakeSLARewarded: true } : a),
-          }));
+          set((state) => {
+            const pointsLedger = appendLedger(state.pointsLedger, [{
+              id: `act-${applicationId}-intake-sla`,
+              userId: actor.id,
+              delta: 1,
+              reason: `Intake completed within 24h — ${app.name}`,
+              kind: 'activity',
+              at: new Date().toISOString(),
+              applicationId,
+              applicationName: app.name,
+            }]);
+            return {
+              ...ledgerPatch(state, pointsLedger),
+              applications: state.applications.map(a => a.id === applicationId ? { ...a, intakeSLARewarded: true } : a),
+            };
+          });
         }
         queueBackendSave(get);
       },
@@ -1143,21 +1503,33 @@ const useAppStore = create<AppStoreState>()(
         const source = app.source ?? 'public';
         if (source === 'agency') requireRole(actor, ['ops', 'ceo']);
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
-        set((state) => ({
-          applications: state.applications.map(a => a.id === applicationId ? {
-            ...a,
-            ownerId: actor.id,
-            salesOwnerId: actor.id,
-            events: [
-              ...(a.events ?? []),
-              { id: `${a.id}-claimed-${Date.now()}`, type: 'claimed' as const, byId: actor.id, byName: actor.name, time: new Date().toISOString() },
-            ],
-          } : a),
-          users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
-        }));
+        set((state) => {
+          const pointsLedger = appendLedger(state.pointsLedger, [{
+            id: `act-${applicationId}-claimed`,
+            userId: actor.id,
+            delta: 1,
+            reason: `Claimed lead — ${app.name}`,
+            kind: 'activity',
+            at: new Date().toISOString(),
+            applicationId,
+            applicationName: app.name,
+          }]);
+          return {
+            applications: state.applications.map(a => a.id === applicationId ? {
+              ...a,
+              ownerId: actor.id,
+              salesOwnerId: actor.id,
+              events: [
+                ...(a.events ?? []),
+                { id: `${a.id}-claimed-${Date.now()}`, type: 'claimed' as const, byId: actor.id, byName: actor.name, time: new Date().toISOString() },
+              ],
+            } : a),
+            ...ledgerPatch(state, pointsLedger),
+          };
+        });
         queueBackendSave(get);
       },
-      
+
       salesAddExtraDocs: (applicationId: string, files: string[]) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         const app = get().applications.find(a => a.id === applicationId);
@@ -1190,7 +1562,6 @@ const useAppStore = create<AppStoreState>()(
 
         set((state) => ({
           applications: state.applications.map(a => a.id === applicationId ? { ...a, stage } : a),
-          users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
           notifications: app.studentId ? [
             ...state.notifications,
             { id: `${applicationId}-stage-${Date.now()}`, userId: app.studentId, title: 'Application Updated', message: `Your application has moved to: ${stageLabel}`, type: 'info' as const, time: new Date().toISOString(), read: false },
@@ -1230,7 +1601,6 @@ const useAppStore = create<AppStoreState>()(
             ...a,
             internalNotes: [...(a.internalNotes ?? []), note],
           } : a),
-          users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
         }));
         queueBackendSave(get);
       },
@@ -1255,7 +1625,6 @@ const useAppStore = create<AppStoreState>()(
         const docId = Date.now().toString();
         set((state) => ({
           documents: [...state.documents, { ...newDoc, id: docId }],
-          users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
           notifications: [
             ...state.notifications,
             { id: `${docId}-upload-notif`, userId: doc.studentId, title: 'New Document Added', message: doc.title, type: 'info' as const, time: new Date().toISOString(), read: false },
@@ -1276,6 +1645,9 @@ const useAppStore = create<AppStoreState>()(
           ctaPath: '/dashboard',
           outro: 'Log in to your dashboard to view and download it.',
         }, { dedupeKey: `${docId}-upload` });
+        // Uploading a stage document (translation, approval letter, visa,
+        // residency, …) completes the matching pipeline stage automatically.
+        if (a) autoCompleteFromDocuments(a.id, actor.id, actor.name);
         queueBackendSave(get);
       },
 
@@ -1291,7 +1663,6 @@ const useAppStore = create<AppStoreState>()(
         const now = new Date().toISOString();
         set((state) => ({
           documents: state.documents.map(d => d.id === documentId ? { ...d, status: 'verified' } : d),
-          users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
           applications: app
             ? state.applications.map(a => a.id === app.id ? {
               ...a,
@@ -1315,6 +1686,7 @@ const useAppStore = create<AppStoreState>()(
           ctaPath: '/dashboard',
           outro: 'Log in to your dashboard to download your document.',
         }, { dedupeKey: `${documentId}-verified` });
+        if (app) autoCompleteFromDocuments(app.id, actor.id, actor.name);
         queueBackendSave(get);
       },
 
@@ -1349,10 +1721,47 @@ const useAppStore = create<AppStoreState>()(
           ctaPath: '/dashboard',
           outro: 'Log in to your portal to see your university and next steps.',
         }, { dedupeKey: `${studentUserId}-uni-${universityId}` });
-        if (firstAssign) {
-          set((state) => ({
-            users: state.users.map(u => u.id === actor.id ? { ...u, points: (u.points ?? 0) + 1 } : u),
-          }));
+        if (firstAssign && actor.role !== 'staff') {
+          set((state) => {
+            const pointsLedger = appendLedger(state.pointsLedger, [{
+              id: `act-uni-${studentUserId}`,
+              userId: actor.id,
+              delta: 1,
+              reason: `Assigned university — ${getUniversityName(universityId)}`,
+              kind: 'activity',
+              at: new Date().toISOString(),
+            }]);
+            return ledgerPatch(state, pointsLedger);
+          });
+        }
+        // PRD §9: selecting a university auto-assigns the mapped staff member.
+        const targetApp = get().applications.find(a => a.studentId === studentUserId);
+        if (targetApp && !targetApp.assignedStaffId) {
+          const autoStaff = resolveAutoStaff(get().users, get().universityConfig, universityId);
+          if (autoStaff) {
+            set((state) => ({
+              applications: state.applications.map(a => a.studentId === studentUserId ? {
+                ...a,
+                assignedStaffId: autoStaff.id,
+                events: [
+                  ...(a.events ?? []),
+                  { id: `${a.id}-auto-assigned-${Date.now()}`, type: 'assigned_staff' as const, byId: actor.id, byName: 'Auto-assignment', time: new Date().toISOString(), details: autoStaff.id },
+                ],
+              } : a),
+              notifications: [
+                ...state.notifications,
+                { id: `${studentUserId}-auto-assign-${autoStaff.id}`, userId: autoStaff.id, title: 'New Student Assigned', message: `${targetApp.name} — ${getUniversityName(universityId)}`, type: 'info', time: new Date().toISOString(), read: false },
+              ],
+            }));
+            emailNotifyUser(get, autoStaff.id, {
+              subject: 'New student assigned — The Way',
+              title: 'A new student was assigned to you',
+              intro: `You have been assigned a new student: ${targetApp.name} (${getUniversityName(universityId)}).`,
+              ctaLabel: 'Open your dashboard',
+              ctaPath: '/staff',
+              outro: 'Log in to review their application and documents.',
+            }, { dedupeKey: `${studentUserId}-autoassign-${autoStaff.id}` });
+          }
         }
         queueBackendSave(get);
       },
@@ -1579,6 +1988,10 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['ceo']);
         set((state) => ({
           trashedApplications: state.trashedApplications.filter(a => a.id !== applicationId),
+          // Tombstone: the server merge drops this id everywhere, forever.
+          purgedApplicationIds: state.purgedApplicationIds.includes(applicationId)
+            ? state.purgedApplicationIds
+            : [...state.purgedApplicationIds, applicationId],
         }));
         queueBackendSave(get);
       },
@@ -1608,6 +2021,9 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['ceo']);
         set((state) => ({
           futureLeads: state.futureLeads.filter(a => a.id !== applicationId),
+          purgedApplicationIds: state.purgedApplicationIds.includes(applicationId)
+            ? state.purgedApplicationIds
+            : [...state.purgedApplicationIds, applicationId],
         }));
         queueBackendSave(get);
       },
@@ -1657,7 +2073,10 @@ const useAppStore = create<AppStoreState>()(
         });
         const json = (await resp.json()) as { ok?: unknown; error?: unknown };
         if (!resp.ok) throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to restore account');
-        set((state) => ({ trashedUsers: state.trashedUsers.filter(u => u.id !== userId) }));
+        set((state) => ({
+          trashedUsers: state.trashedUsers.filter(u => u.id !== userId),
+          unTrashedUserIds: state.unTrashedUserIds.includes(userId) ? state.unTrashedUserIds : [...state.unTrashedUserIds, userId],
+        }));
         await get().refreshUsersFromBackend();
         queueBackendSave(get);
       },
@@ -1680,6 +2099,7 @@ const useAppStore = create<AppStoreState>()(
         set((state) => ({
           trashedUsers: state.trashedUsers.filter(u => u.id !== userId),
           users: state.users.filter(u => u.id !== userId),
+          unTrashedUserIds: state.unTrashedUserIds.includes(userId) ? state.unTrashedUserIds : [...state.unTrashedUserIds, userId],
         }));
         queueBackendSave(get);
       },
@@ -2101,41 +2521,55 @@ const useAppStore = create<AppStoreState>()(
         }
       },
 
-      staffRequestDocument: (studentId: string, applicationId: string | undefined, title: string, description?: string) => {
+      staffRequestDocument: (studentId: string, applicationId: string | undefined, title: string, description?: string, target?: 'student' | 'agency') => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         requireRole(actor, ['staff', 'agency_staff', 'ceo', 'sales', 'ops']);
+        const app = applicationId
+          ? get().applications.find(a => a.id === applicationId)
+          : get().applications.find(a => a.studentId === studentId);
+        const effectiveTarget: 'student' | 'agency' = target
+          ?? (((app?.source ?? 'public') === 'agency' && app?.agencyId) ? 'agency' : 'student');
+        const agencyId = effectiveTarget === 'agency' ? app?.agencyId : undefined;
+        if (effectiveTarget === 'agency' && !agencyId) throw new Error('This application has no agency to request from');
         const req: DocumentRequest = {
           id: `docreq-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           studentId,
-          applicationId,
+          applicationId: applicationId ?? app?.id,
           title: title.trim(),
           description: description?.trim(),
           requestedBy: actor.id,
           requestedByName: actor.name,
           createdAt: new Date().toISOString(),
           status: 'pending',
+          target: effectiveTarget,
+          ...(agencyId ? { agencyId } : {}),
         };
+        const recipientId = effectiveTarget === 'agency' ? agencyId! : studentId;
         set((state) => ({
           documentRequests: [...state.documentRequests, req],
           notifications: [
             ...state.notifications,
             {
               id: `docreq-notif-${req.id}`,
-              userId: studentId,
+              userId: recipientId,
               title: 'Document Requested',
-              message: `Your advisor has requested: "${title}". Please upload it in your portal.`,
+              message: effectiveTarget === 'agency'
+                ? `Documents requested for ${app?.name ?? 'your student'}: "${title}". Please upload in your portal.`
+                : `Your advisor has requested: "${title}". Please upload it in your portal.`,
               type: 'info' as const,
               time: new Date().toISOString(),
               read: false,
             },
           ],
         }));
-        emailNotifyUser(get, studentId, {
+        emailNotifyUser(get, recipientId, {
           subject: 'Action needed: document required — The Way',
           title: 'A document was requested',
-          intro: `Your advisor has requested the following document: "${title}"${description ? ` — ${description}` : ''}.`,
+          intro: effectiveTarget === 'agency'
+            ? `The following document was requested for your student ${app?.name ?? ''}: "${title}"${description ? ` — ${description}` : ''}.`
+            : `Your advisor has requested the following document: "${title}"${description ? ` — ${description}` : ''}.`,
           ctaLabel: 'Upload in your portal',
-          ctaPath: '/dashboard',
+          ctaPath: effectiveTarget === 'agency' ? '/agencies' : '/dashboard',
           note: 'Please upload this document as soon as possible so we can continue processing the application.',
         }, { dedupeKey: `${req.id}-request` });
         queueBackendSave(get);
@@ -2148,12 +2582,12 @@ const useAppStore = create<AppStoreState>()(
         if (req.studentId !== actor.id) throw new Error('Forbidden');
         set((state) => ({
           documentRequests: state.documentRequests.map(r =>
-            r.id === requestId ? { ...r, status: 'fulfilled' as const, fulfilledFile: fileUrl, fulfilledAt: new Date().toISOString() } : r
+            r.id === requestId ? { ...r, status: 'uploaded' as const, fulfilledFile: fileUrl, fulfilledAt: new Date().toISOString(), uploadedByName: actor.name } : r
           ),
           notifications: [
             ...state.notifications,
             {
-              id: `docreq-fulfilled-${requestId}`,
+              id: `docreq-fulfilled-${requestId}-${Date.now()}`,
               userId: req.requestedBy,
               title: 'Document Uploaded',
               message: `Student uploaded the requested document: "${req.title}"`,
@@ -2169,8 +2603,414 @@ const useAppStore = create<AppStoreState>()(
           intro: `${actor.name} uploaded the document you requested: "${req.title}".`,
           ctaLabel: 'Review in your dashboard',
           ctaPath: '/staff',
-          outro: 'Log in to review and verify the document.',
-        }, { dedupeKey: `${requestId}-fulfilled` });
+          outro: 'Log in to review and approve the document.',
+        }, { dedupeKey: `${requestId}-fulfilled-${Date.now()}` });
+        queueBackendSave(get);
+      },
+
+      agentFulfillRequest: (requestId: string, fileUrl: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['agency']);
+        const req = get().documentRequests.find(r => r.id === requestId);
+        if (!req) throw new Error('Request not found');
+        if (req.target !== 'agency' || req.agencyId !== actor.id) throw new Error('Forbidden');
+        if (req.status === 'approved') throw new Error('This request is already approved');
+        set((state) => ({
+          documentRequests: state.documentRequests.map(r =>
+            r.id === requestId ? { ...r, status: 'uploaded' as const, fulfilledFile: fileUrl, fulfilledAt: new Date().toISOString(), uploadedByName: actor.name } : r
+          ),
+          notifications: [
+            ...state.notifications,
+            {
+              id: `docreq-agent-uploaded-${requestId}-${Date.now()}`,
+              userId: req.requestedBy,
+              title: 'Requested Document Uploaded',
+              message: `${actor.name} uploaded: "${req.title}"`,
+              type: 'success' as const,
+              time: new Date().toISOString(),
+              read: false,
+            },
+          ],
+        }));
+        emailNotifyUser(get, req.requestedBy, {
+          subject: 'Requested document uploaded — The Way',
+          title: 'A requested document was uploaded',
+          intro: `${actor.name} uploaded the document you requested: "${req.title}".`,
+          ctaLabel: 'Review in your dashboard',
+          ctaPath: '/staff',
+          outro: 'Log in to approve or reject the document.',
+        }, { dedupeKey: `${requestId}-agent-uploaded-${Date.now()}` });
+        queueBackendSave(get);
+      },
+
+      reviewDocumentRequest: (requestId: string, decision: 'approved' | 'rejected' | 'reupload', note?: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['staff', 'agency_staff', 'ops', 'ceo']);
+        const req = get().documentRequests.find(r => r.id === requestId);
+        if (!req) throw new Error('Request not found');
+        if (req.status !== 'uploaded' && req.status !== 'fulfilled') throw new Error('Nothing to review — no upload yet');
+        const now = new Date().toISOString();
+        const uploaderId = req.target === 'agency' ? req.agencyId : req.studentId;
+        const file = req.fulfilledFile;
+
+        if (decision === 'approved') {
+          set((state) => ({
+            documentRequests: state.documentRequests.map(r => r.id === requestId
+              ? { ...r, status: 'approved' as const, reviewedAt: now, reviewedByName: actor.name, reviewNote: note?.trim() || undefined }
+              : r),
+            // Approved files automatically appear in the student application (PRD §8).
+            applications: file ? state.applications.map(a => (a.id === req.applicationId || (!req.applicationId && a.studentId === req.studentId)) ? {
+              ...a,
+              intakeExtraDocs: (a.intakeExtraDocs ?? []).includes(file) ? a.intakeExtraDocs : [...(a.intakeExtraDocs ?? []), file],
+              events: [
+                ...(a.events ?? []),
+                { id: `${a.id}-docreq-approved-${Date.now()}`, type: 'extra_docs_added' as const, byId: actor.id, byName: actor.name, time: now, details: `Approved requested document: ${req.title}` },
+              ],
+            } : a) : state.applications,
+            documents: (file && req.studentId && state.users.some(u => u.id === req.studentId))
+              ? [...state.documents, {
+                  id: `docreq-doc-${requestId}`,
+                  studentId: req.studentId,
+                  title: req.title,
+                  type: 'requested-document',
+                  status: 'verified' as const,
+                  uploadedAt: now,
+                  uploadedBy: actor.id,
+                  file,
+                }].filter((d, i, arr) => arr.findIndex(x => x.id === d.id) === i)
+              : state.documents,
+            notifications: uploaderId ? [
+              ...state.notifications,
+              { id: `docreq-approved-${requestId}`, userId: uploaderId, title: 'Document Approved', message: `"${req.title}" was approved.`, type: 'success' as const, time: now, read: false },
+            ] : state.notifications,
+          }));
+        } else {
+          const backToPending = decision === 'reupload';
+          set((state) => ({
+            documentRequests: state.documentRequests.map(r => r.id === requestId
+              ? {
+                  ...r,
+                  status: (backToPending ? 'pending' : 'rejected') as DocumentRequestStatus,
+                  reviewedAt: now,
+                  reviewedByName: actor.name,
+                  reviewNote: note?.trim() || undefined,
+                  ...(backToPending ? { fulfilledFile: undefined, fulfilledAt: undefined, reuploadCount: (r.reuploadCount ?? 0) + 1 } : {}),
+                }
+              : r),
+            notifications: uploaderId ? [
+              ...state.notifications,
+              {
+                id: `docreq-${decision}-${requestId}-${Date.now()}`,
+                userId: uploaderId,
+                title: backToPending ? 'Re-upload Requested' : 'Document Rejected',
+                message: `"${req.title}"${note?.trim() ? ` — ${note.trim()}` : ''}`,
+                type: 'alert' as const,
+                time: now,
+                read: false,
+              },
+            ] : state.notifications,
+          }));
+        }
+        if (uploaderId) {
+          emailNotifyUser(get, uploaderId, {
+            subject: `Document ${decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 're-upload requested'} — The Way`,
+            title: decision === 'approved' ? 'Your document was approved' : decision === 'rejected' ? 'Your document was rejected' : 'Please re-upload a document',
+            intro: `"${req.title}"${note?.trim() ? ` — ${note.trim()}` : ''}`,
+            ctaLabel: 'Open your portal',
+            ctaPath: req.target === 'agency' ? '/agencies' : '/dashboard',
+          }, { dedupeKey: `${requestId}-${decision}-${Date.now()}` });
+        }
+        queueBackendSave(get);
+      },
+
+      // ── Case pipeline actions ────────────────────────────────────────────
+
+      grantStagePermission: (applicationId: string, stage: PipelineStageId) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['agency', 'sales', 'ceo']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app?.pipeline) throw new Error('Application has no active case');
+        if (app.pipeline.status !== 'processing') throw new Error('Case is not in processing');
+        const meta = getStageMeta(stage);
+        if (!meta.permissionGated) throw new Error('This stage does not need permission');
+        if (actor.role === 'agency' && app.agencyId !== actor.id) throw new Error('Forbidden');
+        if (app.pipeline.current !== stage) throw new Error(`Permission can only be granted for the current stage (${getStageMeta(app.pipeline.current as PipelineStageId)?.label ?? app.pipeline.current})`);
+        const track = app.pipeline.stages[stage] ?? {};
+        if (track.permissionAt) throw new Error('Permission was already granted');
+        // PRD §2: Recognition stays blocked until the high-school certificate exists.
+        if (stage === 'recognition_letter' && !app.intakeHighSchoolCertificate) {
+          throw new Error('Recognition is blocked: the high school certificate has not been uploaded yet');
+        }
+        const now = new Date().toISOString();
+        set((state) => ({
+          applications: state.applications.map(a => (a.id === applicationId && a.pipeline) ? {
+            ...a,
+            pipeline: {
+              ...a.pipeline,
+              stages: {
+                ...a.pipeline.stages,
+                [stage]: { ...track, permissionAt: now, permissionById: actor.id, permissionByName: actor.name, startedAt: now },
+              },
+            },
+            events: [
+              ...(a.events ?? []),
+              { id: `${a.id}-permission-${stage}-${Date.now()}`, type: 'needs_info' as const, byId: actor.id, byName: actor.name, time: now, details: `Permission granted: ${meta.label} — timer started` },
+            ],
+          } : a),
+          notifications: app.assignedStaffId ? [
+            ...state.notifications,
+            { id: `${applicationId}-perm-${stage}`, userId: app.assignedStaffId, title: `${meta.label}: permission granted`, message: `${app.name} — the SLA timer is now running.`, type: 'info' as const, time: now, read: false },
+          ] : state.notifications,
+        }));
+        if (app.assignedStaffId) {
+          emailNotifyUser(get, app.assignedStaffId, {
+            subject: `${meta.label}: permission granted — The Way`,
+            title: 'A stage timer has started',
+            intro: `${actor.name} granted permission for "${meta.label}" on ${app.name}'s case. The SLA timer is now running.`,
+            ctaLabel: 'Open your dashboard',
+            ctaPath: '/staff',
+          }, { dedupeKey: `${applicationId}-perm-${stage}` });
+        }
+        // The document may already be uploaded — complete instantly if so.
+        autoCompleteFromDocuments(applicationId, actor.id, actor.name);
+        queueBackendSave(get);
+      },
+
+      completePipelineStage: (applicationId: string, stage: PipelineStageId) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['staff', 'agency_staff', 'ceo']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app?.pipeline) throw new Error('Application has no active case');
+        if (app.pipeline.status !== 'processing') throw new Error('Case is not in processing');
+        if (app.pipeline.current !== stage) throw new Error('Only the current stage can be completed');
+        const meta = getStageMeta(stage);
+        const track = app.pipeline.stages[stage] ?? {};
+        if (meta.permissionGated && !track.permissionAt) throw new Error(`${meta.label} needs permission from Agency/Sales/CEO first`);
+        if (stage === 'recognition_letter' && !app.intakeHighSchoolCertificate) {
+          throw new Error('Recognition is blocked: the high school certificate has not been uploaded yet');
+        }
+        if (stage === 'visa_residency') {
+          const docs = get().documents;
+          const hasBoth = STAGE_TO_DOC_TYPES.visa_residency.every(t => docs.some(d => d.studentId === app.studentId && d.type === t));
+          if (!hasBoth) throw new Error('Upload both the visa and the residency documents first');
+        }
+        if (!completeStageCore(applicationId, stage, actor.id, actor.name)) {
+          throw new Error('Could not complete this stage');
+        }
+      },
+
+      ceoCancelApplication: (applicationId: string, reason?: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app?.pipeline) throw new Error('Application has no active case');
+        if (app.pipeline.status !== 'processing') throw new Error('Only processing cases can be cancelled');
+        const now = new Date().toISOString();
+        set((state) => ({
+          applications: state.applications.map(a => (a.id === applicationId && a.pipeline) ? {
+            ...a,
+            pipeline: {
+              ...a.pipeline,
+              status: 'cancelled' as const,
+              cancelledAt: now,
+              cancelledById: actor.id,
+              cancelledByName: actor.name,
+              cancelReason: reason?.trim() || undefined,
+            },
+            events: [
+              ...(a.events ?? []),
+              { id: `${a.id}-cancelled-${Date.now()}`, type: 'rejected' as const, byId: actor.id, byName: actor.name, time: now, details: `Case cancelled by CEO${reason?.trim() ? `: ${reason.trim()}` : ''}` },
+            ],
+          } : a),
+          notifications: [
+            ...state.notifications,
+            ...(app.assignedStaffId ? [{ id: `${applicationId}-cancelled-staff`, userId: app.assignedStaffId, title: 'Case Cancelled', message: `${app.name} — cancelled by CEO`, type: 'alert' as const, time: now, read: false }] : []),
+            ...(app.studentId ? [{ id: `${applicationId}-cancelled-student`, userId: app.studentId, title: 'Application Update', message: 'Your case has been cancelled. Please contact us for details.', type: 'alert' as const, time: now, read: false }] : []),
+          ],
+        }));
+        queueBackendSave(get);
+      },
+
+      studentRateService: (applicationId: string, stars: number, comment?: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['student']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app || app.studentId !== actor.id) throw new Error('Application not found');
+        const residencyDone = app.pipeline?.status === 'closed' || Boolean(app.pipeline?.stages?.visa_residency?.completedAt);
+        if (!residencyDone) throw new Error('Rating opens after your residency is uploaded');
+        const s = Math.round(stars);
+        if (s < 1 || s > 5) throw new Error('Rating must be between 1 and 5 stars');
+        if (app.rating) throw new Error('You have already rated our service — thank you!');
+        const now = new Date().toISOString();
+        const ceoUsers = get().users.filter(u => u.role === 'ceo');
+        set((state) => ({
+          applications: state.applications.map(a => a.id === applicationId ? {
+            ...a,
+            rating: { stars: s, comment: comment?.trim() || undefined, at: now },
+          } : a),
+          notifications: [
+            ...state.notifications,
+            ...ceoUsers.map(u => ({
+              id: `${applicationId}-rating-${u.id}`,
+              userId: u.id,
+              title: `New ${s}-star rating`,
+              message: `${app.name} rated the service ${s}/5${comment?.trim() ? ` — "${comment.trim().slice(0, 120)}"` : ''}`,
+              type: 'success' as const,
+              time: now,
+              read: false,
+            })),
+          ],
+        }));
+        queueBackendSave(get);
+      },
+
+      // ── Staff performance points ─────────────────────────────────────────
+
+      ceoAdjustPoints: (userId: string, delta: number, reason: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const target = get().users.find(u => u.id === userId);
+        if (!target) throw new Error('User not found');
+        const d = Math.trunc(delta);
+        if (!d) throw new Error('Adjustment cannot be zero');
+        const why = reason.trim();
+        if (!why) throw new Error('Please add a reason for the adjustment');
+        const now = new Date().toISOString();
+        set((state) => {
+          const pointsLedger = appendLedger(state.pointsLedger, [{
+            id: `adj-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+            userId,
+            delta: d,
+            reason: why,
+            kind: 'adjustment',
+            at: now,
+            byId: actor.id,
+            byName: actor.name,
+          }]);
+          return {
+            ...ledgerPatch(state, pointsLedger),
+            notifications: [
+              ...state.notifications,
+              {
+                id: `adj-notif-${userId}-${Date.now()}`,
+                userId,
+                title: d > 0 ? `+${d} points adjustment` : `${d} points adjustment`,
+                message: `${actor.name}: ${why}`,
+                type: (d > 0 ? 'success' : 'alert') as NotificationType,
+                time: now,
+                read: false,
+              },
+            ],
+          };
+        });
+        queueBackendSave(get);
+      },
+
+      evaluateSlaDeadlines: () => {
+        const me = get().currentUser;
+        if (!me || !['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(me.role)) return;
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const ledger = get().pointsLedger;
+        const existingIds = new Set(ledger.map(e => e.id));
+        const penalties: PointsEntry[] = [];
+        const lateNotifs: Notification[] = [];
+        const ceoUsers = get().users.filter(u => u.role === 'ceo');
+
+        for (const app of get().applications) {
+          const pipeline = app.pipeline;
+          if (!pipeline || pipeline.status !== 'processing' || pipeline.current === 'done') continue;
+          const stage = pipeline.current as PipelineStageId;
+          const track = pipeline.stages[stage];
+          if (!track?.startedAt || track.completedAt) continue;
+          if (!app.assignedStaffId) continue;
+          const group = effectiveSlaGroup(get().universityConfig, app.university);
+          const window = getSlaWindow(stage, group);
+          if (!window) continue;
+          if (now.getTime() <= slaDeadline(window, track.startedAt).getTime()) continue;
+          const id = slaLedgerId(app.id, stage);
+          if (existingIds.has(id)) continue;
+          const meta = getStageMeta(stage);
+          penalties.push({
+            id,
+            userId: app.assignedStaffId,
+            delta: window.latePoints,
+            reason: `${meta.label} deadline passed — ${app.name}`,
+            kind: 'sla',
+            at: nowIso,
+            applicationId: app.id,
+            applicationName: app.name,
+            stage,
+          });
+          lateNotifs.push({
+            id: `sla-late-${app.id}-${stage}-staff`,
+            userId: app.assignedStaffId,
+            title: `${window.latePoints} points — deadline passed`,
+            message: `${meta.label} for ${app.name} is overdue.`,
+            type: 'alert',
+            time: nowIso,
+            read: false,
+          });
+          for (const ceo of ceoUsers) {
+            lateNotifs.push({
+              id: `sla-late-${app.id}-${stage}-ceo-${ceo.id}`,
+              userId: ceo.id,
+              title: 'SLA deadline passed',
+              message: `${meta.label} for ${app.name} is overdue (assigned staff penalized ${window.latePoints}).`,
+              type: 'alert',
+              time: nowIso,
+              read: false,
+            });
+          }
+        }
+
+        if (!penalties.length) return;
+        set((state) => {
+          const pointsLedger = appendLedger(state.pointsLedger, penalties);
+          const freshNotifIds = new Set(state.notifications.map(n => n.id));
+          return {
+            ...ledgerPatch(state, pointsLedger),
+            notifications: [...state.notifications, ...lateNotifs.filter(n => !freshNotifIds.has(n.id))],
+          };
+        });
+        queueBackendSave(get);
+      },
+
+      // ── University configuration (CEO) ───────────────────────────────────
+
+      ceoSetUniversityStaff: (universityId: string, staffUsername: string | null) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const now = new Date().toISOString();
+        set((state) => {
+          const cur = state.universityConfig;
+          return {
+            universityConfig: {
+              assignments: { ...(cur?.assignments ?? {}), [universityId]: staffUsername ?? '' },
+              slaGroups: { ...(cur?.slaGroups ?? {}) },
+              updatedAt: now,
+              updatedByName: actor.name,
+            },
+          };
+        });
+        queueBackendSave(get);
+      },
+
+      ceoSetUniversitySlaGroup: (universityId: string, group: UniversitySlaGroup) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const now = new Date().toISOString();
+        set((state) => {
+          const cur = state.universityConfig;
+          return {
+            universityConfig: {
+              assignments: { ...(cur?.assignments ?? {}) },
+              slaGroups: { ...(cur?.slaGroups ?? {}), [universityId]: group },
+              updatedAt: now,
+              updatedByName: actor.name,
+            },
+          };
+        });
         queueBackendSave(get);
       },
     };
@@ -2191,11 +3031,16 @@ const useAppStore = create<AppStoreState>()(
         chatMessages: state.chatMessages,
         chatThreadReadAt: state.chatThreadReadAt,
         chatEmailNotify: state.chatEmailNotify,
+        documentRequests: state.documentRequests,
         leads: state.leads,
         futureLeads: state.futureLeads,
         trashedApplications: state.trashedApplications,
         trashedUsers: state.trashedUsers,
         credentialRequests: state.credentialRequests,
+        pointsLedger: state.pointsLedger,
+        universityConfig: state.universityConfig,
+        purgedApplicationIds: state.purgedApplicationIds,
+        unTrashedUserIds: state.unTrashedUserIds,
       }),
       migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out', users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} }, version: 5 } as unknown),
     }

@@ -97,6 +97,15 @@ const serveFile = async (res, filePath) => {
   const data = await fs.readFile(filePath);
   res.statusCode = 200;
   res.setHeader('Content-Type', ct);
+  // Hashed assets are immutable; HTML must always revalidate so a page
+  // refresh after a deploy never serves a stale bundle.
+  if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  } else if (ext === '.html') {
+    res.setHeader('Cache-Control', 'no-cache');
+  } else {
+    res.setHeader('Cache-Control', 'public, max-age=300');
+  }
   res.end(data);
 };
 
@@ -485,6 +494,9 @@ const inlineApply = async (apiReq, apiRes) => {
     country: typeof body.country === 'string' ? body.country.slice(0, 80) : '',
     program: typeof body.program === 'string' ? body.program.slice(0, 120) : '',
     university: typeof body.university === 'string' ? (body.university.slice(0, 80) || null) : null,
+    dob: typeof body.dob === 'string' ? body.dob.slice(0, 40) : null,
+    studyLevel: typeof body.studyLevel === 'string' ? body.studyLevel.slice(0, 80) : null,
+    aviationDegree: typeof body.aviationDegree === 'string' ? body.aviationDegree.slice(0, 120) : null,
     status: 'submitted',
     stage: 'applied',
     createdAt: typeof body.createdAt === 'string' ? body.createdAt.slice(0, 40) : now,
@@ -505,6 +517,10 @@ const inlineApply = async (apiReq, apiRes) => {
     intakeVideoUrl: typeof body.intakeVideoUrl === 'string' ? body.intakeVideoUrl.slice(0, 2000) : null,
     intakePassportCopy: typeof body.intakePassportCopy === 'string' ? body.intakePassportCopy.slice(0, 2000) : null,
     intakeHighSchoolCertificate: typeof body.intakeHighSchoolCertificate === 'string' ? body.intakeHighSchoolCertificate.slice(0, 2000) : null,
+    intakeHighSchoolMissingNote: typeof body.intakeHighSchoolMissingNote === 'string' ? body.intakeHighSchoolMissingNote.slice(0, 4000) : null,
+    intakeBirthCertificate: typeof body.intakeBirthCertificate === 'string' ? body.intakeBirthCertificate.slice(0, 2000) : null,
+    intakeMotherPassport: typeof body.intakeMotherPassport === 'string' ? body.intakeMotherPassport.slice(0, 2000) : null,
+    intakeFatherPassport: typeof body.intakeFatherPassport === 'string' ? body.intakeFatherPassport.slice(0, 2000) : null,
     intakeSLARewarded: Boolean(body.intakeSLARewarded),
     arrived: Boolean(body.arrived),
     intakeExtraDocs: Array.isArray(body.intakeExtraDocs) ? body.intakeExtraDocs : null,
@@ -809,7 +825,8 @@ const inlineUsersList = async (apiReq, apiRes) => {
     if (profRole.ok) effectiveRole = String(profRole.role || '').trim().toLowerCase();
   }
   const isInternal = ['ceo', 'sales', 'ops', 'staff', 'agency_staff'].includes(effectiveRole);
-  if (!isInternal) {
+  const isExternal = ['student', 'agency', 'customer_support'].includes(effectiveRole);
+  if (!isInternal && !isExternal) {
     apiRes.status(403).json({ error: 'Forbidden' });
     return;
   }
@@ -818,7 +835,7 @@ const inlineUsersList = async (apiReq, apiRes) => {
     apiRes.status(500).json({ error: 'Failed to load users', details: r.text?.slice(0, 300) });
     return;
   }
-  const users = r.json
+  let users = r.json
     .filter((x) => x && typeof x === 'object')
     .map((row) => ({
       id: typeof row.id === 'string' ? row.id : String(row.id ?? ''),
@@ -826,6 +843,15 @@ const inlineUsersList = async (apiReq, apiRes) => {
       role: typeof row.role === 'string' ? row.role : '',
       name: typeof row.name === 'string' ? row.name : '',
     }));
+
+  // Students and agencies only get the internal team directory (advisor names,
+  // messaging targets) — never other students/agencies.
+  if (!isInternal) {
+    const teamRoles = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support']);
+    users = users.filter((u) => teamRoles.has(u.role));
+    apiRes.status(200).json({ users });
+    return;
+  }
 
   if (effectiveRole !== 'ceo') {
     apiRes.status(200).json({ users });
@@ -1218,9 +1244,32 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// SLA deadline sweep: penalties apply automatically the moment a stage
+// deadline passes, even with nobody logged in (PRD §1). Runs every 30 min.
+const startSlaSweep = async () => {
+  try {
+    const file = path.join(apiBuildDir, 'sla-evaluate.js');
+    if (!(await exists(file))) {
+      console.warn('SLA sweep disabled: build/api/sla-evaluate.js not found (run npm run build)');
+      return;
+    }
+    const mod = await import(pathToFileURL(file).href);
+    const run = mod.runSlaSweep;
+    if (typeof run !== 'function') return;
+    const tick = () => {
+      run().catch((e) => console.error('SLA sweep failed', e));
+    };
+    setTimeout(tick, 20_000);
+    setInterval(tick, 30 * 60 * 1000);
+  } catch (e) {
+    console.error('SLA sweep init failed', e);
+  }
+};
+
 const port = Number(process.env.PORT ?? 4173);
 server.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
   void bootstrapDefaultCeo();
   void bootstrapNamedAccounts();
+  void startSlaSweep();
 });

@@ -46,6 +46,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         appointments: s.appointments,
         chatMessages: s.chatMessages,
         chatThreadReadAt: s.chatThreadReadAt,
+        documentRequests: s.documentRequests,
+        pointsLedger: s.pointsLedger,
+        universityConfig: s.universityConfig,
       });
       if (snapshot === lastSnapshot.current) return;
       lastSnapshot.current = snapshot;
@@ -61,14 +64,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [isHydrated, authStatus, backendHydrated, saveBackendState]);
 
-  // Internal staff share one backend state but only pull it at login. Re-fetch
-  // when they return to the tab so a teammate's freshly-saved intake/documents
-  // appear without a full re-login. Any pending local edit is flushed first so
-  // the refresh can't race a save in flight.
+  // Everyone shares one backend state but historically only pulled it at
+  // login. Re-fetch when the user returns to the tab AND on a gentle polling
+  // interval, so a teammate's fresh data (documents, requests, points,
+  // notifications) appears without a re-login or manual refresh. Any pending
+  // local edit is flushed first so the refresh can't race a save in flight.
   const internalRole = currentUser?.role === 'ceo' || currentUser?.role === 'sales'
-    || currentUser?.role === 'ops' || currentUser?.role === 'staff' || currentUser?.role === 'agency_staff';
+    || currentUser?.role === 'ops' || currentUser?.role === 'staff' || currentUser?.role === 'agency_staff'
+    || currentUser?.role === 'customer_support';
   useEffect(() => {
-    if (!isHydrated || authStatus !== 'signed_in' || !backendHydrated || !internalRole) return;
+    if (!isHydrated || authStatus !== 'signed_in' || !backendHydrated) return;
     let refreshing = false;
     const refresh = async () => {
       if (refreshing || document.visibilityState !== 'visible') return;
@@ -82,9 +87,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
+    // Live polling: internal roles every 2 minutes, students/agencies every 3.
+    const pollMs = internalRole ? 120_000 : 180_000;
+    const pollId = window.setInterval(() => { void refresh(); }, pollMs);
+    // Overdue-SLA check runs locally more often than the server sweep.
+    const slaId = internalRole
+      ? window.setInterval(() => { try { useAppStore.getState().evaluateSlaDeadlines(); } catch { /* noop */ } }, 300_000)
+      : undefined;
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
+      window.clearInterval(pollId);
+      if (slaId) window.clearInterval(slaId);
     };
   }, [isHydrated, authStatus, backendHydrated, internalRole, saveBackendState, loadBackendState]);
 

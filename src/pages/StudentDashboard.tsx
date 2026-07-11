@@ -1,381 +1,353 @@
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { useAppStore } from '../store/appStore';
 import { useNavigate } from 'react-router-dom';
-import { getUniversityName } from '../lib/universities';
+import { getUniversity, getUniversityName } from '../lib/universities';
+import { PIPELINE_STAGES } from '../lib/pipeline';
 import { openStorageUrl } from '../lib/storage';
-import { getSupabase } from '../lib/supabase';
-import toast from 'react-hot-toast';
 import {
-  CheckCircle2,
-  FileText,
-  Building2,
-  MapPin,
-  ArrowRight,
-  ShieldCheck,
-  Download,
-  Clock,
-  AlertCircle,
-  Info,
-  Upload,
-  ClipboardList
+  CheckCircle2, FileText, Building2, ArrowRight, ShieldCheck, Download,
+  Clock, AlertCircle, Info, ClipboardList, MessageSquare, Calendar,
+  GraduationCap, Circle, Sparkles, Landmark, Ban,
 } from 'lucide-react';
+import { RequestedDocsUploader } from '../components/dashboard/RequestedDocuments';
+import { RatingPrompt } from '../components/dashboard/RatingPrompt';
+import { DashboardSection, EmptyState } from '../components/dashboard/ui';
 
-const admissionSteps = [
-  { id: 'translation', label: 'Documents', icon: FileText },
-  { id: 'university-approval', label: 'Approval', icon: CheckCircle2 },
-  { id: 'recognition-letter', label: 'Recognition', icon: ShieldCheck },
-  { id: 'ministry-order', label: 'Ministry', icon: Building2 },
-  { id: 'visa-documents', label: 'Visa', icon: MapPin },
-] as const;
+/**
+ * Student portal home — the student's window into their whole journey.
+ * Mobile-first: most students live on their phones (PRD §6).
+ */
+
+const badgeClass = (status: string) => {
+  if (status === 'verified') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'pending') return 'bg-amber-100 text-amber-700';
+  if (status === 'rejected') return 'bg-red-100 text-red-700';
+  return 'bg-gray-100 text-gray-500';
+};
 
 const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
   const { applications, documents, users } = useApp();
-  const { documentRequests, studentFulfillRequest } = useAppStore();
+  const { documentRequests } = useAppStore();
   const navigate = useNavigate();
-  const [uploadingReqId, setUploadingReqId] = useState<string | null>(null);
-  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  const myRequests = documentRequests.filter(r => r.studentId === user?.id && r.status === 'pending');
-
-  const handleFulfillRequest = async (reqId: string, file: File) => {
-    setUploadingReqId(reqId);
-    try {
-      const supabase = getSupabase();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const reader = new FileReader();
-      const dataBase64 = await new Promise<string>((resolve, reject) => {
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-        reader.readAsDataURL(file);
-      });
-      const resp = await fetch('/api/upload-file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }),
-      });
-      const json = await resp.json().catch(() => null) as { url?: string; error?: string } | null;
-      if (!resp.ok || !json?.url) throw new Error(json?.error ?? 'Upload failed');
-      studentFulfillRequest(reqId, json.url);
-      toast.success('Document uploaded successfully');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Upload failed');
-    } finally {
-      setUploadingReqId(null);
-    }
-  };
 
   const myApplication = applications.find(app => app.studentId === user?.id) ?? null;
-  const uniName = getUniversityName(user?.assignedUniversityId || myApplication?.university) || 'Not assigned';
+  const universityId = user?.assignedUniversityId || myApplication?.university;
+  const university = getUniversity(universityId);
+  const uniName = getUniversityName(universityId) || 'Not assigned yet';
   const firstName = user?.name?.split(' ')?.[0] ?? 'Student';
   const myDocs = documents.filter(d => d.studentId === user?.id);
+  const myRequests = documentRequests
+    .filter(r => r.studentId === user?.id && r.target !== 'agency')
+    .sort((a, b) => (a.status === 'pending' || a.status === 'rejected' ? -1 : 1) - (b.status === 'pending' || b.status === 'rejected' ? -1 : 1));
+  const openRequests = myRequests.filter(r => r.status === 'pending' || r.status === 'rejected').length;
+  const advisor = users.find(u => u.id === myApplication?.assignedStaffId);
 
-  const stepStatus = (stepId: string): 'verified' | 'pending' | 'rejected' | 'missing' => {
-    const stepDocs = myDocs.filter(d => d.type === stepId);
-    if (stepDocs.some(d => d.status === 'verified')) return 'verified';
-    if (stepDocs.some(d => d.status === 'pending')) return 'pending';
-    if (stepDocs.some(d => d.status === 'rejected')) return 'rejected';
-    return 'missing';
+  // Journey progress — pipeline first, legacy document steps as fallback.
+  const pipeline = myApplication?.pipeline;
+  const currentIdx = !pipeline ? 0
+    : pipeline.current === 'done' ? PIPELINE_STAGES.length
+    : PIPELINE_STAGES.findIndex(s => s.id === pipeline.current);
+  const stageDone = (idx: number) => {
+    if (!pipeline) return false;
+    if (pipeline.status === 'closed') return true;
+    const track = pipeline.stages[PIPELINE_STAGES[idx].id];
+    return Boolean(track?.completedAt) || idx < currentIdx;
   };
-
-  const completedCount = admissionSteps.filter(s => stepStatus(s.id) === 'verified').length;
-  const progressPercent = Math.round((completedCount / admissionSteps.length) * 100);
+  const completedCount = PIPELINE_STAGES.filter((_, i) => stageDone(i)).length;
+  const progressPercent = pipeline
+    ? Math.round((completedCount / PIPELINE_STAGES.length) * 100)
+    : 0;
 
   const uploadedByName = (id?: string) => users.find(x => x.id === id)?.name ?? '';
 
-  const badgeClass = (status: string) => {
-    if (status === 'verified') return 'bg-green-100 text-green-700';
-    if (status === 'pending') return 'bg-amber-100 text-amber-700';
-    if (status === 'rejected') return 'bg-red-100 text-red-700';
-    return 'bg-gray-100 text-gray-500';
-  };
+  const caseBadge = !pipeline ? null
+    : pipeline.status === 'closed'
+      ? { text: 'Completed', cls: 'bg-emerald-400/20 text-emerald-300 border-emerald-300/30', icon: <ShieldCheck className="h-3.5 w-3.5" /> }
+      : pipeline.status === 'cancelled'
+        ? { text: 'Cancelled', cls: 'bg-red-400/20 text-red-300 border-red-300/30', icon: <Ban className="h-3.5 w-3.5" /> }
+        : { text: 'In progress', cls: 'bg-amber-400/20 text-amber-300 border-amber-300/30', icon: <Clock className="h-3.5 w-3.5" /> };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 pb-24 md:pb-12">
 
-      {/* Welcome Hero */}
-      <div className="relative overflow-hidden rounded-3xl p-8 sm:p-10 bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 shadow-xl shadow-amber-200">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div>
-            <p className="text-black/60 font-bold text-sm uppercase tracking-widest mb-1">Welcome back</p>
-            <h1 className="text-3xl sm:text-4xl font-black text-black mb-3">{firstName}!</h1>
-            {myApplication ? (
-              <p className="text-black/70 font-semibold text-sm">
-                Application for <span className="font-black text-black">{uniName}</span> · Stage: <span className="font-black text-black capitalize">{myApplication.stage}</span>
-              </p>
-            ) : (
-              <p className="text-black/70 font-semibold text-sm">Your account is ready. Your application will appear once approved.</p>
-            )}
-            <button
-              onClick={() => navigate('/messages')}
-              className="mt-5 inline-flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors"
-            >
-              Message Advisor <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="bg-white/25 backdrop-blur-md border border-white/30 rounded-2xl p-6 text-center shrink-0 min-w-[140px]">
-            <p className="text-black/60 text-[10px] font-black uppercase tracking-widest mb-1">Progress</p>
-            <div className="text-5xl font-black text-black mb-3">{progressPercent}%</div>
-            <div className="w-full bg-black/20 rounded-full h-1.5 overflow-hidden">
-              <div className="h-full bg-black transition-all duration-700" style={{ width: `${progressPercent}%` }} />
+      {/* ── Hero — landing-page navy + gold ── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A1628] via-[#0D1F3C] to-[#0A1628] p-6 sm:p-10">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-16 bottom-0 h-48 w-48 rounded-full bg-amber-400/5 blur-2xl" />
+        <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[3px] text-amber-400">
+              Your journey to Georgia
+            </p>
+            <h1 className="mt-2 text-3xl sm:text-4xl font-black text-white">
+              Welcome, {firstName}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {universityId && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-gray-200">
+                  <GraduationCap className="h-3.5 w-3.5 text-amber-400" /> {uniName}
+                </span>
+              )}
+              {caseBadge && (
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${caseBadge.cls}`}>
+                  {caseBadge.icon} {caseBadge.text}
+                </span>
+              )}
+              {openRequests > 0 && (
+                <button
+                  onClick={() => document.getElementById('requested-docs')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-300 hover:bg-amber-400/30 transition-colors"
+                >
+                  <ClipboardList className="h-3.5 w-3.5" /> {openRequests} document{openRequests > 1 ? 's' : ''} needed
+                </button>
+              )}
             </div>
-            <p className="text-black/50 text-[10px] font-bold mt-2">{completedCount} / {admissionSteps.length} steps</p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                onClick={() => navigate('/messages')}
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-2.5 text-sm font-black uppercase tracking-wider text-[#0A1628] hover:bg-amber-300 transition-colors"
+              >
+                <MessageSquare className="h-4 w-4" /> Message advisor
+              </button>
+              <button
+                onClick={() => navigate('/appointments')}
+                className="inline-flex items-center gap-2 rounded-xl border-2 border-amber-400/60 px-5 py-2.5 text-sm font-bold uppercase tracking-wider text-amber-400 hover:bg-amber-400/10 transition-colors"
+              >
+                <Calendar className="h-4 w-4" /> Book a call
+              </button>
+            </div>
+          </div>
+
+          {/* Progress dial */}
+          <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-5 text-center backdrop-blur-sm sm:min-w-[150px]">
+            <p className="mb-1 text-[10px] font-black uppercase tracking-[2px] text-gray-400">Progress</p>
+            <div className="text-5xl font-black text-amber-400">{progressPercent}<span className="text-2xl">%</span></div>
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-700" style={{ width: `${progressPercent}%` }} />
+            </div>
+            <p className="mt-2 text-[10px] font-bold text-gray-400">{completedCount} / {PIPELINE_STAGES.length} stages</p>
           </div>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      {/* ── Rating prompt (after residency) ── */}
+      {myApplication && <RatingPrompt application={myApplication} />}
 
-          {/* Admission Journey */}
-          <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
-            <h2 className="text-xl font-black text-black mb-6">Admission Journey</h2>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
 
-            {/* Desktop: horizontal timeline */}
-            <div className="hidden sm:block relative">
-              <div className="absolute top-6 left-0 w-full h-1 bg-gray-100 -translate-y-1/2" />
-              <div
-                className="absolute top-6 left-0 h-1 bg-gradient-to-r from-amber-400 to-orange-500 -translate-y-1/2 transition-all duration-700"
-                style={{ width: `${progressPercent}%` }}
-              />
-              <div className="relative flex justify-between items-start">
-                {admissionSteps.map((step) => {
-                  const status = stepStatus(step.id);
-                  const Icon = step.icon;
-                  return (
-                    <div key={step.id} className="flex flex-col items-center flex-1">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center relative z-10 transition-all ${
-                        status === 'verified' ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-black shadow-lg shadow-amber-200' :
-                        status === 'pending' ? 'bg-amber-50 text-amber-500 border-2 border-amber-200' :
-                        status === 'rejected' ? 'bg-red-50 text-red-500 border-2 border-red-200' :
-                        'bg-gray-100 text-gray-400 border-2 border-gray-200'
-                      }`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <p className={`text-xs font-black uppercase tracking-wide mt-3 text-center ${status === 'verified' ? 'text-amber-600' : 'text-gray-400'}`}>{step.label}</p>
-                      <p className={`text-[10px] mt-1 font-bold ${
-                        status === 'verified' ? 'text-green-600' : status === 'pending' ? 'text-amber-500' : status === 'rejected' ? 'text-red-500' : 'text-gray-400'
-                      }`}>
-                        {status === 'verified' ? '✓ Done' : status === 'pending' ? 'Pending' : status === 'rejected' ? 'Rejected' : 'Awaiting'}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* ── Journey timeline ── */}
+          <DashboardSection title="Your Admission Journey" icon={Sparkles}>
+            <div className="px-4 sm:px-6 py-5">
+              {!pipeline ? (
+                <div className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+                  <p className="text-xs font-semibold leading-relaxed text-blue-700">
+                    {myApplication
+                      ? 'Your case opens as soon as your application is approved — the full journey appears here.'
+                      : 'Your account is ready. Your application journey will appear here once it is approved.'}
+                  </p>
+                </div>
+              ) : (
+                <ol className="space-y-0">
+                  {PIPELINE_STAGES.map((s, idx) => {
+                    const done = stageDone(idx);
+                    const active = pipeline.status === 'processing' && pipeline.current === s.id;
+                    const isLast = idx === PIPELINE_STAGES.length - 1;
+                    return (
+                      <li key={s.id} className="flex gap-4">
+                        <div className="flex flex-col items-center">
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-all
+                            ${done ? 'border-emerald-400 bg-emerald-50 text-emerald-600'
+                              : active ? 'border-amber-400 bg-amber-50 text-amber-600 shadow-lg shadow-amber-100'
+                              : 'border-gray-200 bg-white text-gray-300'}`}>
+                            {done ? <CheckCircle2 className="h-4.5 w-4.5" /> : active ? <Clock className="h-4 w-4" /> : <Circle className="h-3 w-3" />}
+                          </div>
+                          {!isLast && <div className={`my-1 w-0.5 flex-1 min-h-[20px] rounded ${done ? 'bg-emerald-300' : 'bg-gray-100'}`} />}
+                        </div>
+                        <div className={`pb-6 pt-1 ${isLast ? 'pb-1' : ''}`}>
+                          <p className={`text-sm font-black leading-none ${done ? 'text-emerald-700' : active ? 'text-gray-900' : 'text-gray-400'}`}>
+                            {s.label}
+                          </p>
+                          <p className="mt-1.5 text-xs text-gray-400">{s.description.replace(' Timer starts when Agency/Sales/CEO grants permission.', '').replace(' Timer starts when permission is granted.', '').replace(' No performance points.', '').replace(' Completing this closes the case (+2 points).', '')}</p>
+                          <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                            done ? 'bg-emerald-100 text-emerald-700' : active ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {done ? '✓ Done' : active ? 'In progress' : 'Upcoming'}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
             </div>
+          </DashboardSection>
 
-            {/* Mobile: vertical stepper */}
-            <div className="sm:hidden space-y-0">
-              {admissionSteps.map((step, idx) => {
-                const status = stepStatus(step.id);
-                const Icon = step.icon;
-                const isLast = idx === admissionSteps.length - 1;
-                return (
-                  <div key={step.id} className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                        status === 'verified' ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-black' :
-                        status === 'pending' ? 'bg-amber-50 text-amber-500 border-2 border-amber-200' :
-                        status === 'rejected' ? 'bg-red-50 text-red-500 border-2 border-red-200' :
-                        'bg-gray-100 text-gray-400 border-2 border-gray-200'
-                      }`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      {!isLast && <div className="w-0.5 flex-1 min-h-[24px] bg-gray-100 my-1" />}
-                    </div>
-                    <div className="pb-5 pt-1.5">
-                      <p className="font-black text-black text-sm leading-none">{step.label}</p>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full mt-1.5 inline-block ${badgeClass(status)}`}>
-                        {status === 'verified' ? 'Done' : status === 'pending' ? 'Pending' : status === 'rejected' ? 'Rejected' : 'Awaiting'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {/* ── Requested documents ── */}
+          <div id="requested-docs">
+            <DashboardSection title="Documents Requested From You" icon={ClipboardList} count={openRequests > 0 ? `${openRequests} to upload` : undefined}>
+              <RequestedDocsUploader requests={myRequests} mode="student" />
+            </DashboardSection>
           </div>
 
-          {/* Documents Checklist */}
-          <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
-            <h2 className="text-xl font-black text-black mb-6">Documents Checklist</h2>
-            <div className="space-y-2">
-              {admissionSteps.map((step) => {
-                const status = stepStatus(step.id);
-                return (
-                  <div key={step.id} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:bg-gray-100/70 transition-all">
-                    <div className="flex items-center gap-3">
-                      <step.icon className="w-4 h-4 text-amber-500" />
-                      <p className="font-semibold text-black text-sm">{step.label}</p>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeClass(status)}`}>
-                      {status}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-5 flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-2xl p-4">
-              <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-              <p className="text-blue-700 text-xs font-semibold leading-relaxed">
-                Your advisor uploads and verifies all documents on your behalf. Contact them via Messages if you have questions.
+          {/* ── My documents ── */}
+          <DashboardSection title="Your Documents" icon={FileText} count={myDocs.length || undefined}>
+            {myDocs.length === 0 ? (
+              <EmptyState icon={FileText} title="No documents yet" hint="Documents prepared by your advisor appear here." />
+            ) : (
+              <>
+                {/* Mobile: cards */}
+                <ul className="divide-y divide-gray-50 sm:hidden">
+                  {myDocs.map((doc) => (
+                    <li key={doc.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50">
+                        <FileText className="h-4 w-4 text-amber-500" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-gray-900">{doc.title}</p>
+                        <p className="text-[11px] text-gray-400">{new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${badgeClass(doc.status)}`}>{doc.status}</span>
+                      {doc.file && (
+                        <button onClick={() => void openStorageUrl(doc.file!)} className="shrink-0 rounded-lg border border-amber-100 bg-amber-50 p-2 text-amber-600 hover:bg-amber-100 transition-colors">
+                          <Download className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {/* Desktop: table */}
+                <div className="hidden overflow-x-auto sm:block">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        <th className="px-5 py-3 text-left">Document</th>
+                        <th className="px-5 py-3 text-left">Uploaded by</th>
+                        <th className="px-5 py-3 text-left">Status</th>
+                        <th className="px-5 py-3 text-left">Date</th>
+                        <th className="px-5 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {myDocs.map((doc) => (
+                        <tr key={doc.id} className="transition-colors hover:bg-gray-50/70">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50">
+                                <FileText className="h-4 w-4 text-amber-500" />
+                              </div>
+                              <p className="text-sm font-semibold text-gray-900">{doc.title}</p>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-gray-500">{uploadedByName(doc.uploadedBy) || '—'}</td>
+                          <td className="px-5 py-3.5">
+                            <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${badgeClass(doc.status)}`}>{doc.status}</span>
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-gray-400">{new Date(doc.uploadedAt).toLocaleDateString()}</td>
+                          <td className="px-5 py-3.5 text-right">
+                            {doc.file ? (
+                              <button
+                                type="button"
+                                onClick={() => void openStorageUrl(doc.file!)}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-100 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-600 transition-colors hover:bg-amber-100"
+                              >
+                                <Download className="h-3.5 w-3.5" /> Download
+                              </button>
+                            ) : (
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Preparing</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </DashboardSection>
+        </div>
+
+        {/* ── Right rail ── */}
+        <div className="space-y-6">
+
+          {/* University card */}
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+            <div className="bg-gradient-to-br from-[#0A1628] to-[#12294a] p-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/15">
+                <Building2 className="h-5 w-5 text-amber-400" />
+              </div>
+              <h3 className="text-lg font-black leading-tight text-white">{uniName}</h3>
+              {myApplication?.program && <p className="mt-1 text-sm font-semibold text-gray-400">{myApplication.program}</p>}
+              <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-gray-400">
+                <Landmark className="h-3.5 w-3.5 text-amber-400/70" /> Tbilisi, Georgia
               </p>
             </div>
-          </div>
-
-          {/* Pending Document Requests */}
-          {myRequests.length > 0 && (
-            <div className="bg-white rounded-3xl p-8 border border-blue-100 shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center">
-                  <ClipboardList className="w-5 h-5 text-blue-500" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-black">Documents Requested</h2>
-                  <p className="text-xs text-gray-500 font-medium">Your advisor needs these documents from you</p>
-                </div>
-                <span className="ml-auto px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-black">{myRequests.length} pending</span>
-              </div>
-              <div className="space-y-3">
-                {myRequests.map((req) => (
-                  <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-blue-50 border border-blue-100">
-                    <div>
-                      <p className="font-black text-black text-sm">{req.title}</p>
-                      {req.description && <p className="text-xs text-gray-500 font-medium mt-0.5">{req.description}</p>}
-                      <p className="text-[10px] text-gray-400 font-bold mt-1">Requested by {req.requestedByName} · {new Date(req.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <div className="shrink-0">
-                      <input
-                        ref={el => { fileInputRefs.current[req.id] = el; }}
-                        type="file"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) void handleFulfillRequest(req.id, file);
-                          e.target.value = '';
-                        }}
-                      />
-                      <button
-                        onClick={() => fileInputRefs.current[req.id]?.click()}
-                        disabled={uploadingReqId === req.id}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {uploadingReqId === req.id ? (
-                          <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Uploading…</>
-                        ) : (
-                          <><Upload className="w-4 h-4" />Upload</>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Documents Table */}
-          <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
-            <h2 className="text-xl font-black text-black mb-6">Your Documents</h2>
-            {myDocs.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-8 h-8 text-gray-200" />
-                </div>
-                <p className="font-bold text-gray-500">No documents yet</p>
-                <p className="text-sm text-gray-400 mt-1">Documents uploaded by your advisor will appear here.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left pb-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Document</th>
-                      <th className="text-left pb-3 text-[10px] font-black text-gray-400 uppercase tracking-widest hidden sm:table-cell">Uploaded By</th>
-                      <th className="text-left pb-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                      <th className="text-left pb-3 text-[10px] font-black text-gray-400 uppercase tracking-widest hidden sm:table-cell">Date</th>
-                      <th className="pb-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {myDocs.map((doc) => (
-                      <tr key={doc.id} className="hover:bg-gray-50/70 transition-colors">
-                        <td className="py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
-                              <FileText className="w-4 h-4 text-amber-500" />
-                            </div>
-                            <p className="font-semibold text-black text-sm">{doc.title}</p>
-                          </div>
-                        </td>
-                        <td className="py-4 text-sm text-gray-500 hidden sm:table-cell">{uploadedByName(doc.uploadedBy) || '—'}</td>
-                        <td className="py-4">
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${badgeClass(doc.status)}`}>{doc.status}</span>
-                        </td>
-                        <td className="py-4 text-sm text-gray-400 hidden sm:table-cell">{new Date(doc.uploadedAt).toLocaleDateString()}</td>
-                        <td className="py-4 text-right">
-                          {doc.file ? (
-                            <button
-                              type="button"
-                              onClick={() => void openStorageUrl(doc.file!)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors border border-amber-100"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Download</span>
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Pending</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {university && university.registrationTimeline.length > 0 && (
+              <div className="p-5">
+                <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Registration timeline</p>
+                <ol className="space-y-2.5">
+                  {university.registrationTimeline.map((step, i) => (
+                    <li key={i} className="flex gap-2.5">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[10px] font-black text-amber-600">{i + 1}</span>
+                      <div>
+                        <p className="text-xs font-bold leading-tight text-gray-800">{step.step}</p>
+                        <p className="text-[11px] text-gray-400">{step.duration}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
               </div>
             )}
           </div>
-        </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* University Card */}
-          <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-3xl p-7 shadow-xl shadow-amber-200">
-            <div className="w-10 h-10 bg-black/15 rounded-xl flex items-center justify-center mb-5">
-              <Building2 className="w-5 h-5 text-black" />
-            </div>
-            <h3 className="text-xl font-black text-black mb-1">{uniName}</h3>
-            {myApplication?.program && <p className="text-black/60 font-semibold text-sm mb-4">{myApplication.program}</p>}
-            <div className="pt-4 border-t border-black/15 space-y-2">
-              <div className="flex justify-between text-sm font-bold"><span className="text-black/60">Duration</span><span className="text-black">6 Years</span></div>
-              <div className="flex justify-between text-sm font-bold"><span className="text-black/60">Location</span><span className="text-black">Tbilisi, Georgia</span></div>
-            </div>
+          {/* Advisor card */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5">
+            <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Your advisor</p>
+            {advisor ? (
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-lg font-black text-amber-700">
+                  {advisor.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-black text-gray-900">{advisor.name}</p>
+                  <p className="text-xs text-gray-400">Personal admission advisor</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">An advisor will be assigned to you shortly.</p>
+            )}
+            <button
+              onClick={() => navigate('/messages')}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0A1628] px-5 py-3 text-sm font-black text-amber-400 transition-colors hover:bg-[#132c50]"
+            >
+              <MessageSquare className="h-4 w-4" /> Send a message <ArrowRight className="h-4 w-4" />
+            </button>
           </div>
 
-          {/* Status */}
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Current Stage</p>
-              <p className="text-2xl font-black text-black capitalize">{myApplication?.stage ?? 'Applied'}</p>
-            </div>
-            <div className="border-t border-gray-50 pt-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Application Status</p>
+          {/* Status card */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5">
+            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Current stage</p>
+            <p className="text-xl font-black text-gray-900">
+              {pipeline
+                ? pipeline.status === 'closed' ? 'Complete 🎉'
+                  : pipeline.status === 'cancelled' ? 'Cancelled'
+                  : PIPELINE_STAGES.find(s => s.id === pipeline.current)?.label ?? '—'
+                : (myApplication?.stage ?? 'Getting started')}
+            </p>
+            <div className="mt-4 border-t border-gray-50 pt-4">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Application status</p>
               <div className="flex items-center gap-2">
-                {myApplication?.status === 'approved' ? <CheckCircle2 className="w-4 h-4 text-green-500" /> :
-                 myApplication?.status === 'rejected' ? <AlertCircle className="w-4 h-4 text-red-500" /> :
-                 <Clock className="w-4 h-4 text-amber-500" />}
-                <p className="text-lg font-black text-black capitalize">{myApplication?.status ?? 'Pending'}</p>
+                {myApplication?.status === 'approved' ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
+                  myApplication?.status === 'rejected' ? <AlertCircle className="h-4 w-4 text-red-500" /> :
+                  <Clock className="h-4 w-4 text-amber-500" />}
+                <p className="text-lg font-black capitalize text-gray-900">{myApplication?.status ?? 'Pending'}</p>
               </div>
             </div>
           </div>
-
-          <button
-            onClick={() => navigate('/messages')}
-            className="w-full px-6 py-4 rounded-2xl font-black text-black bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 transition-all shadow-lg shadow-amber-200 flex items-center justify-center gap-2 text-sm"
-          >
-            Message Advisor <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
       </div>
     </div>

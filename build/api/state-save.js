@@ -58,6 +58,7 @@ const fetchJsonWithAdminHeaders = async (url, init, adminKey) => {
     }
     return last;
 };
+const asStringArray = (v, cap) => Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, cap) : [];
 const asState = (value) => {
     const v = (value && typeof value === 'object') ? value : {};
     return {
@@ -67,8 +68,17 @@ const asState = (value) => {
         appointments: Array.isArray(v.appointments) ? v.appointments : [],
         chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
         chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? v.chatThreadReadAt : {},
+        chatEmailNotify: (v.chatEmailNotify && typeof v.chatEmailNotify === 'object') ? v.chatEmailNotify : {},
         documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
         leads: Array.isArray(v.leads) ? v.leads : [],
+        futureLeads: Array.isArray(v.futureLeads) ? v.futureLeads : [],
+        trashedApplications: Array.isArray(v.trashedApplications) ? v.trashedApplications : [],
+        trashedUsers: Array.isArray(v.trashedUsers) ? v.trashedUsers : [],
+        credentialRequests: Array.isArray(v.credentialRequests) ? v.credentialRequests : [],
+        pointsLedger: Array.isArray(v.pointsLedger) ? v.pointsLedger : [],
+        universityConfig: (v.universityConfig && typeof v.universityConfig === 'object') ? v.universityConfig : null,
+        purgedApplicationIds: asStringArray(v.purgedApplicationIds, 50_000),
+        unTrashedUserIds: asStringArray(v.unTrashedUserIds, 50_000),
     };
 };
 const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(role);
@@ -117,6 +127,8 @@ const itemKey = (item, idx) => {
 };
 // Union two arrays, de-duplicating by id (objects) or value (strings).
 // `current` first preserves original order; only truly new items are appended.
+// FIRST-WINS for identical keys — used for the points ledger so an outcome
+// recorded once (award or penalty) can never be replaced.
 const unionArray = (currentVal, incomingVal, cap = 1000) => {
     const cur = Array.isArray(currentVal) ? currentVal : [];
     const inc = Array.isArray(incomingVal) ? incomingVal : [];
@@ -162,15 +174,123 @@ const mergeReadAt = (currentVal, incomingVal) => {
     });
     return out;
 };
+// chatEmailNotify: earliest firstAt wins, reminded flags accumulate, and keys
+// whose thread was read after firstAt are dropped (the reminder is obsolete).
+const mergeEmailNotify = (currentVal, incomingVal, readAt) => {
+    const out = {};
+    const keys = new Set([...Object.keys(currentVal || {}), ...Object.keys(incomingVal || {})]);
+    for (const key of keys) {
+        const cur = asRecord((currentVal || {})[key]);
+        const inc = asRecord((incomingVal || {})[key]);
+        const firstAtCur = cur ? getString(cur, 'firstAt') : '';
+        const firstAtInc = inc ? getString(inc, 'firstAt') : '';
+        const firstAt = [firstAtCur, firstAtInc].filter(Boolean).sort()[0] ?? '';
+        if (!firstAt)
+            continue;
+        const reminded = Boolean(cur?.reminded) || Boolean(inc?.reminded);
+        // key = `${threadKey}|${recipientId}` → read key = `${recipientId}|${threadKey}`
+        const sep = key.lastIndexOf('|');
+        if (sep > 0) {
+            const recipientId = key.slice(sep + 1);
+            const threadKey = key.slice(0, sep);
+            const read = readAt[`${recipientId}|${threadKey}`];
+            if (read && read >= firstAt)
+                continue;
+        }
+        out[key] = { firstAt, reminded };
+    }
+    return out;
+};
 // Application fields that must never be downgraded from a real value back to
 // empty by a stale snapshot. Re-uploads (a new non-empty URL) still win.
 const PROTECTED_STR_FIELDS = [
     'intakeDetails', 'intakeVideoUrl', 'intakePassportCopy', 'intakeHighSchoolCertificate',
     'intakeHighSchoolMissingNote', 'intakeBirthCertificate', 'intakeMotherPassport',
     'intakeFatherPassport', 'dob',
+    // Identity/assignment of an approved case must survive stale snapshots too.
+    'studentId', 'assignedStaffId', 'university', 'program', 'studentEmail',
+    'approvedBy', 'approvedAt',
 ];
 // Application list fields that accumulate (attachments, audit trail, notes).
 const PROTECTED_ARR_FIELDS = ['intakeAttachments', 'intakeExtraDocs', 'events', 'internalNotes'];
+const PIPELINE_STAGE_IDS = [
+    'translated_documents', 'university_approval', 'recognition_letter',
+    'ministry_order', 'visa_documents', 'visa_residency',
+];
+// Merge two pipeline objects without ever regressing progress: earliest
+// timestamps win per stage (a stamp only appears once), status can only move
+// forward (processing → closed/cancelled), `current` takes the furthest stage.
+const mergePipeline = (curVal, incVal) => {
+    const cur = asRecord(curVal);
+    const inc = asRecord(incVal);
+    if (!cur)
+        return inc ?? undefined;
+    if (!inc)
+        return cur;
+    const curStages = asRecord(cur.stages) ?? {};
+    const incStages = asRecord(inc.stages) ?? {};
+    const stages = {};
+    for (const sid of PIPELINE_STAGE_IDS) {
+        const c = asRecord(curStages[sid]);
+        const i = asRecord(incStages[sid]);
+        if (!c && !i)
+            continue;
+        const pick = (field) => {
+            const cv = c ? getString(c, field) : '';
+            const iv = i ? getString(i, field) : '';
+            // earliest non-empty timestamp wins (a stage event only happens once)
+            if (cv && iv)
+                return cv <= iv ? cv : iv;
+            return cv || iv;
+        };
+        const pickBy = (tsField, whoField) => {
+            const cv = c ? getString(c, tsField) : '';
+            const iv = i ? getString(i, tsField) : '';
+            const src = (cv && (!iv || cv <= iv)) ? c : i;
+            return src ? getString(src, whoField) : '';
+        };
+        const track = {};
+        for (const [ts, by, byName] of [
+            ['startedAt', '', ''],
+            ['completedAt', 'completedById', 'completedByName'],
+            ['permissionAt', 'permissionById', 'permissionByName'],
+        ]) {
+            const v = pick(ts);
+            if (v)
+                track[ts] = v;
+            if (by) {
+                const b = pickBy(ts, by);
+                if (b)
+                    track[by] = b;
+            }
+            if (byName) {
+                const b = pickBy(ts, byName);
+                if (b)
+                    track[byName] = b;
+            }
+        }
+        if (Object.keys(track).length)
+            stages[sid] = track;
+    }
+    const statusRank = { processing: 0, closed: 1, cancelled: 1 };
+    const curStatus = getString(cur, 'status') || 'processing';
+    const incStatus = getString(inc, 'status') || 'processing';
+    const status = (statusRank[incStatus] ?? 0) >= (statusRank[curStatus] ?? 0) ? incStatus : curStatus;
+    const stageRank = (s) => s === 'done' ? PIPELINE_STAGE_IDS.length : Math.max(0, PIPELINE_STAGE_IDS.indexOf(s));
+    const curCurrent = getString(cur, 'current') || 'translated_documents';
+    const incCurrent = getString(inc, 'current') || 'translated_documents';
+    const current = stageRank(incCurrent) >= stageRank(curCurrent) ? incCurrent : curCurrent;
+    const scalar = (field) => getString(cur, field) || getString(inc, field)
+        ? ((getString(inc, field) || getString(cur, field)))
+        : undefined;
+    const out = { status, current, stages };
+    for (const f of ['closedAt', 'cancelledAt', 'cancelledById', 'cancelledByName', 'cancelReason']) {
+        const v = scalar(f);
+        if (v)
+            out[f] = v;
+    }
+    return out;
+};
 const mergeApplication = (cur, inc) => {
     const merged = { ...cur, ...inc }; // last-write-wins baseline
     for (const f of PROTECTED_STR_FIELDS) {
@@ -182,33 +302,91 @@ const mergeApplication = (cur, inc) => {
     }
     if (cur.intakeSLARewarded === true)
         merged.intakeSLARewarded = true; // never un-reward
+    // A student rating, once given, never disappears or changes.
+    if (cur.rating && typeof cur.rating === 'object')
+        merged.rating = cur.rating;
+    // Student credentials survive snapshots that never loaded them.
+    if (cur.studentCredentials && typeof cur.studentCredentials === 'object' && !(inc.studentCredentials && typeof inc.studentCredentials === 'object')) {
+        merged.studentCredentials = cur.studentCredentials;
+    }
+    // Status can never regress to 'submitted' once the application was processed.
+    const curStatus = getString(cur, 'status');
+    const incStatus = getString(inc, 'status');
+    if ((curStatus === 'approved' || curStatus === 'rejected') && incStatus === 'submitted') {
+        merged.status = curStatus;
+    }
+    const pipeline = mergePipeline(cur.pipeline, inc.pipeline);
+    if (pipeline)
+        merged.pipeline = pipeline;
     return merged;
 };
-const mergeApplications = (currentApps, incomingApps) => {
-    const curById = new Map();
-    (Array.isArray(currentApps) ? currentApps : []).forEach((a) => {
-        const id = getString(asRecord(a), 'id');
-        if (id)
-            curById.set(id, a);
-    });
-    const seen = new Set();
-    const out = [];
-    (Array.isArray(incomingApps) ? incomingApps : []).forEach((a) => {
-        const r = asRecord(a);
-        const id = r ? getString(r, 'id') : '';
-        if (!id) {
-            out.push(a);
-            return;
+const placeApplications = (current, incoming, purged) => {
+    const curPlace = new Map();
+    const incPlace = new Map();
+    const collect = (map, arr, bucket) => {
+        for (const a of arr) {
+            const r = asRecord(a);
+            const id = r ? getString(r, 'id') : '';
+            if (!r || !id)
+                continue;
+            if (!map.has(id))
+                map.set(id, { row: r, bucket });
         }
+    };
+    collect(curPlace, current.applications, 'active');
+    collect(curPlace, current.futureLeads, 'future');
+    collect(curPlace, current.trashedApplications, 'trash');
+    collect(incPlace, incoming.applications, 'active');
+    collect(incPlace, incoming.futureLeads, 'future');
+    collect(incPlace, incoming.trashedApplications, 'trash');
+    const out = { active: [], future: [], trash: [] };
+    const push = (bucket, row) => {
+        if (bucket === 'active')
+            out.active.push(row);
+        else if (bucket === 'future')
+            out.future.push(row);
+        else
+            out.trash.push(row);
+    };
+    // Incoming order first (client's view), then anything it never loaded.
+    const seen = new Set();
+    for (const [id, inc] of incPlace) {
+        if (purged.has(id))
+            continue;
         seen.add(id);
-        const cur = asRecord(curById.get(id));
-        out.push(cur && r ? mergeApplication(cur, r) : a);
-    });
-    // keep applications the saving client never loaded (created by teammates)
-    curById.forEach((a, id) => { if (!seen.has(id))
-        out.push(a); });
+        const cur = curPlace.get(id);
+        const row = cur ? mergeApplication(cur.row, inc.row) : inc.row;
+        push(inc.bucket, row);
+    }
+    for (const [id, cur] of curPlace) {
+        if (seen.has(id) || purged.has(id))
+            continue;
+        push(cur.bucket, cur.row);
+    }
+    // Rows without ids (shouldn't happen) — keep incoming active ones as-is.
+    for (const a of incoming.applications) {
+        const r = asRecord(a);
+        if (!r || getString(r, 'id'))
+            continue;
+        out.active.push(a);
+    }
     return out;
 };
+// universityConfig: whole-object latest-wins by updatedAt.
+const mergeUniversityConfig = (cur, inc) => {
+    if (!cur)
+        return inc;
+    if (!inc)
+        return cur;
+    const curAt = getString(cur, 'updatedAt');
+    const incAt = getString(inc, 'updatedAt');
+    return incAt >= curAt ? inc : cur;
+};
+// trashedUsers: union minus explicitly restored/purged users.
+const mergeTrashedUsers = (cur, inc, unTrashed) => mergeCollection(cur, inc, 10_000).filter((u) => {
+    const id = getString(asRecord(u), 'id');
+    return !id || !unTrashed.has(id);
+});
 export default async function handler(req, res) {
     try {
         if (req.method !== 'POST') {
@@ -264,17 +442,30 @@ export default async function handler(req, res) {
         const now = new Date().toISOString();
         if (isInternal(role)) {
             // Additive merge (see helpers above) instead of full overwrite, so a
-            // teammate's freshly-uploaded intake / documents / notes are never wiped
-            // by another internal user saving an older snapshot.
+            // teammate's freshly-saved data is never wiped by another internal user
+            // saving an older snapshot.
+            const purged = new Set([...current.purgedApplicationIds, ...incoming.purgedApplicationIds]);
+            const unTrashed = new Set([...current.unTrashedUserIds, ...incoming.unTrashedUserIds]);
+            const placed = placeApplications(current, incoming, purged);
             next = {
-                applications: mergeApplications(current.applications, incoming.applications).slice(0, 50_000),
+                applications: placed.active.slice(0, 50_000),
+                futureLeads: placed.future.slice(0, 50_000),
+                trashedApplications: placed.trash.slice(0, 50_000),
                 documents: mergeCollection(current.documents, incoming.documents, 50_000),
                 notifications: mergeCollection(current.notifications, incoming.notifications, 100_000),
                 appointments: mergeCollection(current.appointments, incoming.appointments, 50_000),
                 chatMessages: mergeCollection(current.chatMessages, incoming.chatMessages, 200_000),
                 chatThreadReadAt: mergeReadAt(current.chatThreadReadAt, incoming.chatThreadReadAt),
+                chatEmailNotify: mergeEmailNotify(current.chatEmailNotify, incoming.chatEmailNotify, mergeReadAt(current.chatThreadReadAt, incoming.chatThreadReadAt)),
                 documentRequests: mergeCollection(current.documentRequests, incoming.documentRequests, 50_000),
                 leads: mergeCollection(current.leads, incoming.leads, 50_000),
+                trashedUsers: mergeTrashedUsers(current.trashedUsers, incoming.trashedUsers, unTrashed),
+                credentialRequests: mergeCollection(current.credentialRequests, incoming.credentialRequests, 50_000),
+                // FIRST-WINS union: a recorded SLA outcome can never be replaced.
+                pointsLedger: unionArray(current.pointsLedger, incoming.pointsLedger, 200_000),
+                universityConfig: mergeUniversityConfig(current.universityConfig, incoming.universityConfig),
+                purgedApplicationIds: Array.from(purged).slice(0, 50_000),
+                unTrashedUserIds: Array.from(unTrashed).slice(0, 50_000),
             };
         }
         else if (role === 'student') {
@@ -311,10 +502,103 @@ export default async function handler(req, res) {
                         time: now,
                     }];
             });
+            // Students may fulfil their own document requests: pending/rejected →
+            // uploaded, with a file. Nothing else on the request is writable.
+            const incReqById = new Map();
+            incoming.documentRequests.forEach((r0) => {
+                const r = asRecord(r0);
+                const id = r ? getString(r, 'id') : '';
+                if (r && id)
+                    incReqById.set(id, r);
+            });
+            const mergedRequests = current.documentRequests.map((r0) => {
+                const r = asRecord(r0);
+                if (!r)
+                    return r0;
+                if (getString(r, 'studentId') !== userId)
+                    return r0;
+                if (getString(r, 'target') === 'agency')
+                    return r0;
+                const inc = incReqById.get(getString(r, 'id'));
+                if (!inc)
+                    return r0;
+                const curStatus = getString(r, 'status');
+                const incStatus = getString(inc, 'status');
+                const file = getString(inc, 'fulfilledFile');
+                const canUpload = curStatus === 'pending' || curStatus === 'rejected';
+                if (canUpload && (incStatus === 'uploaded' || incStatus === 'fulfilled') && file) {
+                    return {
+                        ...r,
+                        status: 'uploaded',
+                        fulfilledFile: file.slice(0, 2000),
+                        fulfilledAt: now,
+                        uploadedByName: getString(inc, 'uploadedByName').slice(0, 120) || undefined,
+                    };
+                }
+                return r0;
+            });
+            // Students may add a one-time 1–5★ service rating to their own
+            // application after residency (validated against the CURRENT state).
+            const incAppById = new Map();
+            incoming.applications.forEach((a0) => {
+                const a = asRecord(a0);
+                const id = a ? getString(a, 'id') : '';
+                if (a && id)
+                    incAppById.set(id, a);
+            });
+            const acceptedRatings = [];
+            const mergedApps = current.applications.map((a0) => {
+                const a = asRecord(a0);
+                if (!a)
+                    return a0;
+                if (getString(a, 'studentId') !== userId)
+                    return a0;
+                if (a.rating && typeof a.rating === 'object')
+                    return a0; // already rated
+                const inc = incAppById.get(getString(a, 'id'));
+                const rating = inc ? asRecord(inc.rating) : null;
+                if (!rating || typeof rating.stars !== 'number')
+                    return a0;
+                const stars = Math.round(rating.stars);
+                if (stars < 1 || stars > 5)
+                    return a0;
+                const pipeline = asRecord(a.pipeline);
+                const stages = pipeline ? asRecord(pipeline.stages) : null;
+                const visaRes = stages ? asRecord(stages.visa_residency) : null;
+                const residencyDone = (pipeline && getString(pipeline, 'status') === 'closed') || Boolean(visaRes && getString(visaRes, 'completedAt'));
+                if (!residencyDone)
+                    return a0;
+                const comment = typeof rating.comment === 'string' ? rating.comment.slice(0, 2000) : undefined;
+                acceptedRatings.push({ appId: getString(a, 'id'), name: getString(a, 'name'), stars, comment });
+                return { ...a, rating: { stars, ...(comment ? { comment } : {}), at: now } };
+            });
+            // Clients can't be trusted to notify the CEO about their own rating —
+            // the server generates those notifications when a rating is accepted.
+            let ratingNotifications = [];
+            if (acceptedRatings.length) {
+                const ceoResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/profiles?role=eq.ceo&select=id`, { method: 'GET' }, adminKey);
+                const ceoIds = Array.isArray(ceoResp.json)
+                    ? ceoResp.json.map((r) => getString(asRecord(r), 'id')).filter(Boolean)
+                    : [];
+                ratingNotifications = acceptedRatings.flatMap(r => ceoIds.map((cid) => ({
+                    id: `${r.appId}-rating-${cid}`,
+                    userId: cid,
+                    title: `New ${r.stars}-star rating`,
+                    message: `${r.name} rated the service ${r.stars}/5${r.comment ? ` — "${r.comment.slice(0, 120)}"` : ''}`,
+                    type: 'success',
+                    time: now,
+                    read: false,
+                })));
+            }
             next = {
                 ...current,
+                applications: mergedApps,
                 chatThreadReadAt: mergedReadAt,
                 chatMessages: uniqueBy([...current.chatMessages, ...newMessages], (x) => getString(asRecord(x), 'id')),
+                documentRequests: mergedRequests,
+                notifications: ratingNotifications.length
+                    ? mergeCollection(current.notifications, ratingNotifications, 100_000)
+                    : current.notifications,
             };
         }
         else if (role === 'agency') {
@@ -364,6 +648,41 @@ export default async function handler(req, res) {
                     const merged = Array.from(new Set([...oldArr, ...newArr]));
                     return merged.slice(0, 200);
                 };
+                // Agencies (agents) may grant permission for gated pipeline stages —
+                // that's the only pipeline write they are allowed.
+                const mergeAgencyPipeline = (curP, incP) => {
+                    const cur = asRecord(curP);
+                    const inc = asRecord(incP);
+                    if (!cur || !inc)
+                        return curP;
+                    const curStages = asRecord(cur.stages) ?? {};
+                    const incStages = asRecord(inc.stages) ?? {};
+                    const gated = ['recognition_letter', 'ministry_order'];
+                    let changed = false;
+                    const nextStages = { ...curStages };
+                    for (const sid of gated) {
+                        if (getString(cur, 'current') !== sid)
+                            continue; // only the current stage
+                        const c = asRecord(curStages[sid]);
+                        const i = asRecord(incStages[sid]);
+                        if (!i)
+                            continue;
+                        if (c && getString(c, 'permissionAt'))
+                            continue; // already granted
+                        const permissionAt = getString(i, 'permissionAt');
+                        if (!permissionAt)
+                            continue;
+                        changed = true;
+                        nextStages[sid] = {
+                            ...(c ?? {}),
+                            permissionAt: now,
+                            permissionById: userId,
+                            permissionByName: getString(i, 'permissionByName').slice(0, 120) || undefined,
+                            startedAt: getString(c ?? null, 'startedAt') || now,
+                        };
+                    }
+                    return changed ? { ...cur, stages: nextStages } : curP;
+                };
                 const nextApp = {
                     ...baseApp,
                     intakeExtraDocs: mergeArray(baseApp.intakeExtraDocs, r.intakeExtraDocs),
@@ -371,6 +690,7 @@ export default async function handler(req, res) {
                     intakeVideoUrl: typeof r.intakeVideoUrl === 'string' ? r.intakeVideoUrl : baseApp.intakeVideoUrl,
                     intakePassportCopy: typeof r.intakePassportCopy === 'string' ? r.intakePassportCopy : baseApp.intakePassportCopy,
                     intakeHighSchoolCertificate: typeof r.intakeHighSchoolCertificate === 'string' ? r.intakeHighSchoolCertificate : baseApp.intakeHighSchoolCertificate,
+                    pipeline: mergeAgencyPipeline(baseApp.pipeline, r.pipeline),
                 };
                 updatedApps.push(nextApp);
             });
@@ -387,11 +707,45 @@ export default async function handler(req, res) {
                     return;
                 mergedReadAt[k] = v;
             });
+            // Agencies may fulfil document requests addressed to them:
+            // pending/rejected → uploaded, with a file.
+            const incReqById = new Map();
+            incoming.documentRequests.forEach((r0) => {
+                const r = asRecord(r0);
+                const id = r ? getString(r, 'id') : '';
+                if (r && id)
+                    incReqById.set(id, r);
+            });
+            const mergedRequests = current.documentRequests.map((r0) => {
+                const r = asRecord(r0);
+                if (!r)
+                    return r0;
+                if (getString(r, 'target') !== 'agency' || getString(r, 'agencyId') !== userId)
+                    return r0;
+                const inc = incReqById.get(getString(r, 'id'));
+                if (!inc)
+                    return r0;
+                const curStatus = getString(r, 'status');
+                const incStatus = getString(inc, 'status');
+                const file = getString(inc, 'fulfilledFile');
+                const canUpload = curStatus === 'pending' || curStatus === 'rejected';
+                if (canUpload && (incStatus === 'uploaded' || incStatus === 'fulfilled') && file) {
+                    return {
+                        ...r,
+                        status: 'uploaded',
+                        fulfilledFile: file.slice(0, 2000),
+                        fulfilledAt: now,
+                        uploadedByName: getString(inc, 'uploadedByName').slice(0, 120) || undefined,
+                    };
+                }
+                return r0;
+            });
             next = {
                 ...current,
                 applications: mergedApps,
                 chatThreadReadAt: mergedReadAt,
                 chatMessages: uniqueBy([...current.chatMessages, ...newMessages], (x) => getString(asRecord(x), 'id')),
+                documentRequests: mergedRequests,
             };
         }
         else {

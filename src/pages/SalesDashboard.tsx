@@ -23,9 +23,10 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
-import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
+import { UNIVERSITY_OPTIONS, getUniversity, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
 import { openStorageUrl } from '../lib/storage';
+import { PipelineTracker, CaseStatusBadge } from '../components/dashboard/PipelineTracker';
 
 const toneFromColor = (color: string): StatTone =>
   color.includes('amber') ? 'amber'
@@ -48,6 +49,7 @@ const SalesDashboard: React.FC = () => {
   const [intakeModal, setIntakeModal] = useState<{ open: boolean; app?: Application }>({ open: false });
   const [previewModal, setPreviewModal] = useState<{ open: boolean; app?: Application }>({ open: false });
   const [assignModal, setAssignModal] = useState<{ open: boolean; stuId?: string; staffId?: string }>({ open: false });
+  const [pipelineOpenId, setPipelineOpenId] = useState<string | null>(null);
   const [requestModal, setRequestModal] = useState<{ open: boolean; app?: Application; message: string }>({ open: false, message: '' });
   const [credentialsModal, setCredentialsModal] = useState<{ open: boolean; username?: string; password?: string; emailSent?: boolean }>({ open: false });
   type IntakeForm = {
@@ -579,7 +581,8 @@ Video: ${intake.videoUrl}`;
               const staff = users.find(u => u.id === a.assignedStaffId);
               const initial = staff?.name?.charAt(0)?.toUpperCase() ?? 'A';
               return (
-                <div key={a.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                <div key={a.id}>
+                <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
                   {/* Student info */}
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-700 font-bold flex items-center justify-center text-sm shrink-0">
@@ -589,6 +592,7 @@ Video: ${intake.videoUrl}`;
                       <p className="text-sm font-semibold text-gray-900 truncate">{a.name}</p>
                       <p className="text-xs text-gray-400 truncate">{a.university ? getUniversityName(a.university) : 'University not set'}</p>
                     </div>
+                    {a.pipeline && <CaseStatusBadge application={a} />}
                   </div>
                   {/* Controls */}
                   <div className="flex flex-wrap items-center gap-2">
@@ -628,6 +632,35 @@ Video: ${intake.videoUrl}`;
                     >
                       Set Uni
                     </button>
+                    {(() => {
+                      // Faculty/program picker fed by the university catalog (PRD §10/§11).
+                      const uniPrograms = getUniversity(a.university)?.programs ?? [];
+                      if (uniPrograms.length === 0) return null;
+                      return (
+                        <select
+                          className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 bg-white max-w-[220px]"
+                          value={a.program ?? ''}
+                          onChange={(e) => {
+                            try {
+                              useAppStore.getState().setApplicationMeta(a.id, { program: e.target.value });
+                              toast.success('Program updated');
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Failed to set program');
+                            }
+                          }}
+                        >
+                          <option value="" disabled>Select program</option>
+                          {a.program && !uniPrograms.some(p => p.name === a.program) && (
+                            <option value={a.program}>{a.program}</option>
+                          )}
+                          {uniPrograms.map((p, i) => (
+                            <option key={`${p.name}-${p.level}-${i}`} value={p.name}>
+                              {p.name} ({p.level === 'bachelor' ? 'BA' : 'MA'} · {p.years}y · {p.price})
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    })()}
                     <select
                       className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 bg-white"
                       value={assigningStaff?.studentId === a.studentId ? (assigningStaff?.staffId ?? '') : (a.assignedStaffId ?? '')}
@@ -659,7 +692,25 @@ Video: ${intake.videoUrl}`;
                     >
                       Assign Admin
                     </button>
+                    {a.pipeline && (
+                      <button
+                        onClick={() => setPipelineOpenId(v => v === a.id ? null : a.id)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border ${
+                          pipelineOpenId === a.id
+                            ? 'bg-[#0A1628] text-amber-400 border-[#0A1628]'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pipelineOpenId === a.id ? 'Hide pipeline' : 'Pipeline'}
+                      </button>
+                    )}
                   </div>
+                </div>
+                {pipelineOpenId === a.id && a.pipeline && (
+                  <div className="px-5 pb-4">
+                    <PipelineTracker application={a} />
+                  </div>
+                )}
                 </div>
               );
             })}

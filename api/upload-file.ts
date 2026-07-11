@@ -123,7 +123,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         ? String(callerProfile.json[0].role).trim().toLowerCase()
         : '';
     }
-    const allowed = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency']);
+    // Students upload their own requested documents (PRD §2); files are keyed
+    // under the caller's id so they can't overwrite anyone else's objects.
+    const allowed = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student']);
     if (!allowed.has(role)) {
       res.status(403).json({ error: 'Forbidden' });
       return;

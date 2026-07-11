@@ -17,9 +17,10 @@ import { useAppStore } from '../store/appStore';
 import { getAvatar, setAvatar, clearAvatar, onAvatarChange, fileToAvatarDataUrl } from '../lib/avatar';
 import { STATUS_ORDER, statusMeta, isLeadDue } from '../lib/leads';
 import type { LeadStatus } from '../store/appStore';
-// Dark-text wordmark — the previous logo had white text that was invisible on
-// the white sidebar, leaving only the orange marks with an empty gap.
+// Dark-text wordmark for white surfaces (mobile drawer header).
 import logoUrl from '../../thewaynewlogo-removebg-preview.png';
+// White-text wordmark for the navy sidebar (dark text is invisible there).
+import logoDarkBgUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 
 // Avatar: shows the uploaded photo, else a colored initial. `className` sizes it.
 const Avatar = ({ name, photo, className = '', textClass = 'text-sm' }: { name?: string; photo?: string; className?: string; textClass?: string }) => (
@@ -69,11 +70,11 @@ const rankMedal = (rank: number) => {
 };
 
 const howToEarn = [
-  { action: 'Claim a lead',          pts: +1,  icon: Zap       },
-  { action: 'Approve a student',     pts: +1,  icon: Users     },
-  { action: 'Assign a university',   pts: +1,  icon: GraduationCap },
-  { action: 'Add internal note',     pts: +1,  icon: FileText  },
-  { action: 'Complete intake',       pts: +1,  icon: Star      },
+  { action: 'Stage completed on time (SLA)', pts: '+2 / +1', icon: Zap },
+  { action: 'Visa & residency uploaded',     pts: '+2',      icon: Users },
+  { action: 'Approve a student',             pts: '+1',      icon: GraduationCap },
+  { action: 'Claim a lead / complete intake', pts: '+1',     icon: FileText },
+  { action: 'Deadline passed (automatic)',   pts: '−1 / −2', icon: Star },
 ];
 
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -358,24 +359,31 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return (
     <div className="min-h-screen bg-[#FAFAF9] flex overflow-hidden tw-mobile-shell">
 
-      {/* ── Sidebar Desktop ── */}
-      <aside className={`hidden md:flex flex-col bg-white border-r border-gray-100 transition-all duration-300 ease-in-out shrink-0 ${isSidebarOpen ? 'w-64' : 'w-[72px]'}`}>
+      {/* ── Sidebar Desktop — landing-page navy + gold ── */}
+      <aside className={`hidden md:flex flex-col bg-gradient-to-b from-[#0A1628] to-[#0D1F3C] transition-all duration-300 ease-in-out shrink-0 ${isSidebarOpen ? 'w-64' : 'w-[72px]'}`}>
         {/* Logo */}
-        <Link to="/" title="Home" className={`flex items-center gap-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${isSidebarOpen ? 'px-5 py-4' : 'px-4 py-4 justify-center'}`}>
-          <img src={logoUrl} alt="The Way — Home" className="h-9 w-auto object-contain shrink-0" />
+        <Link to="/" title="Home" className={`flex items-center gap-3 border-b border-white/5 hover:bg-white/5 transition-colors ${isSidebarOpen ? 'px-5 py-4' : 'px-4 py-4 justify-center'}`}>
+          {isSidebarOpen ? (
+            <img src={logoDarkBgUrl} alt="The Way — Home" className="h-9 w-auto object-contain shrink-0" />
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-[#0A1628] font-black text-lg">W</div>
+          )}
         </Link>
 
         {/* Nav */}
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto custom-scrollbar">
+          {isSidebarOpen && (
+            <p className="px-3 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[2px] text-gray-500">Workspace</p>
+          )}
           <Link
             to="/"
             title={!isSidebarOpen ? 'Home' : undefined}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative ${
-              location.pathname === '/' ? 'bg-amber-50 text-amber-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 group relative ${
+              location.pathname === '/' ? 'bg-amber-400/15 text-amber-300' : 'text-gray-400 hover:bg-white/5 hover:text-white'
             }`}
           >
-            {location.pathname === '/' && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-amber-500 rounded-r-full" />}
-            <Home className={`w-5 h-5 shrink-0 ${location.pathname === '/' ? 'text-amber-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+            {location.pathname === '/' && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-amber-400 rounded-r-full" />}
+            <Home className={`w-5 h-5 shrink-0 ${location.pathname === '/' ? 'text-amber-400' : 'text-gray-500 group-hover:text-gray-300'}`} />
             {isSidebarOpen && <span className="text-sm font-semibold truncate">Home</span>}
           </Link>
           {filteredItems.map((item) => {
@@ -385,48 +393,48 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 key={item.path}
                 to={item.path}
                 title={!isSidebarOpen ? item.label : undefined}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 group relative ${
                   isActive
-                    ? 'bg-amber-50 text-amber-700'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-amber-400/15 text-amber-300'
+                    : 'text-gray-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
-                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-amber-500 rounded-r-full" />}
-                <item.icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-amber-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
-                {isSidebarOpen && <span className={`text-sm font-semibold truncate ${isActive ? 'text-amber-700' : ''}`}>{item.label}</span>}
+                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-amber-400 rounded-r-full" />}
+                <item.icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-amber-400' : 'text-gray-500 group-hover:text-gray-300'}`} />
+                {isSidebarOpen && <span className={`text-sm font-semibold truncate ${isActive ? 'text-amber-300' : ''}`}>{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
         {/* User footer */}
-        <div className="p-3 border-t border-gray-100 space-y-1">
+        <div className="p-3 border-t border-white/5 space-y-1">
           <a
             href="/welcome"
             target="_blank"
             rel="noopener noreferrer"
             title={!isSidebarOpen ? 'Main website' : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-all ${!isSidebarOpen ? 'justify-center' : ''}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-all ${!isSidebarOpen ? 'justify-center' : ''}`}
           >
-            <Globe className="w-5 h-5 shrink-0 text-gray-400" />
-            {isSidebarOpen && <><span className="text-sm font-semibold flex-1">Main website</span><ArrowUpRight className="w-4 h-4 text-gray-300" /></>}
+            <Globe className="w-5 h-5 shrink-0 text-gray-500" />
+            {isSidebarOpen && <><span className="text-sm font-semibold flex-1">Main website</span><ArrowUpRight className="w-4 h-4 text-gray-600" /></>}
           </a>
           <button
             onClick={openProfile}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-all text-left ${!isSidebarOpen ? 'justify-center' : ''}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all text-left ${!isSidebarOpen ? 'justify-center' : ''}`}
           >
             <Avatar name={user?.name} photo={avatarUrl} className="w-8 h-8 rounded-lg shrink-0" />
             {isSidebarOpen && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-900 truncate leading-none">{user?.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{meta.label}</p>
+                <p className="text-sm font-semibold text-white truncate leading-none">{user?.name}</p>
+                <p className="text-xs text-amber-400/70 mt-0.5">{meta.label} · {user?.points ?? 0} pts</p>
               </div>
             )}
-            {isSidebarOpen && <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
+            {isSidebarOpen && <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />}
           </button>
           <button
             onClick={handleLogout}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all ${!isSidebarOpen ? 'justify-center' : ''}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all ${!isSidebarOpen ? 'justify-center' : ''}`}
           >
             <LogOut className="w-5 h-5 shrink-0" />
             {isSidebarOpen && <span className="text-sm font-semibold">Log out</span>}
@@ -702,7 +710,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                               </div>
                               <span className="text-sm text-gray-700 font-medium">{item.action}</span>
                             </div>
-                            <span className="text-sm font-bold text-amber-600">+{item.pts} pt</span>
+                            <span className={`text-sm font-bold ${String(item.pts).startsWith('−') ? 'text-red-500' : 'text-amber-600'}`}>{item.pts}</span>
                           </div>
                         ))}
                       </div>
@@ -1020,20 +1028,20 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
         )}
       </AnimatePresence>
 
-      {/* ── Mobile Bottom Nav ── */}
+      {/* ── Mobile Bottom Nav — navy app bar ── */}
       {user && (
         <nav className="fixed bottom-0 left-0 right-0 z-30 md:hidden pb-safe">
-          <div className="bg-white border-t border-gray-100 px-2 pb-2 pt-1 flex items-center gap-1">
+          <div className="bg-gradient-to-r from-[#0A1628] to-[#0D1F3C] border-t border-white/10 px-2 pb-2 pt-1 flex items-center gap-1 shadow-[0_-4px_20px_rgba(10,22,40,0.25)]">
             {filteredItems.slice(0, 4).map((item) => {
               const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
               return (
-                <Link key={item.path} to={item.path} className={`flex-1 flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${isActive ? 'text-amber-600 bg-amber-50' : 'text-gray-400'}`}>
+                <Link key={item.path} to={item.path} className={`flex-1 flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${isActive ? 'text-amber-400 bg-white/5' : 'text-gray-500'}`}>
                   <item.icon className="w-5 h-5" />
                   <span className="text-[9px] font-bold uppercase tracking-wide truncate">{item.label}</span>
                 </Link>
               );
             })}
-            <button onClick={() => setIsMobileMenuOpen(true)} className="flex-1 flex flex-col items-center gap-0.5 py-2 rounded-xl text-gray-400">
+            <button onClick={() => setIsMobileMenuOpen(true)} className="flex-1 flex flex-col items-center gap-0.5 py-2 rounded-xl text-gray-500">
               <Menu className="w-5 h-5" />
               <span className="text-[9px] font-bold uppercase tracking-wide">More</span>
             </button>

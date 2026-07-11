@@ -13,14 +13,6 @@ const asNumber = (v: unknown, fallback: number) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const getBearer = (req: ApiRequest) => {
-  const raw = req.headers?.authorization || req.headers?.Authorization;
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return '';
-  const m = value.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] ?? '';
-};
-
 const fetchJson = async (url: string, init: RequestInit) => {
   const resp = await fetch(url, init);
   const text = await resp.text();

@@ -12,6 +12,7 @@ import { useAppStore } from '../store/appStore';
 import { getAvatar, setAvatar, clearAvatar, onAvatarChange, fileToAvatarDataUrl } from '../lib/avatar';
 import { STATUS_ORDER, statusMeta, isLeadDue } from '../lib/leads';
 import type { LeadStatus } from '../store/appStore';
+import { PointsHistory } from '../components/dashboard/PointsHistory';
 
 const roleMeta: Record<string, { label: string; color: string; bg: string }> = {
   ceo:          { label: 'CEO',          color: 'text-purple-700', bg: 'bg-purple-50'  },
@@ -31,12 +32,21 @@ const rankMedal = (rank: number) => {
   return { emoji: `#${rank}`, color: 'text-gray-400', bg: 'bg-gray-50 border-gray-100' };
 };
 
-const howToEarn = [
-  { action: 'Claim a lead',        pts: +1, icon: Zap },
-  { action: 'Approve a student',   pts: +1, icon: Users },
-  { action: 'Assign a university', pts: +1, icon: GraduationCap },
-  { action: 'Add internal note',   pts: +1, icon: FileText },
-  { action: 'Complete intake',     pts: +1, icon: Star },
+// Points rules per role. Staff earn via the automatic SLA engine (PRD §1);
+// sales/support/agency earn small activity awards.
+const staffEarnRules = [
+  { action: 'Translated documents on time', pts: '+2 / +1', icon: FileText },
+  { action: 'University approval on time', pts: '+2 / +1', icon: GraduationCap },
+  { action: 'Recognition letter on time', pts: '+2 / +1', icon: Star },
+  { action: 'Ministry order on time', pts: '+2 / +1', icon: Star },
+  { action: 'Visa & residency uploaded (case closed)', pts: '+2', icon: Users },
+  { action: 'Deadline passes (automatic)', pts: '−1 / −2', icon: Zap },
+];
+const activityEarnRules = [
+  { action: 'Claim a lead', pts: '+1', icon: Zap },
+  { action: 'Approve a student', pts: '+1', icon: Users },
+  { action: 'Assign a university', pts: '+1', icon: GraduationCap },
+  { action: 'Complete intake (within 24h: +1 extra)', pts: '+1', icon: Star },
 ];
 
 const Avatar = ({ name, photo, className = '', textClass = 'text-sm' }: { name?: string; photo?: string; className?: string; textClass?: string }) => (
@@ -294,15 +304,26 @@ const ProfilePage: React.FC = () => {
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">How to earn points</p>
               <div className="space-y-2">
-                {howToEarn.map((item, i) => (
+                {(user.role === 'staff' || user.role === 'agency_staff' ? staffEarnRules : activityEarnRules).map((item, i) => (
                   <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 bg-amber-50 rounded-lg flex items-center justify-center"><item.icon className="w-3.5 h-3.5 text-amber-600" /></div>
                       <span className="text-sm text-gray-700 font-medium">{item.action}</span>
                     </div>
-                    <span className="text-sm font-bold text-amber-600">+{item.pts} pt</span>
+                    <span className={`text-sm font-bold ${item.pts.startsWith('−') ? 'text-red-500' : 'text-amber-600'}`}>{item.pts}</span>
                   </div>
                 ))}
+              </div>
+              {(user.role === 'staff' || user.role === 'agency_staff') && (
+                <p className="mt-2 text-[11px] text-gray-400">
+                  Timers depend on the university's speed group. Penalties apply automatically when a deadline passes — the CEO can adjust points manually.
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">My points history</p>
+              <div className="rounded-2xl border border-gray-100 overflow-hidden max-h-[420px] overflow-y-auto custom-scrollbar">
+                <PointsHistory userId={user.id} limit={50} />
               </div>
             </div>
           </div>

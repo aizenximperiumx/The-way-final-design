@@ -25,11 +25,13 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import toast from 'react-hot-toast';
 import { tryGetSupabase } from '../lib/supabase';
-import { PageHeader, StatGrid, StatCard, type StatTone } from '../components/dashboard/ui';
+import { PageHeader, StatGrid, StatCard, DashboardSection, EmptyState, type StatTone } from '../components/dashboard/ui';
+import { UniversityAssignmentSettings, PointsAdjustTool, SlaRulesCard } from '../components/dashboard/CeoControls';
+import { Star, Trophy, Timer } from 'lucide-react';
 
 const toneFromColor = (color: string): StatTone =>
   color.includes('amber') ? 'amber'
@@ -72,9 +74,10 @@ const AdminDashboard: React.FC = () => {
     ceoRestoreFutureLead, ceoDeleteFutureLead,
     ceoDisableUser, ceoRestoreUser, ceoPurgeUser,
     credentialRequests, ceoResolveCredentialRequest, ceoRejectCredentialRequest,
+    pointsLedger,
   } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'forms' | 'requests' | 'trash' | 'security'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'forms' | 'requests' | 'performance' | 'universities' | 'trash' | 'security'>('analytics');
   const pendingCredRequests = credentialRequests.filter(r => r.status === 'pending');
   const [health, setHealth] = useState<{ loading: boolean; ok: boolean | null; checks: Array<{ name: string; ok: boolean; details?: string }> }>({ loading: true, ok: null, checks: [] });
   const [audit, setAudit] = useState<{ loading: boolean; ok: boolean | null; issueCount: number; issues: Array<{ severity: 'high' | 'medium' | 'low'; code: string; message: string }> }>({ loading: false, ok: null, issueCount: 0, issues: [] });
@@ -117,6 +120,8 @@ const AdminDashboard: React.FC = () => {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'forms', label: 'Forms', icon: FileText },
     { id: 'requests', label: 'Requests', icon: KeyRound },
+    { id: 'performance', label: 'Performance', icon: Trophy },
+    { id: 'universities', label: 'Universities', icon: GraduationCap },
     { id: 'trash', label: 'Trash', icon: Trash2 },
     { id: 'security', label: 'Security', icon: ShieldAlert },
   ] as const;
@@ -299,7 +304,10 @@ const AdminDashboard: React.FC = () => {
         </div>
       </section>
 
-      <AnimatePresence mode="wait">
+      {/* Tab content switches instantly — a mode="wait" exit animation here
+          made every tab change wait for the old tab to animate out (and could
+          stall entirely in throttled/background tabs). */}
+      <div>
         {activeTab === 'analytics' && (
           <motion.div
             key="analytics"
@@ -1235,6 +1243,130 @@ const AdminDashboard: React.FC = () => {
           </motion.div>
         )}
 
+        {activeTab === 'performance' && (
+          <motion.div
+            key="performance"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="space-y-6"
+          >
+            {(() => {
+              const ledger = pointsLedger;
+              const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+              const thisMonth = ledger.filter(e => e.at >= monthStart);
+              const awarded = thisMonth.filter(e => e.delta > 0).reduce((s, e) => s + e.delta, 0);
+              const penalties = thisMonth.filter(e => e.delta < 0 && e.kind === 'sla').length;
+              const staffRank = users
+                .filter(u => u.role === 'staff')
+                .sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+              const ratedApps = applications.filter(a => a.rating);
+              const avgRating = ratedApps.length
+                ? (ratedApps.reduce((s, a) => s + (a.rating?.stars ?? 0), 0) / ratedApps.length).toFixed(1)
+                : '—';
+              const recent = ledger.slice().sort((a, b) => b.at.localeCompare(a.at)).slice(0, 25);
+              const nameOf = (id: string) => users.find(u => u.id === id)?.name ?? 'Unknown';
+              return (
+                <>
+                  <StatGrid cols={4}>
+                    <StatCard label="Points awarded (month)" value={`+${awarded}`} icon={Trophy} tone="green" />
+                    <StatCard label="SLA penalties (month)" value={penalties} icon={Timer} tone="red" />
+                    <StatCard label="Top performer" value={staffRank[0]?.name?.split(' ')[0] ?? '—'} icon={Star} tone="amber" hint={staffRank[0] ? `${staffRank[0].points ?? 0} pts` : undefined} />
+                    <StatCard label="Avg. student rating" value={avgRating} icon={Star} tone="purple" hint={ratedApps.length ? `${ratedApps.length} rating${ratedApps.length > 1 ? 's' : ''}` : 'no ratings yet'} />
+                  </StatGrid>
+
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <PointsAdjustTool />
+                    <div className="space-y-6">
+                      <DashboardSection title="Staff leaderboard" icon={Trophy}>
+                        {staffRank.length === 0 ? (
+                          <EmptyState icon={Users} title="No staff accounts yet" />
+                        ) : (
+                          <ul className="divide-y divide-gray-50">
+                            {staffRank.map((s, i) => (
+                              <li key={s.id} className="flex items-center gap-3 px-5 py-3">
+                                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                                  i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-gray-100 text-gray-600' : i === 2 ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-400'
+                                }`}>{i + 1}</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-bold text-gray-900">{s.name}</p>
+                                  <p className="text-[11px] text-gray-400">@{s.username}</p>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-[#0A1628] px-3 py-1 text-xs font-black text-amber-400">{s.points ?? 0} pts</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </DashboardSection>
+                      <SlaRulesCard />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <DashboardSection title="Recent points activity" icon={Activity} count={recent.length}>
+                      {recent.length === 0 ? (
+                        <EmptyState icon={Activity} title="No points activity yet" hint="Entries appear as stages complete or deadlines pass." />
+                      ) : (
+                        <ul className="max-h-[420px] divide-y divide-gray-50 overflow-y-auto custom-scrollbar">
+                          {recent.map(e => (
+                            <li key={e.id} className="flex items-center gap-3 px-5 py-2.5">
+                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-black ${e.delta > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                                {e.delta > 0 ? `+${e.delta}` : e.delta}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-semibold text-gray-800">{nameOf(e.userId)} — {e.reason}</p>
+                                <p className="text-[10px] text-gray-400">{new Date(e.at).toLocaleString()}{e.byName ? ` · by ${e.byName}` : ''}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </DashboardSection>
+
+                    <DashboardSection title="Student ratings" icon={Star} count={ratedApps.length || undefined}>
+                      {ratedApps.length === 0 ? (
+                        <EmptyState icon={Star} title="No ratings yet" hint="Students are asked to rate the service after their residency is uploaded." />
+                      ) : (
+                        <ul className="max-h-[420px] divide-y divide-gray-50 overflow-y-auto custom-scrollbar">
+                          {ratedApps
+                            .slice()
+                            .sort((a, b) => (b.rating!.at).localeCompare(a.rating!.at))
+                            .map(a => (
+                              <li key={a.id} className="px-5 py-3">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-bold text-gray-900">{a.name}</p>
+                                  <span className="ml-auto flex items-center gap-0.5">
+                                    {[1, 2, 3, 4, 5].map(i => (
+                                      <Star key={i} className={`h-3.5 w-3.5 ${i <= (a.rating?.stars ?? 0) ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />
+                                    ))}
+                                  </span>
+                                </div>
+                                {a.rating?.comment && <p className="mt-1 text-xs italic text-gray-500">“{a.rating.comment}”</p>}
+                                <p className="mt-0.5 text-[10px] text-gray-400">{new Date(a.rating!.at).toLocaleDateString()} · {getUniversityName(a.university) || 'No university'}</p>
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </DashboardSection>
+                  </div>
+                </>
+              );
+            })()}
+          </motion.div>
+        )}
+
+        {activeTab === 'universities' && (
+          <motion.div
+            key="universities"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="space-y-6"
+          >
+            <UniversityAssignmentSettings />
+          </motion.div>
+        )}
+
         {activeTab === 'trash' && (
           <motion.div
             key="trash"
@@ -1429,7 +1561,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 };

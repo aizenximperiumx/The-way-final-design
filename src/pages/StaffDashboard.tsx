@@ -25,9 +25,12 @@ import { useNavigate } from 'react-router-dom';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
 import { openStorageUrl } from '../lib/storage';
+import { PipelineTracker } from '../components/dashboard/PipelineTracker';
+import { RequestedDocsReviewer } from '../components/dashboard/RequestedDocuments';
+import { DashboardSection } from '../components/dashboard/ui';
 
 const StaffDashboard: FC = () => {
-  const { applications, documents, users, staffUploadDocument, staffAddInternalNote, staffUpdateStudentProfile, staffVerifyDocument, assignUniversity, staffRequestDocument } = useAppStore();
+  const { applications, documents, users, documentRequests, staffUploadDocument, staffAddInternalNote, staffUpdateStudentProfile, staffVerifyDocument, assignUniversity, staffRequestDocument } = useAppStore();
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,6 +40,7 @@ const StaffDashboard: FC = () => {
   const [newDocument, setNewDocument] = useState<{ title: string; type: string; file?: string; fileObject?: File }>({ title: '', type: '' });
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestDoc, setRequestDoc] = useState({ title: '', description: '' });
+  const [requestTarget, setRequestTarget] = useState<'student' | 'agency'>('student');
   const [noteText, setNoteText] = useState('');
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
@@ -50,8 +54,13 @@ const StaffDashboard: FC = () => {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const approvedStudents = useMemo(() => {
     const base = applications.filter(app => app.status === 'approved');
+    // User isolation (PRD §11): staff members only see the students assigned
+    // to them. The CEO (visiting /staff) still sees everyone.
+    if (currentUser?.role === 'staff') {
+      return base.filter(app => app.assignedStaffId === currentUser.id);
+    }
     if (currentUser?.role === 'agency_staff') {
-      return base.filter(app => (app.source ?? 'public') === 'agency');
+      return base.filter(app => (app.source ?? 'public') === 'agency' && app.assignedStaffId === currentUser.id);
     }
     return base;
   }, [applications, currentUser]);
@@ -235,6 +244,15 @@ const StaffDashboard: FC = () => {
     { label: 'Closed Cases', value: closedCount, icon: Users, tone: 'blue' as const },
   ];
 
+  // Requested-document uploads waiting for my review (students + agents).
+  const myStudentIds = new Set(approvedStudents.map(a => a.studentId).filter(Boolean));
+  const reviewQueue = documentRequests
+    .filter(r => (r.status === 'uploaded' || r.status === 'fulfilled') && (myStudentIds.has(r.studentId) || r.requestedBy === currentUser?.id))
+    .sort((a, b) => (b.fulfilledAt ?? '').localeCompare(a.fulfilledAt ?? ''));
+  const requestStudentName = (req: { studentId: string }) =>
+    approvedStudents.find(a => a.studentId === req.studentId)?.name
+      ?? users.find(u => u.id === req.studentId)?.name ?? 'Student';
+
   return (
     <div className="space-y-6 pb-12 bg-[#FAFAF9]">
       {/* Header */}
@@ -251,6 +269,13 @@ const StaffDashboard: FC = () => {
           <StatCard key={idx} label={stat.label} value={stat.value} icon={stat.icon} tone={stat.tone} />
         ))}
       </StatGrid>
+
+      {/* Requested-document uploads waiting for review (PRD §8) */}
+      {reviewQueue.length > 0 && (
+        <DashboardSection title="Uploads to review" icon={FileText} count={reviewQueue.length}>
+          <RequestedDocsReviewer requests={reviewQueue} studentName={requestStudentName} />
+        </DashboardSection>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left: Student List */}
@@ -489,12 +514,15 @@ const StaffDashboard: FC = () => {
                   </div>
                 </div>
 
+                {/* Case pipeline — SLA timers, permissions, stage completion */}
+                <PipelineTracker application={selectedStudent} />
+
                 <div className="grid md:grid-cols-2 gap-5">
                   {/* Admission Steps */}
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="px-5 py-4 border-b border-gray-100">
                       <p className="text-base font-bold text-gray-900">Admission Steps</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Upload a document to complete each step.</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Upload a document to complete each step — the pipeline advances automatically.</p>
                     </div>
                     <div className="p-4 space-y-2">
                       {[
@@ -503,6 +531,8 @@ const StaffDashboard: FC = () => {
                         { id: 'recognition-letter', label: 'Recognition letter' },
                         { id: 'ministry-order', label: 'Ministry order' },
                         { id: 'visa-documents', label: 'Visa required documents' },
+                        { id: 'visa', label: 'Visa' },
+                        { id: 'residency', label: 'Residency' },
                       ].map(step => {
                         const has = selectedDocs.some(d => d.type === step.id);
                         return (
@@ -632,7 +662,9 @@ const StaffDashboard: FC = () => {
                               ev.type === 'arrival_set' ? 'Arrival Updated' :
                               ev.type === 'document_uploaded' ? 'Document Uploaded' :
                               'Document Verified';
-                            const details = ev.type === 'university_set' ? getUniversityName(ev.details) : ev.details;
+                            const details = ev.type === 'university_set' ? getUniversityName(ev.details)
+                              : ev.type === 'assigned_staff' ? (users.find(u => u.id === ev.details)?.name ?? ev.details)
+                              : ev.details;
                             return (
                               <div key={ev.id} className="flex gap-3">
                                 <div className="flex flex-col items-center">
@@ -839,6 +871,7 @@ const StaffDashboard: FC = () => {
                 </button>
               </div>
               <div className="p-5 space-y-5">
+                <PipelineTracker application={selectedStudent} />
                 <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -990,6 +1023,9 @@ const StaffDashboard: FC = () => {
                     <option value="recognition-letter">Recognition letter</option>
                     <option value="ministry-order">Ministry order</option>
                     <option value="visa-documents">Visa required documents</option>
+                    <option value="visa">Visa</option>
+                    <option value="residency">Residency</option>
+                    <option value="other">Other document</option>
                   </select>
                 </div>
                 <div>
@@ -1048,8 +1084,28 @@ const StaffDashboard: FC = () => {
               </div>
               <div className="p-6 space-y-4">
                 <p className="text-sm text-gray-500">
-                  The student will receive a notification asking them to upload this document.
+                  {requestTarget === 'agency'
+                    ? 'The agency (agent) will be notified and can upload the file from their portal.'
+                    : 'The student will receive a notification asking them to upload this document.'}
                 </p>
+                {(selectedStudent.source ?? 'public') === 'agency' && selectedStudent.agencyId && (
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1.5">Request from</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['student', 'agency'] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => setRequestTarget(t)}
+                          className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                            requestTarget === t ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {t === 'student' ? 'Student' : 'Agent (agency)'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1.5">Document Name</label>
                   <input
@@ -1074,10 +1130,11 @@ const StaffDashboard: FC = () => {
                   onClick={() => {
                     if (!requestDoc.title.trim()) { toast.error('Enter a document name'); return; }
                     try {
-                      staffRequestDocument(selectedStudent.studentId!, selectedStudent.id, requestDoc.title, requestDoc.description);
-                      toast.success('Document request sent to student');
+                      staffRequestDocument(selectedStudent.studentId!, selectedStudent.id, requestDoc.title, requestDoc.description, requestTarget);
+                      toast.success(requestTarget === 'agency' ? 'Document request sent to the agent' : 'Document request sent to student');
                       setShowRequestModal(false);
                       setRequestDoc({ title: '', description: '' });
+                      setRequestTarget('student');
                     } catch (e) {
                       toast.error(e instanceof Error ? e.message : 'Failed');
                     }

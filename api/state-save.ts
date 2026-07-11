@@ -62,9 +62,21 @@ type AppState = {
   appointments: unknown[];
   chatMessages: unknown[];
   chatThreadReadAt: Record<string, string>;
+  chatEmailNotify: Record<string, unknown>;
   documentRequests: unknown[];
   leads: unknown[];
+  futureLeads: unknown[];
+  trashedApplications: unknown[];
+  trashedUsers: unknown[];
+  credentialRequests: unknown[];
+  pointsLedger: unknown[];
+  universityConfig: Record<string, unknown> | null;
+  purgedApplicationIds: string[];
+  unTrashedUserIds: string[];
 };
+
+const asStringArray = (v: unknown, cap: number): string[] =>
+  Array.isArray(v) ? (v.filter(x => typeof x === 'string') as string[]).slice(0, cap) : [];
 
 const asState = (value: unknown): AppState => {
   const v = (value && typeof value === 'object') ? (value as Record<string, unknown>) : {};
@@ -75,8 +87,17 @@ const asState = (value: unknown): AppState => {
     appointments: Array.isArray(v.appointments) ? v.appointments : [],
     chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
     chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? (v.chatThreadReadAt as Record<string, string>) : {},
+    chatEmailNotify: (v.chatEmailNotify && typeof v.chatEmailNotify === 'object') ? (v.chatEmailNotify as Record<string, unknown>) : {},
     documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
     leads: Array.isArray(v.leads) ? v.leads : [],
+    futureLeads: Array.isArray(v.futureLeads) ? v.futureLeads : [],
+    trashedApplications: Array.isArray(v.trashedApplications) ? v.trashedApplications : [],
+    trashedUsers: Array.isArray(v.trashedUsers) ? v.trashedUsers : [],
+    credentialRequests: Array.isArray(v.credentialRequests) ? v.credentialRequests : [],
+    pointsLedger: Array.isArray(v.pointsLedger) ? v.pointsLedger : [],
+    universityConfig: (v.universityConfig && typeof v.universityConfig === 'object') ? (v.universityConfig as Record<string, unknown>) : null,
+    purgedApplicationIds: asStringArray(v.purgedApplicationIds, 50_000),
+    unTrashedUserIds: asStringArray(v.unTrashedUserIds, 50_000),
   };
 };
 
@@ -121,6 +142,8 @@ const itemKey = (item: unknown, idx: number): string => {
 
 // Union two arrays, de-duplicating by id (objects) or value (strings).
 // `current` first preserves original order; only truly new items are appended.
+// FIRST-WINS for identical keys — used for the points ledger so an outcome
+// recorded once (award or penalty) can never be replaced.
 const unionArray = (currentVal: unknown, incomingVal: unknown, cap = 1000): unknown[] => {
   const cur = Array.isArray(currentVal) ? currentVal : [];
   const inc = Array.isArray(incomingVal) ? incomingVal : [];
@@ -165,15 +188,113 @@ const mergeReadAt = (currentVal: Record<string, string>, incomingVal: Record<str
   return out;
 };
 
+// chatEmailNotify: earliest firstAt wins, reminded flags accumulate, and keys
+// whose thread was read after firstAt are dropped (the reminder is obsolete).
+const mergeEmailNotify = (
+  currentVal: Record<string, unknown>,
+  incomingVal: Record<string, unknown>,
+  readAt: Record<string, string>,
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  const keys = new Set([...Object.keys(currentVal || {}), ...Object.keys(incomingVal || {})]);
+  for (const key of keys) {
+    const cur = asRecord((currentVal || {})[key]);
+    const inc = asRecord((incomingVal || {})[key]);
+    const firstAtCur = cur ? getString(cur, 'firstAt') : '';
+    const firstAtInc = inc ? getString(inc, 'firstAt') : '';
+    const firstAt = [firstAtCur, firstAtInc].filter(Boolean).sort()[0] ?? '';
+    if (!firstAt) continue;
+    const reminded = Boolean(cur?.reminded) || Boolean(inc?.reminded);
+    // key = `${threadKey}|${recipientId}` → read key = `${recipientId}|${threadKey}`
+    const sep = key.lastIndexOf('|');
+    if (sep > 0) {
+      const recipientId = key.slice(sep + 1);
+      const threadKey = key.slice(0, sep);
+      const read = readAt[`${recipientId}|${threadKey}`];
+      if (read && read >= firstAt) continue;
+    }
+    out[key] = { firstAt, reminded };
+  }
+  return out;
+};
+
 // Application fields that must never be downgraded from a real value back to
 // empty by a stale snapshot. Re-uploads (a new non-empty URL) still win.
 const PROTECTED_STR_FIELDS = [
   'intakeDetails', 'intakeVideoUrl', 'intakePassportCopy', 'intakeHighSchoolCertificate',
   'intakeHighSchoolMissingNote', 'intakeBirthCertificate', 'intakeMotherPassport',
   'intakeFatherPassport', 'dob',
+  // Identity/assignment of an approved case must survive stale snapshots too.
+  'studentId', 'assignedStaffId', 'university', 'program', 'studentEmail',
+  'approvedBy', 'approvedAt',
 ];
 // Application list fields that accumulate (attachments, audit trail, notes).
 const PROTECTED_ARR_FIELDS = ['intakeAttachments', 'intakeExtraDocs', 'events', 'internalNotes'];
+
+const PIPELINE_STAGE_IDS = [
+  'translated_documents', 'university_approval', 'recognition_letter',
+  'ministry_order', 'visa_documents', 'visa_residency',
+] as const;
+
+// Merge two pipeline objects without ever regressing progress: earliest
+// timestamps win per stage (a stamp only appears once), status can only move
+// forward (processing → closed/cancelled), `current` takes the furthest stage.
+const mergePipeline = (curVal: unknown, incVal: unknown): unknown => {
+  const cur = asRecord(curVal);
+  const inc = asRecord(incVal);
+  if (!cur) return inc ?? undefined;
+  if (!inc) return cur;
+  const curStages = asRecord(cur.stages) ?? {};
+  const incStages = asRecord(inc.stages) ?? {};
+  const stages: Record<string, unknown> = {};
+  for (const sid of PIPELINE_STAGE_IDS) {
+    const c = asRecord(curStages[sid]);
+    const i = asRecord(incStages[sid]);
+    if (!c && !i) continue;
+    const pick = (field: string) => {
+      const cv = c ? getString(c, field) : '';
+      const iv = i ? getString(i, field) : '';
+      // earliest non-empty timestamp wins (a stage event only happens once)
+      if (cv && iv) return cv <= iv ? cv : iv;
+      return cv || iv;
+    };
+    const pickBy = (tsField: string, whoField: string) => {
+      const cv = c ? getString(c, tsField) : '';
+      const iv = i ? getString(i, tsField) : '';
+      const src = (cv && (!iv || cv <= iv)) ? c : i;
+      return src ? getString(src, whoField) : '';
+    };
+    const track: Record<string, unknown> = {};
+    for (const [ts, by, byName] of [
+      ['startedAt', '', ''],
+      ['completedAt', 'completedById', 'completedByName'],
+      ['permissionAt', 'permissionById', 'permissionByName'],
+    ] as const) {
+      const v = pick(ts);
+      if (v) track[ts] = v;
+      if (by) { const b = pickBy(ts, by); if (b) track[by] = b; }
+      if (byName) { const b = pickBy(ts, byName); if (b) track[byName] = b; }
+    }
+    if (Object.keys(track).length) stages[sid] = track;
+  }
+  const statusRank: Record<string, number> = { processing: 0, closed: 1, cancelled: 1 };
+  const curStatus = getString(cur, 'status') || 'processing';
+  const incStatus = getString(inc, 'status') || 'processing';
+  const status = (statusRank[incStatus] ?? 0) >= (statusRank[curStatus] ?? 0) ? incStatus : curStatus;
+  const stageRank = (s: string) => s === 'done' ? PIPELINE_STAGE_IDS.length : Math.max(0, PIPELINE_STAGE_IDS.indexOf(s as typeof PIPELINE_STAGE_IDS[number]));
+  const curCurrent = getString(cur, 'current') || 'translated_documents';
+  const incCurrent = getString(inc, 'current') || 'translated_documents';
+  const current = stageRank(incCurrent) >= stageRank(curCurrent) ? incCurrent : curCurrent;
+  const scalar = (field: string) => getString(cur, field) || getString(inc, field)
+    ? ((getString(inc, field) || getString(cur, field)))
+    : undefined;
+  const out: Record<string, unknown> = { status, current, stages };
+  for (const f of ['closedAt', 'cancelledAt', 'cancelledById', 'cancelledByName', 'cancelReason']) {
+    const v = scalar(f);
+    if (v) out[f] = v;
+  }
+  return out;
+};
 
 const mergeApplication = (cur: Record<string, unknown>, inc: Record<string, unknown>): Record<string, unknown> => {
   const merged: Record<string, unknown> = { ...cur, ...inc }; // last-write-wins baseline
@@ -184,29 +305,95 @@ const mergeApplication = (cur: Record<string, unknown>, inc: Record<string, unkn
     merged[f] = unionArray(cur[f], inc[f], f === 'internalNotes' || f === 'events' ? 2000 : 400);
   }
   if (cur.intakeSLARewarded === true) merged.intakeSLARewarded = true; // never un-reward
+  // A student rating, once given, never disappears or changes.
+  if (cur.rating && typeof cur.rating === 'object') merged.rating = cur.rating;
+  // Student credentials survive snapshots that never loaded them.
+  if (cur.studentCredentials && typeof cur.studentCredentials === 'object' && !(inc.studentCredentials && typeof inc.studentCredentials === 'object')) {
+    merged.studentCredentials = cur.studentCredentials;
+  }
+  // Status can never regress to 'submitted' once the application was processed.
+  const curStatus = getString(cur, 'status');
+  const incStatus = getString(inc, 'status');
+  if ((curStatus === 'approved' || curStatus === 'rejected') && incStatus === 'submitted') {
+    merged.status = curStatus;
+  }
+  const pipeline = mergePipeline(cur.pipeline, inc.pipeline);
+  if (pipeline) merged.pipeline = pipeline;
   return merged;
 };
 
-const mergeApplications = (currentApps: unknown[], incomingApps: unknown[]): unknown[] => {
-  const curById = new Map<string, unknown>();
-  (Array.isArray(currentApps) ? currentApps : []).forEach((a) => {
-    const id = getString(asRecord(a), 'id');
-    if (id) curById.set(id, a);
-  });
+// ── Application placement (active / future lead / trash / purged) ───────────
+// One application id lives in exactly ONE bucket. The saving client's
+// placement wins for ids it knows about; ids it never loaded stay where they
+// are. Purged ids (tombstones) are dropped everywhere, forever.
+
+type Placed = { row: Record<string, unknown>; bucket: 'active' | 'future' | 'trash' };
+
+const placeApplications = (current: AppState, incoming: AppState, purged: Set<string>) => {
+  const curPlace = new Map<string, Placed>();
+  const incPlace = new Map<string, Placed>();
+  const collect = (map: Map<string, Placed>, arr: unknown[], bucket: Placed['bucket']) => {
+    for (const a of arr) {
+      const r = asRecord(a);
+      const id = r ? getString(r, 'id') : '';
+      if (!r || !id) continue;
+      if (!map.has(id)) map.set(id, { row: r, bucket });
+    }
+  };
+  collect(curPlace, current.applications, 'active');
+  collect(curPlace, current.futureLeads, 'future');
+  collect(curPlace, current.trashedApplications, 'trash');
+  collect(incPlace, incoming.applications, 'active');
+  collect(incPlace, incoming.futureLeads, 'future');
+  collect(incPlace, incoming.trashedApplications, 'trash');
+
+  const out = { active: [] as unknown[], future: [] as unknown[], trash: [] as unknown[] };
+  const push = (bucket: Placed['bucket'], row: unknown) => {
+    if (bucket === 'active') out.active.push(row);
+    else if (bucket === 'future') out.future.push(row);
+    else out.trash.push(row);
+  };
+
+  // Incoming order first (client's view), then anything it never loaded.
   const seen = new Set<string>();
-  const out: unknown[] = [];
-  (Array.isArray(incomingApps) ? incomingApps : []).forEach((a) => {
-    const r = asRecord(a);
-    const id = r ? getString(r, 'id') : '';
-    if (!id) { out.push(a); return; }
+  for (const [id, inc] of incPlace) {
+    if (purged.has(id)) continue;
     seen.add(id);
-    const cur = asRecord(curById.get(id));
-    out.push(cur && r ? mergeApplication(cur, r) : a);
-  });
-  // keep applications the saving client never loaded (created by teammates)
-  curById.forEach((a, id) => { if (!seen.has(id)) out.push(a); });
+    const cur = curPlace.get(id);
+    const row = cur ? mergeApplication(cur.row, inc.row) : inc.row;
+    push(inc.bucket, row);
+  }
+  for (const [id, cur] of curPlace) {
+    if (seen.has(id) || purged.has(id)) continue;
+    push(cur.bucket, cur.row);
+  }
+  // Rows without ids (shouldn't happen) — keep incoming active ones as-is.
+  for (const a of incoming.applications) {
+    const r = asRecord(a);
+    if (!r || getString(r, 'id')) continue;
+    out.active.push(a);
+  }
   return out;
 };
+
+// universityConfig: whole-object latest-wins by updatedAt.
+const mergeUniversityConfig = (
+  cur: Record<string, unknown> | null,
+  inc: Record<string, unknown> | null,
+): Record<string, unknown> | null => {
+  if (!cur) return inc;
+  if (!inc) return cur;
+  const curAt = getString(cur, 'updatedAt');
+  const incAt = getString(inc, 'updatedAt');
+  return incAt >= curAt ? inc : cur;
+};
+
+// trashedUsers: union minus explicitly restored/purged users.
+const mergeTrashedUsers = (cur: unknown[], inc: unknown[], unTrashed: Set<string>): unknown[] =>
+  mergeCollection(cur, inc, 10_000).filter((u) => {
+    const id = getString(asRecord(u), 'id');
+    return !id || !unTrashed.has(id);
+  });
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
@@ -270,17 +457,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (isInternal(role)) {
       // Additive merge (see helpers above) instead of full overwrite, so a
-      // teammate's freshly-uploaded intake / documents / notes are never wiped
-      // by another internal user saving an older snapshot.
+      // teammate's freshly-saved data is never wiped by another internal user
+      // saving an older snapshot.
+      const purged = new Set([...current.purgedApplicationIds, ...incoming.purgedApplicationIds]);
+      const unTrashed = new Set([...current.unTrashedUserIds, ...incoming.unTrashedUserIds]);
+      const placed = placeApplications(current, incoming, purged);
       next = {
-        applications: mergeApplications(current.applications, incoming.applications).slice(0, 50_000),
+        applications: placed.active.slice(0, 50_000),
+        futureLeads: placed.future.slice(0, 50_000),
+        trashedApplications: placed.trash.slice(0, 50_000),
         documents: mergeCollection(current.documents, incoming.documents, 50_000),
         notifications: mergeCollection(current.notifications, incoming.notifications, 100_000),
         appointments: mergeCollection(current.appointments, incoming.appointments, 50_000),
         chatMessages: mergeCollection(current.chatMessages, incoming.chatMessages, 200_000),
         chatThreadReadAt: mergeReadAt(current.chatThreadReadAt, incoming.chatThreadReadAt),
+        chatEmailNotify: mergeEmailNotify(current.chatEmailNotify, incoming.chatEmailNotify, mergeReadAt(current.chatThreadReadAt, incoming.chatThreadReadAt)),
         documentRequests: mergeCollection(current.documentRequests, incoming.documentRequests, 50_000),
         leads: mergeCollection(current.leads, incoming.leads, 50_000),
+        trashedUsers: mergeTrashedUsers(current.trashedUsers, incoming.trashedUsers, unTrashed),
+        credentialRequests: mergeCollection(current.credentialRequests, incoming.credentialRequests, 50_000),
+        // FIRST-WINS union: a recorded SLA outcome can never be replaced.
+        pointsLedger: unionArray(current.pointsLedger, incoming.pointsLedger, 200_000),
+        universityConfig: mergeUniversityConfig(current.universityConfig, incoming.universityConfig),
+        purgedApplicationIds: Array.from(purged).slice(0, 50_000),
+        unTrashedUserIds: Array.from(unTrashed).slice(0, 50_000),
       };
     } else if (role === 'student') {
       const allowedThread = (key: string) =>
@@ -311,10 +511,95 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           time: now,
         }];
       });
+
+      // Students may fulfil their own document requests: pending/rejected →
+      // uploaded, with a file. Nothing else on the request is writable.
+      const incReqById = new Map<string, Record<string, unknown>>();
+      incoming.documentRequests.forEach((r0) => {
+        const r = asRecord(r0);
+        const id = r ? getString(r, 'id') : '';
+        if (r && id) incReqById.set(id, r);
+      });
+      const mergedRequests = current.documentRequests.map((r0) => {
+        const r = asRecord(r0);
+        if (!r) return r0;
+        if (getString(r, 'studentId') !== userId) return r0;
+        if (getString(r, 'target') === 'agency') return r0;
+        const inc = incReqById.get(getString(r, 'id'));
+        if (!inc) return r0;
+        const curStatus = getString(r, 'status');
+        const incStatus = getString(inc, 'status');
+        const file = getString(inc, 'fulfilledFile');
+        const canUpload = curStatus === 'pending' || curStatus === 'rejected';
+        if (canUpload && (incStatus === 'uploaded' || incStatus === 'fulfilled') && file) {
+          return {
+            ...r,
+            status: 'uploaded',
+            fulfilledFile: file.slice(0, 2000),
+            fulfilledAt: now,
+            uploadedByName: getString(inc, 'uploadedByName').slice(0, 120) || undefined,
+          };
+        }
+        return r0;
+      });
+
+      // Students may add a one-time 1–5★ service rating to their own
+      // application after residency (validated against the CURRENT state).
+      const incAppById = new Map<string, Record<string, unknown>>();
+      incoming.applications.forEach((a0) => {
+        const a = asRecord(a0);
+        const id = a ? getString(a, 'id') : '';
+        if (a && id) incAppById.set(id, a);
+      });
+      const acceptedRatings: Array<{ appId: string; name: string; stars: number; comment?: string }> = [];
+      const mergedApps = current.applications.map((a0) => {
+        const a = asRecord(a0);
+        if (!a) return a0;
+        if (getString(a, 'studentId') !== userId) return a0;
+        if (a.rating && typeof a.rating === 'object') return a0; // already rated
+        const inc = incAppById.get(getString(a, 'id'));
+        const rating = inc ? asRecord(inc.rating) : null;
+        if (!rating || typeof rating.stars !== 'number') return a0;
+        const stars = Math.round(rating.stars);
+        if (stars < 1 || stars > 5) return a0;
+        const pipeline = asRecord(a.pipeline);
+        const stages = pipeline ? asRecord(pipeline.stages) : null;
+        const visaRes = stages ? asRecord(stages.visa_residency) : null;
+        const residencyDone = (pipeline && getString(pipeline, 'status') === 'closed') || Boolean(visaRes && getString(visaRes, 'completedAt'));
+        if (!residencyDone) return a0;
+        const comment = typeof rating.comment === 'string' ? rating.comment.slice(0, 2000) : undefined;
+        acceptedRatings.push({ appId: getString(a, 'id'), name: getString(a, 'name'), stars, comment });
+        return { ...a, rating: { stars, ...(comment ? { comment } : {}), at: now } };
+      });
+
+      // Clients can't be trusted to notify the CEO about their own rating —
+      // the server generates those notifications when a rating is accepted.
+      let ratingNotifications: unknown[] = [];
+      if (acceptedRatings.length) {
+        const ceoResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/profiles?role=eq.ceo&select=id`, { method: 'GET' }, adminKey);
+        const ceoIds = Array.isArray(ceoResp.json)
+          ? ceoResp.json.map((r: unknown) => getString(asRecord(r), 'id')).filter(Boolean)
+          : [];
+        ratingNotifications = acceptedRatings.flatMap(r => ceoIds.map((cid: string) => ({
+          id: `${r.appId}-rating-${cid}`,
+          userId: cid,
+          title: `New ${r.stars}-star rating`,
+          message: `${r.name} rated the service ${r.stars}/5${r.comment ? ` — "${r.comment.slice(0, 120)}"` : ''}`,
+          type: 'success',
+          time: now,
+          read: false,
+        })));
+      }
+
       next = {
         ...current,
+        applications: mergedApps,
         chatThreadReadAt: mergedReadAt,
         chatMessages: uniqueBy([...current.chatMessages, ...newMessages], (x) => getString(asRecord(x), 'id')),
+        documentRequests: mergedRequests,
+        notifications: ratingNotifications.length
+          ? mergeCollection(current.notifications, ratingNotifications, 100_000)
+          : current.notifications,
       };
     } else if (role === 'agency') {
       const allowedApp = (id: string) =>
@@ -357,6 +642,36 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const merged = Array.from(new Set([...oldArr, ...newArr]));
           return merged.slice(0, 200);
         };
+        // Agencies (agents) may grant permission for gated pipeline stages —
+        // that's the only pipeline write they are allowed.
+        const mergeAgencyPipeline = (curP: unknown, incP: unknown): unknown => {
+          const cur = asRecord(curP);
+          const inc = asRecord(incP);
+          if (!cur || !inc) return curP;
+          const curStages = asRecord(cur.stages) ?? {};
+          const incStages = asRecord(inc.stages) ?? {};
+          const gated = ['recognition_letter', 'ministry_order'];
+          let changed = false;
+          const nextStages: Record<string, unknown> = { ...curStages };
+          for (const sid of gated) {
+            if (getString(cur, 'current') !== sid) continue; // only the current stage
+            const c = asRecord(curStages[sid]);
+            const i = asRecord(incStages[sid]);
+            if (!i) continue;
+            if (c && getString(c, 'permissionAt')) continue; // already granted
+            const permissionAt = getString(i, 'permissionAt');
+            if (!permissionAt) continue;
+            changed = true;
+            nextStages[sid] = {
+              ...(c ?? {}),
+              permissionAt: now,
+              permissionById: userId,
+              permissionByName: getString(i, 'permissionByName').slice(0, 120) || undefined,
+              startedAt: getString(c ?? null, 'startedAt') || now,
+            };
+          }
+          return changed ? { ...cur, stages: nextStages } : curP;
+        };
         const nextApp = {
           ...baseApp,
           intakeExtraDocs: mergeArray(baseApp.intakeExtraDocs, r.intakeExtraDocs),
@@ -364,6 +679,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           intakeVideoUrl: typeof r.intakeVideoUrl === 'string' ? r.intakeVideoUrl : baseApp.intakeVideoUrl,
           intakePassportCopy: typeof r.intakePassportCopy === 'string' ? r.intakePassportCopy : baseApp.intakePassportCopy,
           intakeHighSchoolCertificate: typeof r.intakeHighSchoolCertificate === 'string' ? r.intakeHighSchoolCertificate : baseApp.intakeHighSchoolCertificate,
+          pipeline: mergeAgencyPipeline(baseApp.pipeline, r.pipeline),
         } satisfies Record<string, unknown>;
         updatedApps.push(nextApp);
       });
@@ -380,11 +696,42 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         mergedReadAt[k] = v;
       });
 
+      // Agencies may fulfil document requests addressed to them:
+      // pending/rejected → uploaded, with a file.
+      const incReqById = new Map<string, Record<string, unknown>>();
+      incoming.documentRequests.forEach((r0) => {
+        const r = asRecord(r0);
+        const id = r ? getString(r, 'id') : '';
+        if (r && id) incReqById.set(id, r);
+      });
+      const mergedRequests = current.documentRequests.map((r0) => {
+        const r = asRecord(r0);
+        if (!r) return r0;
+        if (getString(r, 'target') !== 'agency' || getString(r, 'agencyId') !== userId) return r0;
+        const inc = incReqById.get(getString(r, 'id'));
+        if (!inc) return r0;
+        const curStatus = getString(r, 'status');
+        const incStatus = getString(inc, 'status');
+        const file = getString(inc, 'fulfilledFile');
+        const canUpload = curStatus === 'pending' || curStatus === 'rejected';
+        if (canUpload && (incStatus === 'uploaded' || incStatus === 'fulfilled') && file) {
+          return {
+            ...r,
+            status: 'uploaded',
+            fulfilledFile: file.slice(0, 2000),
+            fulfilledAt: now,
+            uploadedByName: getString(inc, 'uploadedByName').slice(0, 120) || undefined,
+          };
+        }
+        return r0;
+      });
+
       next = {
         ...current,
         applications: mergedApps,
         chatThreadReadAt: mergedReadAt,
         chatMessages: uniqueBy([...current.chatMessages, ...newMessages], (x) => getString(asRecord(x), 'id')),
+        documentRequests: mergedRequests,
       };
     } else {
       res.status(403).json({ error: 'Forbidden' });

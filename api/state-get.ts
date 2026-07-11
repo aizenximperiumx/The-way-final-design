@@ -66,12 +66,24 @@ type AppState = {
   appointments: unknown[];
   chatMessages: unknown[];
   chatThreadReadAt: Record<string, string>;
+  chatEmailNotify: Record<string, unknown>;
   documentRequests: unknown[];
   leads: unknown[];
+  futureLeads: unknown[];
+  trashedApplications: unknown[];
+  trashedUsers: unknown[];
+  credentialRequests: unknown[];
+  pointsLedger: unknown[];
+  universityConfig: Record<string, unknown> | null;
+  purgedApplicationIds: string[];
+  unTrashedUserIds: string[];
 };
 
 const asRecord = (value: unknown) => (value && typeof value === 'object') ? (value as Record<string, unknown>) : null;
 const getString = (r: Record<string, unknown> | null, key: string) => (r && typeof r[key] === 'string' ? (r[key] as string) : '');
+
+const asStringArray = (v: unknown, cap: number): string[] =>
+  Array.isArray(v) ? (v.filter(x => typeof x === 'string') as string[]).slice(0, cap) : [];
 
 const asState = (value: unknown): AppState => {
   const v = (value && typeof value === 'object') ? (value as Record<string, unknown>) : {};
@@ -82,8 +94,17 @@ const asState = (value: unknown): AppState => {
     appointments: Array.isArray(v.appointments) ? v.appointments : [],
     chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
     chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? (v.chatThreadReadAt as Record<string, string>) : {},
+    chatEmailNotify: (v.chatEmailNotify && typeof v.chatEmailNotify === 'object') ? (v.chatEmailNotify as Record<string, unknown>) : {},
     documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
     leads: Array.isArray(v.leads) ? v.leads : [],
+    futureLeads: Array.isArray(v.futureLeads) ? v.futureLeads : [],
+    trashedApplications: Array.isArray(v.trashedApplications) ? v.trashedApplications : [],
+    trashedUsers: Array.isArray(v.trashedUsers) ? v.trashedUsers : [],
+    credentialRequests: Array.isArray(v.credentialRequests) ? v.credentialRequests : [],
+    pointsLedger: Array.isArray(v.pointsLedger) ? v.pointsLedger : [],
+    universityConfig: (v.universityConfig && typeof v.universityConfig === 'object') ? (v.universityConfig as Record<string, unknown>) : null,
+    purgedApplicationIds: asStringArray(v.purgedApplicationIds, 50_000),
+    unTrashedUserIds: asStringArray(v.unTrashedUserIds, 50_000),
   };
 };
 
@@ -220,6 +241,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const documents = mergedState.documents.filter((row) => getString(asRecord(row), 'studentId') === userId);
       const notifications = mergedState.notifications.filter((row) => getString(asRecord(row), 'userId') === userId);
       const appointments = mergedState.appointments.filter((row) => getString(asRecord(row), 'userId') === userId);
+      // Requests addressed to this student (agency-targeted ones are not theirs).
+      const documentRequests = mergedState.documentRequests.filter((row) => {
+        const r = asRecord(row);
+        return r && getString(r, 'studentId') === userId && getString(r, 'target') !== 'agency';
+      });
       const chatMessages = mergedState.chatMessages.filter((row) => {
         const m = asRecord(row);
         if (!m) return false;
@@ -233,7 +259,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       Object.entries(mergedState.chatThreadReadAt).forEach(([k, v]) => {
         if (k.startsWith(`${userId}|`) || k === `complaint-${userId}` || appIds.has(k)) chatThreadReadAt[k] = v;
       });
-      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt } });
+      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt, documentRequests } });
       return;
     }
 
@@ -242,6 +268,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const appIds = new Set(apps.map((a) => getString(asRecord(a), 'id')));
       const studentIds = new Set(apps.map((a) => getString(asRecord(a), 'studentId')).filter(Boolean));
       const documents = mergedState.documents.filter((row) => studentIds.has(getString(asRecord(row), 'studentId')));
+      const notifications = mergedState.notifications.filter((row) => getString(asRecord(row), 'userId') === userId);
+      // Requests addressed to this agency (the agent document workflow).
+      const documentRequests = mergedState.documentRequests.filter((row) => {
+        const r = asRecord(row);
+        return r && getString(r, 'target') === 'agency' && getString(r, 'agencyId') === userId;
+      });
+      const credentialRequests = mergedState.credentialRequests.filter((row) => getString(asRecord(row), 'agencyId') === userId);
       const chatMessages = mergedState.chatMessages.filter((row) => {
         const m = asRecord(row);
         if (!m) return false;
@@ -255,7 +288,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       Object.entries(mergedState.chatThreadReadAt).forEach(([k, v]) => {
         if (k.startsWith(`${userId}|`) || appIds.has(k)) chatThreadReadAt[k] = v;
       });
-      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications: [], appointments: [], chatMessages, chatThreadReadAt } });
+      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments: [], chatMessages, chatThreadReadAt, documentRequests, credentialRequests } });
       return;
     }
 

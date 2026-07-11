@@ -63,6 +63,7 @@ const fetchJsonWithAdminHeaders = async (url, init, adminKey) => {
 };
 const asRecord = (value) => (value && typeof value === 'object') ? value : null;
 const getString = (r, key) => (r && typeof r[key] === 'string' ? r[key] : '');
+const asStringArray = (v, cap) => Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, cap) : [];
 const asState = (value) => {
     const v = (value && typeof value === 'object') ? value : {};
     return {
@@ -72,8 +73,17 @@ const asState = (value) => {
         appointments: Array.isArray(v.appointments) ? v.appointments : [],
         chatMessages: Array.isArray(v.chatMessages) ? v.chatMessages : [],
         chatThreadReadAt: (v.chatThreadReadAt && typeof v.chatThreadReadAt === 'object') ? v.chatThreadReadAt : {},
+        chatEmailNotify: (v.chatEmailNotify && typeof v.chatEmailNotify === 'object') ? v.chatEmailNotify : {},
         documentRequests: Array.isArray(v.documentRequests) ? v.documentRequests : [],
         leads: Array.isArray(v.leads) ? v.leads : [],
+        futureLeads: Array.isArray(v.futureLeads) ? v.futureLeads : [],
+        trashedApplications: Array.isArray(v.trashedApplications) ? v.trashedApplications : [],
+        trashedUsers: Array.isArray(v.trashedUsers) ? v.trashedUsers : [],
+        credentialRequests: Array.isArray(v.credentialRequests) ? v.credentialRequests : [],
+        pointsLedger: Array.isArray(v.pointsLedger) ? v.pointsLedger : [],
+        universityConfig: (v.universityConfig && typeof v.universityConfig === 'object') ? v.universityConfig : null,
+        purgedApplicationIds: asStringArray(v.purgedApplicationIds, 50_000),
+        unTrashedUserIds: asStringArray(v.unTrashedUserIds, 50_000),
     };
 };
 const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(role);
@@ -204,6 +214,11 @@ export default async function handler(req, res) {
             const documents = mergedState.documents.filter((row) => getString(asRecord(row), 'studentId') === userId);
             const notifications = mergedState.notifications.filter((row) => getString(asRecord(row), 'userId') === userId);
             const appointments = mergedState.appointments.filter((row) => getString(asRecord(row), 'userId') === userId);
+            // Requests addressed to this student (agency-targeted ones are not theirs).
+            const documentRequests = mergedState.documentRequests.filter((row) => {
+                const r = asRecord(row);
+                return r && getString(r, 'studentId') === userId && getString(r, 'target') !== 'agency';
+            });
             const chatMessages = mergedState.chatMessages.filter((row) => {
                 const m = asRecord(row);
                 if (!m)
@@ -220,7 +235,7 @@ export default async function handler(req, res) {
                 if (k.startsWith(`${userId}|`) || k === `complaint-${userId}` || appIds.has(k))
                     chatThreadReadAt[k] = v;
             });
-            res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt } });
+            res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt, documentRequests } });
             return;
         }
         if (role === 'agency') {
@@ -228,6 +243,13 @@ export default async function handler(req, res) {
             const appIds = new Set(apps.map((a) => getString(asRecord(a), 'id')));
             const studentIds = new Set(apps.map((a) => getString(asRecord(a), 'studentId')).filter(Boolean));
             const documents = mergedState.documents.filter((row) => studentIds.has(getString(asRecord(row), 'studentId')));
+            const notifications = mergedState.notifications.filter((row) => getString(asRecord(row), 'userId') === userId);
+            // Requests addressed to this agency (the agent document workflow).
+            const documentRequests = mergedState.documentRequests.filter((row) => {
+                const r = asRecord(row);
+                return r && getString(r, 'target') === 'agency' && getString(r, 'agencyId') === userId;
+            });
+            const credentialRequests = mergedState.credentialRequests.filter((row) => getString(asRecord(row), 'agencyId') === userId);
             const chatMessages = mergedState.chatMessages.filter((row) => {
                 const m = asRecord(row);
                 if (!m)
@@ -244,7 +266,7 @@ export default async function handler(req, res) {
                 if (k.startsWith(`${userId}|`) || appIds.has(k))
                     chatThreadReadAt[k] = v;
             });
-            res.status(200).json({ ok: true, state: { applications: apps, documents, notifications: [], appointments: [], chatMessages, chatThreadReadAt } });
+            res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments: [], chatMessages, chatThreadReadAt, documentRequests, credentialRequests } });
             return;
         }
         res.status(403).json({ error: 'Forbidden' });

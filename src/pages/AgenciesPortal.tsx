@@ -8,11 +8,13 @@ import logoUrl from '../../thewaynewlogo-removebg-preview.png';
 import toast from 'react-hot-toast';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
-import { StatGrid, StatCard } from '../components/dashboard/ui';
+import { StatGrid, StatCard, DashboardSection } from '../components/dashboard/ui';
+import { PipelineTracker } from '../components/dashboard/PipelineTracker';
+import { RequestedDocsUploader } from '../components/dashboard/RequestedDocuments';
 
 export default function AgenciesPortal() {
   const { user, logout } = useAuth();
-  const { addApplication, applications, documents, users, chatMessages, addChatMessage, agencyAddExtraDocs, credentialRequests, agencyRequestCredentialChange } = useAppStore();
+  const { addApplication, applications, documents, users, chatMessages, addChatMessage, agencyAddExtraDocs, credentialRequests, agencyRequestCredentialChange, documentRequests } = useAppStore();
   const [revealCred, setRevealCred] = useState(false);
   const [credReqReason, setCredReqReason] = useState('');
   const [credReqOpen, setCredReqOpen] = useState(false);
@@ -299,6 +301,14 @@ Underage: ${underage ? 'Yes' : 'No'}`;
   };
 
   const myApps = applications.filter(a => a.agencyId === user?.id);
+  // Documents the admin team requested from THIS agency (agent workflow, PRD §8).
+  const myDocRequests = documentRequests
+    .filter(r => r.target === 'agency' && r.agencyId === user?.id)
+    .sort((a, b) => {
+      const open = (s: string) => (s === 'pending' || s === 'rejected' ? 0 : 1);
+      return open(a.status) - open(b.status) || b.createdAt.localeCompare(a.createdAt);
+    });
+  const openDocRequests = myDocRequests.filter(r => r.status === 'pending' || r.status === 'rejected').length;
 
   return (
     <div className="min-h-screen bg-[#FAFAF9]">
@@ -375,6 +385,17 @@ Underage: ${underage ? 'Yes' : 'No'}`;
                   <StatCard key={i} label={stat.label} value={stat.value} icon={stat.icon} tone={stat.tone} />
                 ))}
               </StatGrid>
+
+              {/* Requested documents — the agent upload workflow (PRD §8) */}
+              {myDocRequests.length > 0 && (
+                <DashboardSection
+                  title="Documents requested from you"
+                  icon={Upload}
+                  count={openDocRequests > 0 ? `${openDocRequests} to upload` : 'all handled'}
+                >
+                  <RequestedDocsUploader requests={myDocRequests} mode="agency" />
+                </DashboardSection>
+              )}
 
               {/* My Students list */}
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
@@ -1016,6 +1037,9 @@ Underage: ${underage ? 'Yes' : 'No'}`;
                     </div>
                   );
                 })()}
+
+                {/* Case pipeline — agencies grant Recognition/Ministry permission here */}
+                {a.pipeline && <PipelineTracker application={a} />}
 
                 {/* Two columns: progress + video/docs */}
                 <div className="grid md:grid-cols-2 gap-6">
