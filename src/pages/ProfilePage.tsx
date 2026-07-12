@@ -4,7 +4,7 @@ import {
   Users, FileText, Calendar, GraduationCap, Trophy, Star, Award,
   Mail, KeyRound, Phone, Eye, EyeOff, Loader2, BadgeCheck, AtSign,
   Camera, Trash2, Plus, Pencil, Briefcase, Save, X as CloseIcon,
-  ArrowUpRight, Zap, LogOut,
+  ArrowUpRight, Zap, LogOut, UserPlus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +13,7 @@ import { getAvatar, setAvatar, clearAvatar, onAvatarChange, fileToAvatarDataUrl 
 import { STATUS_ORDER, statusMeta, isLeadDue } from '../lib/leads';
 import type { LeadStatus } from '../store/appStore';
 import { PointsHistory } from '../components/dashboard/PointsHistory';
+import { CreateStudentModal } from '../components/dashboard/CreateStudentModal';
 
 const roleMeta: Record<string, { label: string; color: string; bg: string }> = {
   ceo:          { label: 'CEO',          color: 'text-purple-700', bg: 'bg-purple-50'  },
@@ -62,6 +63,9 @@ const ProfilePage: React.FC = () => {
 
   const isCompetitive = ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(user?.role ?? '');
   const hasLeads = ['sales', 'customer_support', 'ceo'].includes(user?.role ?? '');
+  // Sales + CEO can create student accounts directly from their profile.
+  const canCreateStudent = user?.role === 'sales' || user?.role === 'ceo';
+  const [createStudentOpen, setCreateStudentOpen] = useState(false);
   const [tab, setTab] = useState<'overview' | 'leaderboard' | 'workspace' | 'account'>(
     user?.role === 'sales' ? 'workspace' : isCompetitive ? 'overview' : 'account'
   );
@@ -271,6 +275,17 @@ const ProfilePage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Create student (Sales + CEO) */}
+          {canCreateStudent && (
+            <button
+              onClick={() => setCreateStudentOpen(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#0A1628] px-5 py-2.5 text-sm font-bold text-amber-400 hover:bg-[#132c50] transition-colors"
+            >
+              <UserPlus className="w-4 h-4" /> Create a student
+              <span className="ml-1 hidden sm:inline text-[11px] font-medium text-gray-400">· account + credentials emailed</span>
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
@@ -471,6 +486,13 @@ const ProfilePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Create student (Sales + CEO; CEO gets the quick-account toggle) */}
+      <CreateStudentModal
+        open={createStudentOpen}
+        onClose={() => setCreateStudentOpen(false)}
+        allowQuick={user.role === 'ceo'}
+      />
     </div>
   );
 };

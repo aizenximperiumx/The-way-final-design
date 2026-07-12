@@ -324,6 +324,24 @@ export interface AppStoreState {
   ) => void;
 
   salesApproveApplication: (applicationId: string) => Promise<{ username: string; password: string; emailSent?: boolean; warning?: string }>;
+  /**
+   * Create a student account directly (Sales/CEO), bypassing the public form.
+   * The backend creates the login and emails the student their credentials.
+   * With `withApplication` (the default) an approved application + case
+   * pipeline is opened and the student's details are saved to their profile;
+   * CEO may pass `withApplication: false` to create a bare account only.
+   */
+  createStudentAccount: (details: {
+    name: string;
+    email: string;
+    phone?: string;
+    country?: string;
+    dob?: string;
+    university?: string;
+    program?: string;
+    studyLevel?: string;
+    withApplication?: boolean;
+  }) => Promise<{ username: string; password: string; emailSent?: boolean; warning?: string; emailError?: string }>;
   salesRejectApplication: (applicationId: string) => void;
   salesAddIntakeDetails: (applicationId: string, details: string, attachments: string[]) => void;
   salesSetIntakeMedia: (
@@ -1372,6 +1390,117 @@ const useAppStore = create<AppStoreState>()(
           ...creds,
           ...(typeof json.emailSent === 'boolean' ? { emailSent: json.emailSent } : {}),
           ...(typeof json.warning === 'string' ? { warning: json.warning } : {}),
+        };
+      },
+
+      createStudentAccount: async (details) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['sales', 'ceo']);
+        const name = (details.name || '').trim();
+        const email = (details.email || '').trim();
+        if (!name) throw new Error('Student name is required');
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('A valid student email is required');
+        const withApplication = details.withApplication !== false;
+        const university = details.university || undefined;
+        const phone = (details.phone || '').trim();
+
+        // Create the login + send the student their credentials by email
+        // (api/admin-create-student handles the Resend send with the branded
+        // welcome template). Same endpoint the approval flow uses.
+        const creds = generateStudentCredentials();
+        const supabase = getSupabase();
+        const { data: session } = await supabase.auth.getSession();
+        const token = session.session?.access_token;
+        if (!token) throw new Error('Not authenticated');
+        const resp = await fetch('/api/admin-create-student', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ email, username: creds.username, password: creds.password, name, phone }),
+        });
+        const text = await resp.text().catch(() => '');
+        const json = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { id?: unknown; error?: unknown; details?: unknown; emailSent?: unknown; warning?: unknown; emailError?: unknown } | null;
+        if (!resp.ok || !json || typeof json.id !== 'string') {
+          const err = json && typeof json.error === 'string' ? json.error : 'Failed to create student account';
+          const d = json && typeof json.details === 'string' ? json.details : '';
+          throw new Error(d ? `${err}: ${d.slice(0, 240)}` : err);
+        }
+        const studentId = json.id;
+        const nowIso = new Date().toISOString();
+
+        // Save the student's profile locally (name, email, phone, university).
+        set((state) => ({
+          users: state.users.some(u => u.id === studentId)
+            ? state.users.map(u => u.id === studentId ? { ...u, name, email, phone: phone || u.phone, ...(university ? { assignedUniversityId: university } : {}) } : u)
+            : [...state.users, { id: studentId, username: creds.username, role: 'student' as const, name, email, phone, createdAt: nowIso, points: 0, ...(university ? { assignedUniversityId: university } : {}) }],
+        }));
+
+        if (withApplication) {
+          const autoStaff = resolveAutoStaff(get().users, get().universityConfig, university);
+          const appId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+          const application: Application = {
+            id: appId,
+            studentId,
+            name, email, phone, country: details.country?.trim() || '',
+            dob: details.dob || undefined,
+            program: details.program?.trim() || undefined,
+            studyLevel: details.studyLevel?.trim() || undefined,
+            university,
+            status: 'approved',
+            stage: 'contacted',
+            createdAt: nowIso,
+            approvedBy: actor.id,
+            approvedAt: nowIso,
+            ownerId: actor.id,
+            salesOwnerId: actor.id,
+            assignedStaffId: autoStaff?.id,
+            source: 'public',
+            studentEmail: email,
+            studentCredentials: { username: creds.username, updatedAt: nowIso },
+            intakeDetails: `Student created directly by ${actor.name}.`,
+            pipeline: { status: 'processing', current: 'translated_documents', stages: { translated_documents: { startedAt: nowIso } } },
+            events: [
+              { id: `${appId}-created`, type: 'approved' as const, byId: actor.id, byName: actor.name, time: nowIso, details: 'Student created directly' },
+              ...(autoStaff ? [{ id: `${appId}-assigned`, type: 'assigned_staff' as const, byId: actor.id, byName: actor.name, time: nowIso, details: autoStaff.id }] : []),
+            ],
+          };
+          set((state) => {
+            const pointsLedger = appendLedger(state.pointsLedger, [{ id: `act-${appId}-created`, userId: actor.id, delta: 1, reason: `Created student — ${name}`, kind: 'activity', at: nowIso, applicationId: appId, applicationName: name }]);
+            return {
+              applications: [application, ...state.applications],
+              ...ledgerPatch(state, pointsLedger),
+              notifications: [
+                ...state.notifications,
+                { id: `${studentId}-welcome`, userId: studentId, title: 'Welcome to The Way', message: 'Your student account has been created', type: 'success' as const, time: nowIso, read: false, link: '/dashboard' },
+                ...(autoStaff ? [{ id: `${appId}-assign-${autoStaff.id}`, userId: autoStaff.id, title: 'New Student Assigned', message: `${name}${university ? ` — ${getUniversityName(university)}` : ''}`, type: 'info' as const, time: nowIso, read: false, link: `/staff?student=${appId}` }] : []),
+              ],
+            };
+          });
+          if (autoStaff) {
+            emailNotifyUser(get, autoStaff.id, {
+              subject: 'New student assigned — The Way',
+              title: 'A new student was assigned to you',
+              intro: `You have been assigned a new student: ${name}${university ? ` (${getUniversityName(university)})` : ''}.`,
+              ctaLabel: 'Open your dashboard',
+              ctaPath: '/staff',
+              outro: 'Log in to review their application and documents.',
+            }, { dedupeKey: `${appId}-autoassign` });
+          }
+        }
+
+        await get().refreshUsersFromBackend();
+        // Keep the freshly-created student in the list even if the backend
+        // users endpoint hasn't caught up yet.
+        if (!get().users.some(u => u.id === studentId)) {
+          set((state) => ({
+            users: [...state.users, { id: studentId, username: creds.username, role: 'student' as const, name, email, phone, createdAt: nowIso, points: 0, ...(university ? { assignedUniversityId: university } : {}) }],
+          }));
+        }
+        queueBackendSave(get);
+        return {
+          ...creds,
+          ...(typeof json.emailSent === 'boolean' ? { emailSent: json.emailSent } : {}),
+          ...(typeof json.warning === 'string' ? { warning: json.warning } : {}),
+          ...(typeof json.emailError === 'string' ? { emailError: json.emailError } : {}),
         };
       },
 
