@@ -1,13 +1,16 @@
 // Shared, email-client-safe HTML template for all outgoing mail.
-// Table-based layout + inline styles so it renders consistently across
-// Gmail, Outlook, Apple Mail, etc. The leading underscore keeps this file
-// from being treated as a deployable serverless route.
+// Mirrors src/lib/emailTemplate.ts — keep both in sync.
+// Design: "private client" letterhead — warm cream page, white card, navy
+// header with a serif wordmark, gold accents, navy credentials panel, gold
+// pill CTA, navy footer. Table-based + inline styles (Gmail/Outlook-safe).
+// The leading underscore keeps this file from being treated as a route.
 
 export type EmailCredential = { username?: string; password?: string };
 
 export type EmailTemplateOptions = {
   title: string;            // large heading inside the body
   preheader?: string;       // hidden inbox-preview text
+  eyebrow?: string;         // small gold caps label above the title
   greeting?: string;        // e.g. "Dear Ziad,"
   intro: string;            // opening paragraph (plain text)
   credentials?: EmailCredential;
@@ -18,13 +21,17 @@ export type EmailTemplateOptions = {
 };
 
 const NAVY = '#0A1628';
-const NAVY_SOFT = '#122036';
+const NAVY_2 = '#13294B';
 const GOLD = '#F5A800';
-const TEXT = '#2b3648';
-const MUTED = '#7a8597';
-const BORDER = '#e6e9ef';
-const PAGE_BG = '#eef1f5';
+const GOLD_SOFT = '#F5C544';
+const PAGE_BG = '#F1EDE6';
+const CARD_BORDER = '#E8E1D2';
+const TEXT = '#41506B';
+const HEAD_TEXT = '#182740';
+const MUTED = '#8B94A6';
 const SITE = 'https://theway.ge';
+const SERIF = "Georgia,'Times New Roman',serif";
+const SANS = 'Arial,Helvetica,sans-serif';
 
 const esc = (s: string): string =>
   String(s)
@@ -33,29 +40,31 @@ const esc = (s: string): string =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-const credRow = (label: string, value: string): string => `
+const credRow = (label: string, value: string, last: boolean): string => `
   <tr>
-    <td style="padding:10px 0;border-bottom:1px solid ${BORDER};">
-      <span style="display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:${MUTED};font-weight:700;margin-bottom:4px;">${esc(label)}</span>
-      <span style="font-family:'Courier New',Consolas,monospace;font-size:18px;font-weight:700;color:${NAVY};word-break:break-all;">${esc(value)}</span>
+    <td style="padding:13px 0;${last ? '' : 'border-bottom:1px solid rgba(255,255,255,0.09);'}">
+      <span style="display:block;font-family:${SANS};font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:rgba(245,240,232,.55);font-weight:700;margin-bottom:5px;">${esc(label)}</span>
+      <span style="font-family:'Courier New',Consolas,monospace;font-size:19px;font-weight:700;color:${GOLD_SOFT};word-break:break-all;">${esc(value)}</span>
     </td>
   </tr>`;
 
 export function renderEmail(o: EmailTemplateOptions): { html: string; text: string } {
   const year = new Date().getFullYear();
   const preheader = o.preheader ?? o.intro;
+  const eyebrow = o.eyebrow ?? 'The Way · Georgia';
 
   const credBlock = (() => {
     const u = o.credentials?.username;
     const p = o.credentials?.password;
     if (!u && !p) return '';
     return `
-      <tr><td style="padding:8px 0 0;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fa;border:1px solid ${BORDER};border-left:4px solid ${GOLD};border-radius:10px;">
-          <tr><td style="padding:18px 22px;">
+      <tr><td style="padding:10px 0 4px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${NAVY}" style="background:${NAVY};background-image:linear-gradient(135deg,${NAVY},${NAVY_2});border-radius:14px;">
+          <tr><td style="padding:20px 26px;">
+            <span style="display:block;font-family:${SANS};font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:${GOLD};font-weight:700;padding-bottom:4px;">Your access</span>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              ${u ? credRow('Username', u) : ''}
-              ${p ? credRow('Password', p) : ''}
+              ${u ? credRow('Username', u, !p) : ''}
+              ${p ? credRow('Temporary password', p, true) : ''}
             </table>
           </td></tr>
         </table>
@@ -63,28 +72,32 @@ export function renderEmail(o: EmailTemplateOptions): { html: string; text: stri
   })();
 
   const ctaBlock = (o.ctaLabel && o.ctaUrl) ? `
-      <tr><td style="padding:28px 0 6px;">
+      <tr><td style="padding:30px 0 4px;">
         <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td align="center" bgcolor="${GOLD}" style="border-radius:10px;">
+          <td align="center" bgcolor="${GOLD}" style="border-radius:999px;">
             <a href="${esc(o.ctaUrl)}" target="_blank"
-               style="display:inline-block;padding:14px 34px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:${NAVY};text-decoration:none;border-radius:10px;">
+               style="display:inline-block;padding:15px 42px;font-family:${SANS};font-size:14px;font-weight:800;letter-spacing:.02em;color:${NAVY};text-decoration:none;border-radius:999px;">
               ${esc(o.ctaLabel)}
             </a>
           </td>
         </tr></table>
+        <span style="display:block;padding-top:12px;font-family:${SANS};font-size:12px;line-height:18px;color:${MUTED};">
+          Or copy this link: <a href="${esc(o.ctaUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;word-break:break-all;">${esc(o.ctaUrl)}</a>
+        </span>
       </td></tr>` : '';
 
   const noteBlock = o.note ? `
-      <tr><td style="padding:18px 0 0;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fbfbfd;border:1px solid ${BORDER};border-radius:10px;">
-          <tr><td style="padding:14px 18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:${MUTED};">
-            🔒 ${esc(o.note)}
+      <tr><td style="padding:22px 0 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAF6ED;border:1px solid #EEE4CC;border-radius:12px;">
+          <tr><td style="padding:14px 20px;">
+            <span style="display:block;font-family:${SANS};font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#B07E00;font-weight:700;padding-bottom:4px;">Please note</span>
+            <span style="font-family:${SANS};font-size:13px;line-height:20px;color:#6E6A5E;">${esc(o.note)}</span>
           </td></tr>
         </table>
       </td></tr>` : '';
 
   const outroBlock = o.outro ? `
-      <tr><td style="padding:22px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:${TEXT};">
+      <tr><td style="padding:24px 0 0;font-family:${SANS};font-size:15px;line-height:25px;color:${TEXT};">
         ${esc(o.outro)}
       </td></tr>` : '';
 
@@ -98,34 +111,33 @@ export function renderEmail(o: EmailTemplateOptions): { html: string; text: stri
 </head>
 <body style="margin:0;padding:0;background:${PAGE_BG};">
   <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">${esc(preheader)}</span>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAGE_BG};">
-    <tr><td align="center" style="padding:32px 16px;">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(10,22,40,.08);">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${PAGE_BG}" style="background:${PAGE_BG};">
+    <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="620" cellpadding="0" cellspacing="0" style="width:620px;max-width:100%;background:#ffffff;border:1px solid ${CARD_BORDER};border-radius:18px;overflow:hidden;">
+
+        <!-- Gold hairline -->
+        <tr><td style="height:5px;background:${GOLD};line-height:5px;font-size:0;">&nbsp;</td></tr>
 
         <!-- Header -->
         <tr>
-          <td style="background:${NAVY};background-image:linear-gradient(135deg,${NAVY} 0%,${NAVY_SOFT} 100%);padding:34px 40px;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-              <td style="font-family:Arial,Helvetica,sans-serif;">
-                <span style="font-size:24px;font-weight:800;letter-spacing:.04em;color:#ffffff;">THE&nbsp;WAY<span style="color:${GOLD};">.</span></span>
-                <span style="display:block;margin-top:6px;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:${GOLD};font-weight:700;">Your Path to Studying in Georgia</span>
-              </td>
-            </tr></table>
+          <td bgcolor="${NAVY}" style="background:${NAVY};background-image:linear-gradient(135deg,${NAVY} 0%,${NAVY_2} 100%);padding:36px 46px;">
+            <span style="font-family:${SERIF};font-size:26px;font-weight:700;letter-spacing:.14em;color:#ffffff;">THE&nbsp;WAY<span style="color:${GOLD};">.</span></span>
+            <span style="display:block;margin-top:7px;font-family:${SANS};font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:${GOLD};font-weight:700;">Study · Live · Belong — Georgia</span>
           </td>
         </tr>
 
-        <!-- Gold rule -->
-        <tr><td style="height:4px;background:${GOLD};line-height:4px;font-size:0;">&nbsp;</td></tr>
-
         <!-- Body -->
         <tr>
-          <td style="padding:40px 40px 8px;">
+          <td style="padding:42px 46px 10px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:800;color:${NAVY};padding-bottom:14px;">
+              <tr><td style="font-family:${SANS};font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:${GOLD};font-weight:800;padding-bottom:12px;">
+                ${esc(eyebrow)}
+              </td></tr>
+              <tr><td style="font-family:${SERIF};font-size:27px;line-height:34px;font-weight:700;color:${HEAD_TEXT};padding-bottom:16px;">
                 ${esc(o.title)}
               </td></tr>
-              ${o.greeting ? `<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:${TEXT};padding-bottom:6px;">${esc(o.greeting)}</td></tr>` : ''}
-              <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:${TEXT};padding-bottom:18px;">
+              ${o.greeting ? `<tr><td style="font-family:${SANS};font-size:15px;line-height:25px;color:${HEAD_TEXT};font-weight:700;padding-bottom:8px;">${esc(o.greeting)}</td></tr>` : ''}
+              <tr><td style="font-family:${SANS};font-size:15px;line-height:25px;color:${TEXT};padding-bottom:16px;">
                 ${esc(o.intro)}
               </td></tr>
               ${credBlock}
@@ -137,24 +149,30 @@ export function renderEmail(o: EmailTemplateOptions): { html: string; text: stri
         </tr>
 
         <!-- Sign-off -->
-        <tr><td style="padding:26px 40px 36px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:${TEXT};">
-          Warm regards,<br/><strong style="color:${NAVY};">The Way Team</strong>
+        <tr><td style="padding:30px 46px 40px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+            <tr><td style="padding-bottom:14px;"><span style="display:inline-block;width:44px;height:2px;background:${GOLD};font-size:0;line-height:2px;">&nbsp;</span></td></tr>
+            <tr><td style="font-family:${SANS};font-size:15px;line-height:24px;color:${TEXT};">
+              Warm regards,<br/><span style="font-family:${SERIF};font-size:16px;font-weight:700;color:${HEAD_TEXT};">The Way Team</span>
+            </td></tr>
+          </table>
         </td></tr>
 
         <!-- Footer -->
         <tr>
-          <td style="background:#f7f9fb;border-top:1px solid ${BORDER};padding:26px 40px;">
+          <td bgcolor="${NAVY}" style="background:${NAVY};padding:28px 46px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:${MUTED};">
-                <a href="${SITE}" target="_blank" style="color:${NAVY};font-weight:700;text-decoration:none;">theway.ge</a>
-                &nbsp;·&nbsp;
-                <a href="mailto:info@theway.ge" style="color:${MUTED};text-decoration:none;">info@theway.ge</a>
+              <tr><td style="font-family:${SERIF};font-size:14px;letter-spacing:.14em;color:#ffffff;padding-bottom:10px;">THE&nbsp;WAY<span style="color:${GOLD};">.</span></td></tr>
+              <tr><td style="font-family:${SANS};font-size:12px;line-height:20px;padding-bottom:12px;">
+                <a href="${SITE}" target="_blank" style="color:${GOLD};font-weight:700;text-decoration:none;">theway.ge</a>
+                <span style="color:rgba(245,240,232,.35);">&nbsp;·&nbsp;</span>
+                <a href="mailto:info@theway.ge" style="color:rgba(245,240,232,.65);text-decoration:none;">info@theway.ge</a>
               </td></tr>
-              <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:${MUTED};padding-top:10px;">
-                You're receiving this email because an account or request was created for you at The Way.
+              <tr><td style="font-family:${SANS};font-size:11px;line-height:17px;color:rgba(245,240,232,.45);padding-bottom:8px;">
+                You are receiving this email because an account or request was created for you at The Way.
                 If this wasn't you, please contact us right away.
               </td></tr>
-              <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#9aa3b2;padding-top:10px;">
+              <tr><td style="font-family:${SANS};font-size:11px;color:rgba(245,240,232,.35);">
                 © ${year} The Way · Tbilisi, Georgia
               </td></tr>
             </table>
@@ -169,7 +187,7 @@ export function renderEmail(o: EmailTemplateOptions): { html: string; text: stri
 
   // Plain-text fallback.
   const lines: string[] = [];
-  lines.push('THE WAY — Your Path to Studying in Georgia');
+  lines.push('THE WAY — Study · Live · Belong — Georgia');
   lines.push('');
   lines.push(o.title);
   if (o.greeting) { lines.push(''); lines.push(o.greeting); }
@@ -177,7 +195,7 @@ export function renderEmail(o: EmailTemplateOptions): { html: string; text: stri
   if (o.credentials?.username || o.credentials?.password) {
     lines.push('');
     if (o.credentials.username) lines.push(`Username: ${o.credentials.username}`);
-    if (o.credentials.password) lines.push(`Password: ${o.credentials.password}`);
+    if (o.credentials.password) lines.push(`Temporary password: ${o.credentials.password}`);
   }
   if (o.ctaLabel && o.ctaUrl) { lines.push(''); lines.push(`${o.ctaLabel}: ${o.ctaUrl}`); }
   if (o.note) { lines.push(''); lines.push(o.note); }

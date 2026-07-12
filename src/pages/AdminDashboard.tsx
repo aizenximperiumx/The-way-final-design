@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Search,
@@ -31,7 +32,7 @@ import toast from 'react-hot-toast';
 import { tryGetSupabase } from '../lib/supabase';
 import { PageHeader, StatGrid, StatCard, DashboardSection, EmptyState, type StatTone } from '../components/dashboard/ui';
 import { UniversityAssignmentSettings, PointsAdjustTool, SlaRulesCard } from '../components/dashboard/CeoControls';
-import { Star, Trophy, Timer } from 'lucide-react';
+import { Star, Trophy, Timer, Mail, Loader2 } from 'lucide-react';
 
 const toneFromColor = (color: string): StatTone =>
   color.includes('amber') ? 'amber'
@@ -77,7 +78,20 @@ const AdminDashboard: React.FC = () => {
     pointsLedger,
   } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'forms' | 'requests' | 'performance' | 'universities' | 'trash' | 'security'>('analytics');
+  type AdminTab = 'analytics' | 'users' | 'forms' | 'requests' | 'performance' | 'universities' | 'trash' | 'security';
+  const ADMIN_TABS: AdminTab[] = ['analytics', 'users', 'forms', 'requests', 'performance', 'universities', 'trash', 'security'];
+  // Deep link: /admin?tab=<id> (from notifications) opens that tab directly.
+  const initialTab = ((): AdminTab => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return (t && (ADMIN_TABS as string[]).includes(t)) ? (t as AdminTab) : 'analytics';
+  })();
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
+  const location = useLocation();
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get('tab');
+    if (t && (ADMIN_TABS as string[]).includes(t)) setActiveTab(t as AdminTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
   const pendingCredRequests = credentialRequests.filter(r => r.status === 'pending');
   const [health, setHealth] = useState<{ loading: boolean; ok: boolean | null; checks: Array<{ name: string; ok: boolean; details?: string }> }>({ loading: true, ok: null, checks: [] });
   const [audit, setAudit] = useState<{ loading: boolean; ok: boolean | null; issueCount: number; issues: Array<{ severity: 'high' | 'medium' | 'low'; code: string; message: string }> }>({ loading: false, ok: null, issueCount: 0, issues: [] });
@@ -226,6 +240,28 @@ const AdminDashboard: React.FC = () => {
       setAudit({ loading: false, ok, issueCount, issues });
     } catch {
       setAudit({ loading: false, ok: false, issueCount: 1, issues: [{ severity: 'high', code: 'AUDIT_FETCH_FAILED', message: 'Failed to run flow audit' }] });
+    }
+  };
+
+  // Manually trigger the weekly digest email (the same summary sent every
+  // Monday morning). Server handler: api/weekly-digest.ts (CEO-only).
+  const [digestSending, setDigestSending] = useState(false);
+  const sendDigestNow = async () => {
+    setDigestSending(true);
+    try {
+      const supabase = tryGetSupabase();
+      const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
+      const resp = await fetch('/api/weekly-digest', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+      const json = (await resp.json().catch(() => null)) as { ok?: boolean; sent?: number; error?: string } | null;
+      if (resp.ok && json?.ok) {
+        toast.success(json.sent ? `Digest sent to ${json.sent} CEO inbox${json.sent > 1 ? 'es' : ''}` : 'Digest ran — no CEO email on file');
+      } else {
+        toast.error(json?.error || 'Could not send digest');
+      }
+    } catch {
+      toast.error('Could not send digest');
+    } finally {
+      setDigestSending(false);
     }
   };
 
@@ -383,6 +419,25 @@ const AdminDashboard: React.FC = () => {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Weekly Digest */}
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <div className="px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-amber-500" />
+                  <span className="text-base font-bold text-gray-900">Weekly Digest</span>
+                  <span className="text-sm text-gray-500">— Emailed to CEOs every Monday morning (new applications, closed cases, overdue stages, points, ratings)</span>
+                </div>
+                <button
+                  onClick={() => void sendDigestNow()}
+                  disabled={digestSending}
+                  className="inline-flex items-center justify-center gap-2 bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-60 shrink-0"
+                >
+                  {digestSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  Send now
+                </button>
+              </div>
             </div>
 
             {/* Charts Section */}

@@ -80,10 +80,27 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const role = Array.isArray(callerProfile.json) && callerProfile.json[0] && typeof callerProfile.json[0].role === 'string'
       ? (callerProfile.json[0].role as string)
       : '';
-    const allowed = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency']);
+    // Students/support trigger notification emails too (e.g. "requested
+    // document uploaded" to their advisor) — rate-limited below.
+    const allowed = new Set(['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'agency', 'student', 'customer_support']);
     if (!allowed.has(role)) {
       res.status(403).json({ error: 'Forbidden' });
       return;
+    }
+    const internal = ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(role);
+    if (!internal) {
+      const g = globalThis as unknown as { __mailRl?: Map<string, { count: number; resetAt: number }> };
+      if (!g.__mailRl) g.__mailRl = new Map();
+      const now = Date.now();
+      const entry = g.__mailRl.get(callerId);
+      if (!entry || now > entry.resetAt) {
+        g.__mailRl.set(callerId, { count: 1, resetAt: now + 60 * 60 * 1000 });
+      } else if (entry.count >= 20) {
+        res.status(429).json({ error: 'Too many emails, try again later' });
+        return;
+      } else {
+        entry.count += 1;
+      }
     }
 
     const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, unknown>) : {};

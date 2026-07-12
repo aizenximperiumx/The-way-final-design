@@ -55,7 +55,7 @@ const fetchJsonWithAdminHeaders = async (url, init, adminKey) => {
 };
 const asRecord = (value) => (value && typeof value === 'object') ? value : null;
 const getString = (r, key) => (r && typeof r[key] === 'string' ? r[key] : '');
-const DEFAULT_SLA_GROUPS = {
+export const DEFAULT_SLA_GROUPS = {
     'georgian-american-university': 'fast',
     'caucasus-international-university': 'fast',
     'georgian-aviation-university': 'fast',
@@ -75,7 +75,7 @@ const APPROVAL_WINDOWS = {
     medium: { fullHours: 72, halfHours: 96, fullPoints: 2, halfPoints: 1, latePoints: -1 },
     slow: { fullHours: 240, halfHours: 280, fullPoints: 2, halfPoints: 1, latePoints: -2 },
 };
-const STAGE_LABELS = {
+export const STAGE_LABELS = {
     translated_documents: 'Translated Documents',
     university_approval: 'University Initial Approval',
     recognition_letter: 'Recognition Letter',
@@ -83,7 +83,7 @@ const STAGE_LABELS = {
     visa_documents: 'Visa Required Documents',
     visa_residency: 'Visa & Residency',
 };
-const getSlaWindow = (stage, group) => {
+export const getSlaWindow = (stage, group) => {
     switch (stage) {
         case 'translated_documents':
             return { fullHours: 36, halfHours: 72, fullPoints: 2, halfPoints: 1, latePoints: -2 };

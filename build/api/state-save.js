@@ -79,6 +79,7 @@ const asState = (value) => {
         universityConfig: (v.universityConfig && typeof v.universityConfig === 'object') ? v.universityConfig : null,
         purgedApplicationIds: asStringArray(v.purgedApplicationIds, 50_000),
         unTrashedUserIds: asStringArray(v.unTrashedUserIds, 50_000),
+        digestMeta: (v.digestMeta && typeof v.digestMeta === 'object') ? v.digestMeta : null,
     };
 };
 const isInternal = (role) => ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(role);
@@ -466,6 +467,7 @@ export default async function handler(req, res) {
                 universityConfig: mergeUniversityConfig(current.universityConfig, incoming.universityConfig),
                 purgedApplicationIds: Array.from(purged).slice(0, 50_000),
                 unTrashedUserIds: Array.from(unTrashed).slice(0, 50_000),
+                digestMeta: current.digestMeta, // server-owned
             };
         }
         else if (role === 'student') {
@@ -588,6 +590,7 @@ export default async function handler(req, res) {
                     type: 'success',
                     time: now,
                     read: false,
+                    link: '/admin?tab=performance',
                 })));
             }
             next = {

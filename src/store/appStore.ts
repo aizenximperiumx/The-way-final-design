@@ -162,10 +162,10 @@ export interface Application {
   pipeline?: ApplicationPipeline;
   /** Student service rating collected after residency upload. */
   rating?: { stars: number; comment?: string; at: string };
-  // Login credentials for the created student account. Stored so a partner
-  // agency (and CEO) can see/manage access for students they can't contact
-  // directly. Only the owning agency and CEO can view these in the UI.
-  studentCredentials?: { username: string; password: string; updatedAt: string };
+  // Login identity for the created student account. The PASSWORD is never
+  // stored — it is shown once at creation and delivered by email; agencies
+  // request a reset (CEO-approved) when access is lost.
+  studentCredentials?: { username: string; password?: string; updatedAt: string };
 }
 
 export interface CredentialRequest {
@@ -214,6 +214,8 @@ export interface Notification {
   type: NotificationType;
   time: string;
   read: boolean;
+  /** Deep link — clicking the notification opens this in-app path. */
+  link?: string;
 }
 
 export type AppointmentType = 'video' | 'in-person';
@@ -691,6 +693,7 @@ const useAppStore = create<AppStoreState>()(
                   : `${meta.label} has been completed. Next: ${nextMeta?.label ?? ''}`,
                 type: (isFinal ? 'success' : 'info') as NotificationType,
                 time: now, read: false,
+                link: '/dashboard',
               }] : []),
               ...(entries.length && app.assignedStaffId ? [{
                 id: `${applicationId}-stage-${stage}-pts`,
@@ -699,6 +702,7 @@ const useAppStore = create<AppStoreState>()(
                 message: `${meta.label} — ${app.name}`,
                 type: (entries[0].delta >= 0 ? 'success' : 'alert') as NotificationType,
                 time: now, read: false,
+                link: '/profile',
               }] : []),
             ],
           };
@@ -1085,9 +1089,18 @@ const useAppStore = create<AppStoreState>()(
           let migrated = false;
           set((state) => {
             const applications = state.applications.map(a => {
-              if (a.pipeline || a.status !== 'approved') return a;
-              migrated = true;
-              return { ...a, pipeline: legacyStageToPipeline(a.stage, nowIso) };
+              let next = a;
+              if (!a.pipeline && a.status === 'approved') {
+                migrated = true;
+                next = { ...next, pipeline: legacyStageToPipeline(a.stage, nowIso) };
+              }
+              // Security migration: scrub any password persisted by the old
+              // "store credentials" design — passwords are email-only now.
+              if (next.studentCredentials?.password) {
+                migrated = true;
+                next = { ...next, studentCredentials: { username: next.studentCredentials.username, updatedAt: next.studentCredentials.updatedAt } };
+              }
+              return next;
             });
             return migrated ? { applications } : {};
           });
@@ -1294,7 +1307,7 @@ const useAppStore = create<AppStoreState>()(
             ownerId: actor.id,
             salesOwnerId: actor.id,
             assignedStaffId: autoAssignedStaffId ?? a.assignedStaffId,
-            studentCredentials: { username: creds.username, password: creds.password, updatedAt: new Date().toISOString() },
+            studentCredentials: { username: creds.username, updatedAt: new Date().toISOString() },
             hold: undefined,
             // Approval opens the case: Processing, first stage timer running.
             pipeline: a.pipeline ?? {
@@ -1311,7 +1324,7 @@ const useAppStore = create<AppStoreState>()(
           notifications: [
             ...state.notifications,
             { id: Date.now().toString(), userId: studentId, title: 'Welcome to The Way', message: 'Your student account has been created', type: 'success', time: new Date().toISOString(), read: false },
-            ...(autoAssignedStaffId ? [{ id: `${studentId}-auto-assign`, userId: autoAssignedStaffId, title: 'New Student Assigned', message: app.name, type: 'info' as const, time: new Date().toISOString(), read: false }] : [])
+            ...(autoAssignedStaffId ? [{ id: `${studentId}-auto-assign`, userId: autoAssignedStaffId, title: 'New Student Assigned', message: app.name, type: 'info' as const, time: new Date().toISOString(), read: false, link: `/staff?student=${applicationId}` }] : [])
           ],
         }));
         set((state) => {
@@ -1564,7 +1577,7 @@ const useAppStore = create<AppStoreState>()(
           applications: state.applications.map(a => a.id === applicationId ? { ...a, stage } : a),
           notifications: app.studentId ? [
             ...state.notifications,
-            { id: `${applicationId}-stage-${Date.now()}`, userId: app.studentId, title: 'Application Updated', message: `Your application has moved to: ${stageLabel}`, type: 'info' as const, time: new Date().toISOString(), read: false },
+            { id: `${applicationId}-stage-${Date.now()}`, userId: app.studentId, title: 'Application Updated', message: `Your application has moved to: ${stageLabel}`, type: 'info' as const, time: new Date().toISOString(), read: false, link: '/dashboard' },
           ] : state.notifications,
         }));
 
@@ -1617,7 +1630,9 @@ const useAppStore = create<AppStoreState>()(
 
         const newDoc: Omit<Document, 'id'> = {
           ...doc,
-          status: 'pending',
+          // Staff upload their own work product — no self-verification click
+          // needed. (Student/agent uploads go through the review workflow.)
+          status: 'verified',
           uploadedAt: new Date().toISOString(),
           uploadedBy: actor.id,
         };
@@ -1750,7 +1765,7 @@ const useAppStore = create<AppStoreState>()(
               } : a),
               notifications: [
                 ...state.notifications,
-                { id: `${studentUserId}-auto-assign-${autoStaff.id}`, userId: autoStaff.id, title: 'New Student Assigned', message: `${targetApp.name} — ${getUniversityName(universityId)}`, type: 'info', time: new Date().toISOString(), read: false },
+                { id: `${studentUserId}-auto-assign-${autoStaff.id}`, userId: autoStaff.id, title: 'New Student Assigned', message: `${targetApp.name} — ${getUniversityName(universityId)}`, type: 'info', time: new Date().toISOString(), read: false, link: `/staff?student=${targetApp.id}` },
               ],
             }));
             emailNotifyUser(get, autoStaff.id, {
@@ -1782,7 +1797,7 @@ const useAppStore = create<AppStoreState>()(
           } : a0),
           notifications: [
             ...state.notifications,
-            { id: `${studentUserId}-assign`, userId: staffUserId, title: 'New Student Assigned', message: a?.name ?? 'New student', type: 'info', time: new Date().toISOString(), read: false }
+            { id: `${studentUserId}-assign`, userId: staffUserId, title: 'New Student Assigned', message: a?.name ?? 'New student', type: 'info', time: new Date().toISOString(), read: false, link: a ? `/staff?student=${a.id}` : '/staff' }
           ],
         }));
         emailNotifyUser(get, staffUserId, {
@@ -2140,6 +2155,7 @@ const useAppStore = create<AppStoreState>()(
               type: 'alert' as const,
               time: now,
               read: false,
+              link: '/admin?tab=requests',
             })),
           ],
         }));
@@ -2170,7 +2186,7 @@ const useAppStore = create<AppStoreState>()(
         const now = new Date().toISOString();
         set((state) => ({
           applications: state.applications.map(a => a.id === req.applicationId
-            ? { ...a, studentCredentials: { username, password: newPassword, updatedAt: now } }
+            ? { ...a, studentCredentials: { username, updatedAt: now } }
             : a),
           credentialRequests: state.credentialRequests.map(r => r.id === requestId
             ? { ...r, status: 'resolved' as const, resolvedAt: now, resolvedByName: actor.name }
@@ -2559,6 +2575,7 @@ const useAppStore = create<AppStoreState>()(
               type: 'info' as const,
               time: new Date().toISOString(),
               read: false,
+              link: effectiveTarget === 'agency' ? '/agencies' : '/dashboard',
             },
           ],
         }));
@@ -2594,6 +2611,7 @@ const useAppStore = create<AppStoreState>()(
               type: 'success' as const,
               time: new Date().toISOString(),
               read: false,
+              link: req.applicationId ? `/staff?student=${req.applicationId}` : '/staff',
             },
           ],
         }));
@@ -2629,6 +2647,7 @@ const useAppStore = create<AppStoreState>()(
               type: 'success' as const,
               time: new Date().toISOString(),
               read: false,
+              link: req.applicationId ? `/staff?student=${req.applicationId}` : '/staff',
             },
           ],
         }));
@@ -2858,6 +2877,7 @@ const useAppStore = create<AppStoreState>()(
               type: 'success' as const,
               time: now,
               read: false,
+              link: '/admin?tab=performance',
             })),
           ],
         }));
@@ -2899,6 +2919,7 @@ const useAppStore = create<AppStoreState>()(
                 type: (d > 0 ? 'success' : 'alert') as NotificationType,
                 time: now,
                 read: false,
+                link: '/profile',
               },
             ],
           };
@@ -2950,6 +2971,7 @@ const useAppStore = create<AppStoreState>()(
             type: 'alert',
             time: nowIso,
             read: false,
+            link: `/staff?student=${app.id}`,
           });
           for (const ceo of ceoUsers) {
             lateNotifs.push({
@@ -2960,6 +2982,7 @@ const useAppStore = create<AppStoreState>()(
               type: 'alert',
               time: nowIso,
               read: false,
+              link: '/admin?tab=performance',
             });
           }
         }

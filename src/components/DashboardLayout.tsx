@@ -194,9 +194,11 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
     navigate(res.kind === 'user' ? '/admin' : roleHome(user?.role));
   };
 
-  const handleNotifClick = (n: { id: string; read: boolean; title: string; message: string }) => {
+  const handleNotifClick = (n: { id: string; read: boolean; title: string; message: string; link?: string }) => {
     if (!n.read) markNotificationsRead([n.id]);
     setShowNotifs(false);
+    // Deep link when the notification carries one; otherwise best-effort fallback.
+    if (n.link) { navigate(n.link); return; }
     const text = `${n.title} ${n.message}`.toLowerCase();
     navigate(text.includes('message') || text.includes('chat') ? '/messages' : roleHome(user?.role));
   };

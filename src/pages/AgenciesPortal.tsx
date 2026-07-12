@@ -15,7 +15,6 @@ import { RequestedDocsUploader } from '../components/dashboard/RequestedDocument
 export default function AgenciesPortal() {
   const { user, logout } = useAuth();
   const { addApplication, applications, documents, users, chatMessages, addChatMessage, agencyAddExtraDocs, credentialRequests, agencyRequestCredentialChange, documentRequests } = useAppStore();
-  const [revealCred, setRevealCred] = useState(false);
   const [credReqReason, setCredReqReason] = useState('');
   const [credReqOpen, setCredReqOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'profile'>('dashboard');
@@ -978,14 +977,9 @@ Underage: ${underage ? 'Yes' : 'No'}`;
                   const pendingReq = credentialRequests.find(r => r.applicationId === a.id && r.status === 'pending');
                   return (
                     <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-2">
-                          <Shield className="w-4 h-4 text-amber-600" />
-                          <p className="text-sm font-bold text-gray-900">Student Login Credentials</p>
-                        </div>
-                        <button onClick={() => setRevealCred(v => !v)} className="text-xs font-semibold text-amber-600 hover:text-amber-700">
-                          {revealCred ? 'Hide' : 'Reveal'}
-                        </button>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Shield className="w-4 h-4 text-amber-600" />
+                        <p className="text-sm font-bold text-gray-900">Student Login</p>
                       </div>
                       <div className="grid sm:grid-cols-2 gap-3">
                         <div className="bg-white border border-gray-100 rounded-xl px-3 py-2.5">
@@ -994,10 +988,12 @@ Underage: ${underage ? 'Yes' : 'No'}`;
                         </div>
                         <div className="bg-white border border-gray-100 rounded-xl px-3 py-2.5">
                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Password</p>
-                          <p className="text-sm font-mono font-semibold text-gray-900 break-all">{revealCred ? a.studentCredentials.password : '••••••••'}</p>
+                          <p className="text-xs font-semibold text-gray-500 mt-0.5">
+                            Sent to you by email when created — for security it is never stored here.
+                          </p>
                         </div>
                       </div>
-                      <p className="text-[11px] text-gray-400 mt-2">Share these with your student securely. You can request a change below.</p>
+                      <p className="text-[11px] text-gray-400 mt-2">Lost access? Request a reset below — a new password is emailed to you after CEO approval.</p>
 
                       {pendingReq ? (
                         <div className="mt-3 flex items-center gap-2 rounded-xl bg-white border border-amber-200 px-3 py-2">

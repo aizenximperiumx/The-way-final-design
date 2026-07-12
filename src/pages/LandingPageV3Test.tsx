@@ -39,6 +39,7 @@ const applicationSchema = z.object({
   email: z.string().email('Invalid email address'),
   phone: z.string().min(5, 'Phone number is required'),
   country: z.string().min(2, 'Country is required'),
+  dob: z.string().min(1, 'Date of birth is required'),
   program: z.string().min(1, 'Please select a program'),
   aviationDegree: z.string().optional(),
   studyLevel: z.string().min(1, 'Please select a study level'),
@@ -758,6 +759,18 @@ export default function LandingPageV3Test() {
                           placeholder={tr('Your country', 'دولتك')}
                         />
                         {errors.country && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.country.message}</p>}
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold tracking-[2.5px] uppercase mb-2" style={{ color: 'rgba(245,240,232,0.45)' }}>{tr('Date of birth', 'تاريخ الميلاد')}</label>
+                        <input
+                          type="date"
+                          {...register('dob')}
+                          className="w-full px-4 py-3 text-[13px] outline-none border rounded"
+                          style={{ background: 'rgba(255,255,255,0.95)', borderColor: 'rgba(245,168,0,0.12)', color: '#000' }}
+                        />
+                        {errors.dob && <p className="mt-2 text-[12px] font-semibold" style={{ color: '#F44336' }}>{errors.dob.message}</p>}
                       </div>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">

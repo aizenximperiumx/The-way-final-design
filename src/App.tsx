@@ -25,7 +25,8 @@ const AgenciesPortal = React.lazy(() => import('./pages/AgenciesPortal'));
 const MobileLanding = React.lazy(() => import('./mobile/MobileLanding'));
 const MobileLogin = React.lazy(() => import('./mobile/MobileLogin'));
 const MobileHome = React.lazy(() => import('./mobile/MobileHome'));
-const MobileDocuments = React.lazy(() => import('./mobile/MobileDocuments'));
+const MobileJourney = React.lazy(() => import('./mobile/MobileJourney'));
+const MobileCard = React.lazy(() => import('./mobile/MobileCard'));
 const MobileMessages = React.lazy(() => import('./mobile/MobileMessages'));
 const MobileProfile = React.lazy(() => import('./mobile/MobileProfile'));
 
@@ -198,7 +199,10 @@ function AppRoutes() {
       <Route path="/app" element={<AppPublic>{appSuspense(<MobileLanding />)}</AppPublic>} />
       <Route path="/app/login" element={<AppPublic>{appSuspense(<MobileLogin />)}</AppPublic>} />
       <Route path="/app/home" element={<AppProtected>{appSuspense(<MobileHome />)}</AppProtected>} />
-      <Route path="/app/documents" element={<AppProtected>{appSuspense(<MobileDocuments />)}</AppProtected>} />
+      <Route path="/app/journey" element={<AppProtected>{appSuspense(<MobileJourney />)}</AppProtected>} />
+      {/* Legacy path kept so old shells/bookmarks still work */}
+      <Route path="/app/documents" element={<AppProtected>{appSuspense(<MobileJourney />)}</AppProtected>} />
+      <Route path="/app/card" element={<AppProtected>{appSuspense(<MobileCard />)}</AppProtected>} />
       <Route path="/app/messages" element={<AppProtected>{appSuspense(<MobileMessages />)}</AppProtected>} />
       <Route path="/app/profile" element={<AppProtected>{appSuspense(<MobileProfile />)}</AppProtected>} />
       <Route path="/universities" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />

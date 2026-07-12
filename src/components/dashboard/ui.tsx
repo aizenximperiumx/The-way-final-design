@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
  * + gold/amber accents, white rounded-2xl cards, soft borders.
  */
 
-/* ── Page header: title, subtitle, role pill, optional right-side actions ── */
+/* ── Page header — navy/gold hero, the landing-page identity on every page ── */
 export const PageHeader: React.FC<{
   title: string;
   subtitle?: string;
@@ -15,29 +15,27 @@ export const PageHeader: React.FC<{
   icon?: LucideIcon;
   actions?: React.ReactNode;
 }> = ({ title, subtitle, pill, icon: Icon, actions }) => (
-  <section className="relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-r from-white via-white to-amber-50/50 shadow-sm">
-    <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full bg-amber-100/40 blur-3xl" />
-    <div className="relative flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-3 min-w-0">
+  <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0A1628] via-[#0D1F3C] to-[#0A1628]">
+    <div className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-amber-400/10 blur-3xl" />
+    <div className="pointer-events-none absolute -left-10 -bottom-16 h-40 w-40 rounded-full bg-amber-400/5 blur-2xl" />
+    <div className="relative flex flex-col gap-4 px-5 py-6 sm:px-7 sm:py-7 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-3.5 min-w-0">
         {Icon && (
-          <div className="hidden sm:flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0A1628] text-amber-400 shadow-sm">
+          <div className="hidden sm:flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-amber-400">
             <Icon className="h-5 w-5" />
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-gray-900 truncate">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-[13px] sm:text-sm text-gray-500">{subtitle}</p>}
+          {pill && (
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[3px] text-amber-400">{pill}</p>
+          )}
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white truncate">{title}</h1>
+          {subtitle && <p className="mt-1 text-[13px] sm:text-sm text-gray-400">{subtitle}</p>}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {actions}
-        {pill && (
-          <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 md:self-auto">
-            {pill}
-          </span>
-        )}
-      </div>
+      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </div>
+    <div className="relative h-[3px] w-full bg-gradient-to-r from-amber-400 via-amber-400/40 to-transparent" />
   </section>
 );
 

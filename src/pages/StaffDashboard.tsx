@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FC } from 'react';
 import { PageHeader, StatGrid, StatCard } from '../components/dashboard/ui';
 import { 
@@ -21,12 +21,13 @@ import { useAppStore } from '../store/appStore';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
 import { getSupabase } from '../lib/supabase';
 import { openStorageUrl } from '../lib/storage';
 import { PipelineTracker } from '../components/dashboard/PipelineTracker';
 import { RequestedDocsReviewer } from '../components/dashboard/RequestedDocuments';
+import { MyDay } from '../components/dashboard/MyDay';
 import { DashboardSection } from '../components/dashboard/ui';
 
 const StaffDashboard: FC = () => {
@@ -89,6 +90,28 @@ const StaffDashboard: FC = () => {
     () => approvedStudents.find(app => app.id === selectedStudentId) ?? null,
     [approvedStudents, selectedStudentId]
   );
+
+  // Deep link: /staff?student=<applicationId> (from notifications) selects
+  // that student directly.
+  const location = useLocation();
+  useEffect(() => {
+    const target = new URLSearchParams(location.search).get('student');
+    if (!target) return;
+    const app = approvedStudents.find(a => a.id === target);
+    if (app && selectedStudentId !== app.id) {
+      setSelectedStudentId(app.id);
+      setMobileDetailsOpen(true);
+      const stu = app.studentId ? users.find(u => u.id === app.studentId) : null;
+      setProfileName(app.name ?? '');
+      setProfileEmail(app.email ?? '');
+      setProfilePhone(app.phone ?? '');
+      setProfileUniversity(app.university ?? '');
+      setPassportExpiry(stu?.passportExpiry ?? '');
+      setVisaExpiry(stu?.visaExpiry ?? '');
+      setResidenceExpiry(stu?.residenceExpiry ?? '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, approvedStudents.length]);
 
   const uploadWebhook = (import.meta.env as { VITE_FILE_UPLOAD_WEBHOOK?: string }).VITE_FILE_UPLOAD_WEBHOOK || '/api/upload-file';
   const toBase64 = (file: File) =>
@@ -269,6 +292,25 @@ const StaffDashboard: FC = () => {
           <StatCard key={idx} label={stat.label} value={stat.value} icon={stat.icon} tone={stat.tone} />
         ))}
       </StatGrid>
+
+      {/* My Day — active cases ordered by deadline urgency */}
+      <MyDay
+        applications={approvedStudents}
+        onSelect={(appId) => {
+          const app = approvedStudents.find(a => a.id === appId);
+          if (!app) return;
+          setSelectedStudentId(app.id);
+          setMobileDetailsOpen(true);
+          const stu = app.studentId ? users.find(u => u.id === app.studentId) : null;
+          setProfileName(app.name ?? '');
+          setProfileEmail(app.email ?? '');
+          setProfilePhone(app.phone ?? '');
+          setProfileUniversity(app.university ?? '');
+          setPassportExpiry(stu?.passportExpiry ?? '');
+          setVisaExpiry(stu?.visaExpiry ?? '');
+          setResidenceExpiry(stu?.residenceExpiry ?? '');
+        }}
+      />
 
       {/* Requested-document uploads waiting for review (PRD §8) */}
       {reviewQueue.length > 0 && (

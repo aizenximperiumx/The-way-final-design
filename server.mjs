@@ -953,6 +953,68 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
   apiRes.status(200).json({ ok: true });
 };
 
+// GET /api/verify-member?sid=<studentId>
+// Opened when a partner (supermarket, café, gym…) scans a student's member QR.
+// Renders a small branded page: valid/active member or not. Shows only the
+// student's first name + last initial — no contact details or documents.
+const inlineVerifyMember = async (apiReq, apiRes, res) => {
+  const serveHtml = (statusCode, title, body) => {
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:linear-gradient(180deg,#0A1628,#0D1F3C);color:#F5F0E8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{max-width:360px;width:100%;text-align:center;background:rgba(255,255,255,0.04);border:1px solid rgba(245,168,0,0.25);border-radius:24px;padding:36px 28px}
+  .badge{width:84px;height:84px;border-radius:50%;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-size:42px}
+  .ok{background:rgba(76,175,80,0.15);border:2px solid #7BE08A}
+  .bad{background:rgba(255,99,99,0.12);border:2px solid #FF7B7B}
+  h1{font-size:22px;margin:0 0 6px}
+  p{margin:4px 0;font-size:14px;color:rgba(245,240,232,0.65)}
+  .brand{margin-top:22px;font-size:11px;letter-spacing:3px;text-transform:uppercase;font-weight:700;color:#F5A800}
+  .status{display:inline-block;margin-top:10px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px}
+  .status.ok{color:#7BE08A;background:rgba(76,175,80,0.14);border:1px solid rgba(76,175,80,0.35)}
+  .status.bad{color:#FF9B9B;background:rgba(255,99,99,0.12);border:1px solid rgba(255,99,99,0.3)}
+</style></head><body><div class="card">${body}<div class="brand">The Way &middot; Georgia</div></div></body></html>`);
+  };
+
+  const ip = String(apiReq.headers?.['x-forwarded-for'] || '').split(',')[0]?.trim() || 'unknown';
+  if (!allowRate(`verify-member:${ip}`, 60, 60_000)) {
+    serveHtml(429, 'Too many requests', '<h1>Please try again in a minute</h1>');
+    return;
+  }
+
+  const env = getAdminEnv();
+  if (!env.ok) {
+    serveHtml(500, 'Unavailable', '<div class="badge bad">!</div><h1>Verification unavailable</h1><p>Please try again later.</p>');
+    return;
+  }
+
+  const url = new URL(apiReq.rawUrl ?? '/', 'http://localhost');
+  const sid = (url.searchParams.get('sid') || '').trim().slice(0, 80);
+  const invalid = () => serveHtml(200, 'Not a member', '<div class="badge bad">✕</div><h1>Not verified</h1><p>This code does not belong to an active The Way member.</p><span class="status bad">Invalid</span>');
+  if (!sid) { invalid(); return; }
+
+  const { base, postgrestHeaderCandidates: pgHeaderCandidates } = env;
+  const stateResp = await fetchPostgrest(pgHeaderCandidates, `${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, { method: 'GET' });
+  const rawState = (stateResp.ok && Array.isArray(stateResp.json) && stateResp.json[0]) ? stateResp.json[0].state : null;
+  const apps = (rawState && typeof rawState === 'object' && Array.isArray(rawState.applications)) ? rawState.applications : [];
+  const app = apps.find((a) => a && typeof a === 'object' && String(a.studentId ?? '') === sid && String(a.status ?? '') === 'approved');
+  if (!app) { invalid(); return; }
+
+  const fullName = String(app.name ?? 'Student').trim();
+  const parts = fullName.split(/\s+/);
+  const displayName = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1].charAt(0)}.` : parts[0];
+  const active = Boolean(app.arrived) || (app.pipeline && typeof app.pipeline === 'object' && app.pipeline.status === 'closed');
+  const sinceYear = app.approvedAt ? new Date(String(app.approvedAt)).getFullYear() : new Date().getFullYear();
+
+  if (!active) {
+    serveHtml(200, 'Member — not yet active', `<div class="badge bad">…</div><h1>${displayName}</h1><p>The Way student — membership benefits not active yet.</p><span class="status bad">Not active</span>`);
+    return;
+  }
+  serveHtml(200, 'Verified member', `<div class="badge ok">✓</div><h1>${displayName}</h1><p>Verified The Way student &middot; member since ${sinceYear}</p><span class="status ok">Active member</span>`);
+};
+
 const allowRate = (key, limit, windowMs) => {
   const now = Date.now();
   const g = globalThis;
@@ -1128,6 +1190,7 @@ const handleApi = async (req, res, route) => {
 
   const apiReq = {
     method: req.method,
+    rawUrl: req.url,
     headers: {
       ...toHeadersRecord(req.headers),
       'x-forwarded-for': req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? 'unknown',
@@ -1175,6 +1238,10 @@ const handleApi = async (req, res, route) => {
       await inlineBootstrapFixAuth(apiReq, apiRes);
       return;
     }
+    if (route === 'verify-member') {
+      await inlineVerifyMember(apiReq, apiRes, res);
+      return;
+    }
     if (!(await exists(file))) {
       serveJson(res, 404, { error: 'Not found' });
       return;
@@ -1215,6 +1282,7 @@ const server = http.createServer(async (req, res) => {
           'admin-update-profile',
           'bootstrap-upsert-profile',
           'bootstrap-fix-auth',
+          'verify-member',
         ],
         dataDir: getDataDir(),
         gitCommit: process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? null,
@@ -1266,10 +1334,29 @@ const startSlaSweep = async () => {
   }
 };
 
+// Weekly CEO digest: checked hourly, sends Monday mornings (Tbilisi time).
+const startWeeklyDigest = async () => {
+  try {
+    const file = path.join(apiBuildDir, 'weekly-digest.js');
+    if (!(await exists(file))) return;
+    const mod = await import(pathToFileURL(file).href);
+    const run = mod.runWeeklyDigest;
+    if (typeof run !== 'function') return;
+    const tick = () => {
+      run().catch((e) => console.error('Weekly digest failed', e));
+    };
+    setTimeout(tick, 45_000);
+    setInterval(tick, 60 * 60 * 1000);
+  } catch (e) {
+    console.error('Weekly digest init failed', e);
+  }
+};
+
 const port = Number(process.env.PORT ?? 4173);
 server.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
   void bootstrapDefaultCeo();
   void bootstrapNamedAccounts();
   void startSlaSweep();
+  void startWeeklyDigest();
 });

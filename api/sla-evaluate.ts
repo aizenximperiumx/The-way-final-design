@@ -56,10 +56,10 @@ const getString = (r: Record<string, unknown> | null, key: string) => (r && type
 
 // ── SLA rules (mirror of src/lib/pipeline.ts) ────────────────────────────────
 
-type SlaGroup = 'fast' | 'medium' | 'slow' | 'none';
-type SlaWindow = { fullHours: number; halfHours: number; fullPoints: number; halfPoints: number; latePoints: number };
+export type SlaGroup = 'fast' | 'medium' | 'slow' | 'none';
+export type SlaWindow = { fullHours: number; halfHours: number; fullPoints: number; halfPoints: number; latePoints: number };
 
-const DEFAULT_SLA_GROUPS: Record<string, SlaGroup> = {
+export const DEFAULT_SLA_GROUPS: Record<string, SlaGroup> = {
   'georgian-american-university': 'fast',
   'caucasus-international-university': 'fast',
   'georgian-aviation-university': 'fast',
@@ -81,7 +81,7 @@ const APPROVAL_WINDOWS: Record<Exclude<SlaGroup, 'none'>, SlaWindow> = {
   slow: { fullHours: 240, halfHours: 280, fullPoints: 2, halfPoints: 1, latePoints: -2 },
 };
 
-const STAGE_LABELS: Record<string, string> = {
+export const STAGE_LABELS: Record<string, string> = {
   translated_documents: 'Translated Documents',
   university_approval: 'University Initial Approval',
   recognition_letter: 'Recognition Letter',
@@ -90,7 +90,7 @@ const STAGE_LABELS: Record<string, string> = {
   visa_residency: 'Visa & Residency',
 };
 
-const getSlaWindow = (stage: string, group: SlaGroup): SlaWindow | null => {
+export const getSlaWindow = (stage: string, group: SlaGroup): SlaWindow | null => {
   switch (stage) {
     case 'translated_documents':
       return { fullHours: 36, halfHours: 72, fullPoints: 2, halfPoints: 1, latePoints: -2 };

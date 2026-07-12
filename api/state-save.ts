@@ -73,6 +73,8 @@ type AppState = {
   universityConfig: Record<string, unknown> | null;
   purgedApplicationIds: string[];
   unTrashedUserIds: string[];
+  /** Server-owned (weekly digest marker) — carried through, never client-set. */
+  digestMeta: Record<string, unknown> | null;
 };
 
 const asStringArray = (v: unknown, cap: number): string[] =>
@@ -98,6 +100,7 @@ const asState = (value: unknown): AppState => {
     universityConfig: (v.universityConfig && typeof v.universityConfig === 'object') ? (v.universityConfig as Record<string, unknown>) : null,
     purgedApplicationIds: asStringArray(v.purgedApplicationIds, 50_000),
     unTrashedUserIds: asStringArray(v.unTrashedUserIds, 50_000),
+    digestMeta: (v.digestMeta && typeof v.digestMeta === 'object') ? (v.digestMeta as Record<string, unknown>) : null,
   };
 };
 
@@ -481,6 +484,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         universityConfig: mergeUniversityConfig(current.universityConfig, incoming.universityConfig),
         purgedApplicationIds: Array.from(purged).slice(0, 50_000),
         unTrashedUserIds: Array.from(unTrashed).slice(0, 50_000),
+        digestMeta: current.digestMeta, // server-owned
       };
     } else if (role === 'student') {
       const allowedThread = (key: string) =>
@@ -588,6 +592,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           type: 'success',
           time: now,
           read: false,
+          link: '/admin?tab=performance',
         })));
       }
 
