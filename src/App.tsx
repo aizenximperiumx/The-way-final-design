@@ -29,6 +29,7 @@ const MobileJourney = React.lazy(() => import('./mobile/MobileJourney'));
 const MobileCard = React.lazy(() => import('./mobile/MobileCard'));
 const MobileMessages = React.lazy(() => import('./mobile/MobileMessages'));
 const MobileProfile = React.lazy(() => import('./mobile/MobileProfile'));
+const MobileGeorgia = React.lazy(() => import('./mobile/MobileGeorgia'));
 
 // Context
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -203,6 +204,7 @@ function AppRoutes() {
       {/* Legacy path kept so old shells/bookmarks still work */}
       <Route path="/app/documents" element={<AppProtected>{appSuspense(<MobileJourney />)}</AppProtected>} />
       <Route path="/app/card" element={<AppProtected>{appSuspense(<MobileCard />)}</AppProtected>} />
+      <Route path="/app/georgia" element={<AppProtected>{appSuspense(<MobileGeorgia />)}</AppProtected>} />
       <Route path="/app/messages" element={<AppProtected>{appSuspense(<MobileMessages />)}</AppProtected>} />
       <Route path="/app/profile" element={<AppProtected>{appSuspense(<MobileProfile />)}</AppProtected>} />
       <Route path="/universities" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />

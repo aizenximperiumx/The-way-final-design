@@ -3,12 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import {
   LogOut, BadgeCheck, GraduationCap, CalendarClock, ShieldAlert,
   QrCode, MessageSquare, KeyRound, ChevronRight, Loader2,
+  Lock, Languages, Compass,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { useAppStore } from '../store/appStore';
 import { getUniversityName } from '../lib/universities';
+import { useI18n } from '../lib/i18n';
+import { tap, thud } from '../lib/native';
+import { PinPad, isAppLockEnabled, setAppLockPin, clearAppLock, verifyAppLockPin } from './AppLock';
 import { GOLD, NAVY, card, dim, goldA, sectionLabel, daysUntil } from './ui';
 import MobileLayout from './MobileLayout';
 
@@ -18,9 +22,16 @@ const MobileProfile: React.FC = () => {
   const { applications } = useApp();
   const { changePassword } = useAppStore();
   const navigate = useNavigate();
+  const { lang, toggle, t } = useI18n();
   const [pwOpen, setPwOpen] = useState(false);
   const [newPw, setNewPw] = useState('');
   const [saving, setSaving] = useState(false);
+  // App Lock setup flow
+  const [lockOpen, setLockOpen] = useState(false);
+  const [lockEnabled, setLockEnabled] = useState(() => isAppLockEnabled(user?.id));
+  const [lockStep, setLockStep] = useState<'set' | 'confirm' | 'disable'>('set');
+  const [pin1, setPin1] = useState('');
+  const [pin2, setPin2] = useState('');
 
   if (!user) return null;
   const myApp = applications.find(a => a.studentId === user.id) ?? null;
@@ -42,6 +53,58 @@ const MobileProfile: React.FC = () => {
     try { await changePassword(newPw); toast.success('Password updated'); setNewPw(''); setPwOpen(false); }
     catch (e) { toast.error(e instanceof Error ? e.message : 'Could not update'); }
     finally { setSaving(false); }
+  };
+
+  // ── App Lock setup / disable ──
+  const openLock = () => {
+    tap();
+    setPin1(''); setPin2('');
+    setLockStep(isAppLockEnabled(user?.id) ? 'disable' : 'set');
+    setLockOpen(v => !v);
+  };
+  const onLockDigit = (d: string) => {
+    if (!user) return;
+    if (lockStep === 'confirm') {
+      const next = (pin2 + d).slice(0, 4);
+      setPin2(next);
+      if (next.length === 4) {
+        if (next === pin1) {
+          void setAppLockPin(user.id, next).then(() => {
+            thud();
+            setLockEnabled(true);
+            setLockOpen(false);
+            toast.success(t('App Lock is on', 'تم تفعيل قفل التطبيق'));
+          });
+        } else {
+          toast.error(t("PINs don't match — try again", 'الرمزان غير متطابقين — حاول مجدداً'));
+          setPin1(''); setPin2(''); setLockStep('set');
+        }
+      }
+      return;
+    }
+    const next = (pin1 + d).slice(0, 4);
+    setPin1(next);
+    if (next.length !== 4) return;
+    if (lockStep === 'set') {
+      setLockStep('confirm');
+    } else {
+      // disable: verify the current PIN first
+      void verifyAppLockPin(user.id, next).then(ok => {
+        if (ok) {
+          clearAppLock(user.id);
+          setLockEnabled(false);
+          setLockOpen(false);
+          toast.success(t('App Lock is off', 'تم إيقاف قفل التطبيق'));
+        } else {
+          toast.error(t('Wrong PIN', 'رمز خاطئ'));
+          setPin1('');
+        }
+      });
+    }
+  };
+  const onLockBackspace = () => {
+    if (lockStep === 'confirm') setPin2(p => p.slice(0, -1));
+    else setPin1(p => p.slice(0, -1));
   };
 
   const doLogout = () => { void logout(); navigate('/app'); };
@@ -110,8 +173,9 @@ const MobileProfile: React.FC = () => {
       <p className="mt-6 mb-3" style={sectionLabel}>Quick links</p>
       <div className="space-y-2">
         {[
-          { icon: QrCode, label: 'My member card & benefits', action: () => navigate('/app/card') },
-          { icon: MessageSquare, label: 'Message my advisor', action: () => navigate('/app/messages') },
+          { icon: QrCode, label: t('My member card & benefits', 'بطاقة العضوية والمزايا'), action: () => navigate('/app/card') },
+          { icon: Compass, label: t('Life in Georgia guide', 'دليل الحياة في جورجيا'), action: () => navigate('/app/georgia') },
+          { icon: MessageSquare, label: t('Message my advisor', 'مراسلة مستشاري'), action: () => navigate('/app/messages') },
         ].map(l => (
           <button key={l.label} onClick={l.action} className="w-full rounded-2xl p-4 flex items-center gap-3 text-left" style={card}>
             <l.icon className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
@@ -119,6 +183,43 @@ const MobileProfile: React.FC = () => {
             <ChevronRight className="w-4 h-4" style={{ color: dim(0.4) }} />
           </button>
         ))}
+
+        {/* Language */}
+        <button onClick={() => { tap(); toggle(); }} className="w-full rounded-2xl p-4 flex items-center gap-3 text-left" style={card}>
+          <Languages className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
+          <span className="text-[14px] font-semibold flex-1" style={{ color: '#fff' }}>{t('Language', 'اللغة')}</span>
+          <span className="text-[12px] font-black uppercase tracking-wide px-2.5 py-1 rounded-full" style={{ background: goldA(0.15), color: GOLD }}>
+            {lang === 'ar' ? 'العربية' : 'English'}
+          </span>
+        </button>
+
+        {/* App Lock */}
+        <div className="rounded-2xl overflow-hidden" style={card}>
+          <button onClick={openLock} className="w-full p-4 flex items-center gap-3 text-left">
+            <Lock className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
+            <span className="text-[14px] font-semibold flex-1" style={{ color: '#fff' }}>{t('App Lock (PIN)', 'قفل التطبيق (رمز)')}</span>
+            <span className="text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-full" style={{
+              background: lockEnabled ? 'rgba(76,175,80,0.16)' : 'rgba(255,255,255,0.06)',
+              color: lockEnabled ? '#7BE08A' : dim(0.5),
+            }}>
+              {lockEnabled ? t('On', 'مفعل') : t('Off', 'متوقف')}
+            </span>
+          </button>
+          {lockOpen && (
+            <div className="px-4 pb-5 text-center">
+              <p className="text-[13px] font-semibold" style={{ color: dim(0.7) }}>
+                {lockStep === 'set' ? t('Choose a 4-digit PIN', 'اختر رمزاً من 4 أرقام')
+                  : lockStep === 'confirm' ? t('Enter the PIN again', 'أدخل الرمز مرة أخرى')
+                  : t('Enter your current PIN to turn off', 'أدخل رمزك الحالي للإيقاف')}
+              </p>
+              <PinPad
+                value={lockStep === 'confirm' ? pin2 : pin1}
+                onDigit={onLockDigit}
+                onBackspace={onLockBackspace}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Change password */}
         <div className="rounded-2xl overflow-hidden" style={card}>

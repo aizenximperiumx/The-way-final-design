@@ -205,6 +205,17 @@ export interface Document {
   file?: string;
 }
 
+/** CEO announcement shown in the student app's home feed. */
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  at: string;
+  byName: string;
+  /** Soft-delete flag (survives the additive server merge). */
+  hidden?: boolean;
+}
+
 export type NotificationType = 'info' | 'success' | 'alert';
 export interface Notification {
   id: string;
@@ -298,6 +309,8 @@ export interface AppStoreState {
   /** Tombstones so purged applications / restored users never resurrect on merge. */
   purgedApplicationIds: string[];
   unTrashedUserIds: string[];
+  /** CEO announcements shown in the student app. */
+  announcements: Announcement[];
   language: 'en' | 'ar';
   backendHydrated: boolean;
 
@@ -413,6 +426,10 @@ export interface AppStoreState {
   // ── University configuration (CEO) ──
   ceoSetUniversityStaff: (universityId: string, staffUsername: string | null) => void;
   ceoSetUniversitySlaGroup: (universityId: string, group: UniversitySlaGroup) => void;
+
+  // ── App announcements (CEO → student app) ──
+  ceoAddAnnouncement: (title: string, body: string) => void;
+  ceoHideAnnouncement: (id: string) => void;
 }
 
 const ensureSignedIn = (user: User | null, authStatus: AuthStatus) => {
@@ -780,6 +797,7 @@ const useAppStore = create<AppStoreState>()(
         universityConfig: null,
         purgedApplicationIds: [],
         unTrashedUserIds: [],
+        announcements: [],
         language: 'en',
         backendHydrated: false,
 
@@ -870,7 +888,7 @@ const useAppStore = create<AppStoreState>()(
         const supabase = tryGetSupabase();
         if (supabase) void supabase.auth.signOut();
         localStorage.removeItem('the-way-storage');
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [], pointsLedger: [], universityConfig: null, purgedApplicationIds: [], unTrashedUserIds: [] });
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [], pointsLedger: [], universityConfig: null, purgedApplicationIds: [], unTrashedUserIds: [], announcements: [] });
       },
 
       changePassword: async (newPassword: string) => {
@@ -1094,6 +1112,7 @@ const useAppStore = create<AppStoreState>()(
           universityConfig: (s.universityConfig && typeof s.universityConfig === 'object') ? (s.universityConfig as UniversityConfig) : null,
           purgedApplicationIds: Array.isArray(s.purgedApplicationIds) ? (s.purgedApplicationIds as string[]) : [],
           unTrashedUserIds: Array.isArray(s.unTrashedUserIds) ? (s.unTrashedUserIds as string[]) : [],
+          announcements: Array.isArray(s.announcements) ? (s.announcements as Announcement[]) : [],
           backendHydrated: true,
         });
         await get().refreshUsersFromBackend();
@@ -1153,6 +1172,7 @@ const useAppStore = create<AppStoreState>()(
           universityConfig: get().universityConfig,
           purgedApplicationIds: get().purgedApplicationIds,
           unTrashedUserIds: get().unTrashedUserIds,
+          announcements: get().announcements,
         };
         await fetch('/api/state-save', {
           method: 'POST',
@@ -3165,6 +3185,36 @@ const useAppStore = create<AppStoreState>()(
         });
         queueBackendSave(get);
       },
+
+      // ── App announcements (CEO → student app home feed) ──────────────────
+
+      ceoAddAnnouncement: (title: string, body: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const t = title.trim();
+        const b = body.trim();
+        if (!t) throw new Error('Announcement needs a title');
+        const announcement: Announcement = {
+          id: `ann-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+          title: t.slice(0, 120),
+          body: b.slice(0, 1000),
+          at: new Date().toISOString(),
+          byName: actor.name,
+        };
+        set((state) => ({ announcements: [announcement, ...state.announcements] }));
+        queueBackendSave(get);
+      },
+
+      ceoHideAnnouncement: (id: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        // Soft-delete: the hidden flag wins in the additive server merge,
+        // where a hard removal would resurrect on the next sync.
+        set((state) => ({
+          announcements: state.announcements.map(a => a.id === id ? { ...a, hidden: true } : a),
+        }));
+        queueBackendSave(get);
+      },
     };
     },
     {
@@ -3193,6 +3243,7 @@ const useAppStore = create<AppStoreState>()(
         universityConfig: state.universityConfig,
         purgedApplicationIds: state.purgedApplicationIds,
         unTrashedUserIds: state.unTrashedUserIds,
+        announcements: state.announcements,
       }),
       migrate: () => ({ state: { currentUser: null, authStatus: 'signed_out', users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {} }, version: 5 } as unknown),
     }

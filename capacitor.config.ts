@@ -4,14 +4,14 @@ const config: CapacitorConfig = {
   appId: 'ge.theway.app',
   appName: 'The Way',
   webDir: 'dist',
-  // The app is online-only (Supabase + Render backend), so the native shell
-  // loads the live site directly. This keeps all `/api/*` calls same-origin and
-  // means the app always runs the latest deploy (no app-store resubmit for web
-  // changes). To ship a fully self-contained build instead, remove `server.url`
-  // and point the app's `/api` calls at https://theway.ge.
+  // FULLY SELF-CONTAINED app: the UI ships inside the binary (instant open,
+  // offline member card / cached data) — only DATA goes over the network.
+  // src/lib/native.ts rewrites relative `/api/*` calls to https://theway.ge
+  // when running natively, and Supabase auth uses the baked-in public config
+  // (.env.app). Build with `npm run build:app`.
+  // For over-the-air JS updates without store resubmission, add Capgo
+  // (@capgo/capacitor-updater) later — see MOBILE.md.
   server: {
-    // The native shell boots straight into the dedicated student app.
-    url: 'https://theway.ge/app',
     androidScheme: 'https',
     cleartext: false,
   },

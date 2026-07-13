@@ -8,6 +8,7 @@
     "dev:vercel": "vercel dev",
     "build:api": "tsc -p tsconfig.api.json",
     "build": "npm run build:api && tsc -b && vite build",
+    "build:app": "npm run build:api && tsc -b && vite build --mode app && npx cap sync",
     "build:mobile": "npm run build && npx cap sync",
     "lint": "eslint .",
     "cap:sync": "npx cap sync",

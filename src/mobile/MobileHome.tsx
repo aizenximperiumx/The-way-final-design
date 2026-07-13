@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2, ArrowRight, Upload, GraduationCap, Sparkles, QrCode,
   MessageSquare, CalendarClock, ShieldAlert, PartyPopper, Star, MapPin,
+  Megaphone, Compass,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
@@ -21,8 +22,13 @@ import MobileLayout from './MobileLayout';
 const MobileHome: React.FC = () => {
   const { user } = useAuth();
   const { applications } = useApp();
-  const { documentRequests } = useAppStore();
+  const { documentRequests, announcements } = useAppStore();
   const navigate = useNavigate();
+
+  const news = announcements
+    .filter(a => !a.hidden)
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 3);
 
   const myApp = applications.find(a => a.studentId === user?.id) ?? null;
   const myRequests = documentRequests.filter(r =>
@@ -134,6 +140,18 @@ const MobileHome: React.FC = () => {
             </button>
           )}
 
+          {/* Life in Georgia — app-exclusive survival guide */}
+          <button onClick={() => navigate('/app/georgia')} className="mt-4 w-full text-left rounded-2xl p-4 flex items-center gap-3" style={{ background: goldA(0.12), border: `1px solid ${goldA(0.3)}`, borderRadius: 20 }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: GOLD }}>
+              <Compass className="w-5 h-5" style={{ color: NAVY }} />
+            </div>
+            <div className="flex-1">
+              <p className="text-[14px] font-bold" style={{ color: '#fff' }}>Life in Georgia</p>
+              <p className="text-[12px]" style={{ color: dim(0.6) }}>SIM cards, banks, transport, halal food & currency</p>
+            </div>
+            <ArrowRight className="w-5 h-5" style={{ color: GOLD }} />
+          </button>
+
           {/* Perks preview */}
           <p className="mt-6 mb-3" style={sectionLabel}>Member perks</p>
           <div className="grid grid-cols-2 gap-2.5">
@@ -217,6 +235,35 @@ const MobileHome: React.FC = () => {
             </div>
             <ArrowRight className="w-5 h-5" style={{ color: dim(0.5) }} />
           </button>
+
+          {/* Life in Georgia guide — useful before arrival too */}
+          <button onClick={() => navigate('/app/georgia')} className="mt-4 w-full text-left rounded-2xl p-4 flex items-center gap-3" style={card}>
+            <Compass className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
+            <div className="flex-1">
+              <p className="text-[14px] font-bold" style={{ color: '#fff' }}>Life in Georgia guide</p>
+              <p className="text-[12px]" style={{ color: dim(0.6) }}>SIM cards, banks, transport & currency converter</p>
+            </div>
+            <ArrowRight className="w-5 h-5" style={{ color: dim(0.5) }} />
+          </button>
+        </>
+      )}
+
+      {/* News from The Way (CEO announcements) */}
+      {news.length > 0 && (
+        <>
+          <p className="mt-6 mb-3" style={sectionLabel}>News from The Way</p>
+          <div className="space-y-2.5">
+            {news.map(a => (
+              <div key={a.id} className="rounded-2xl p-4" style={card}>
+                <div className="flex items-center gap-2">
+                  <Megaphone className="w-4 h-4 shrink-0" style={{ color: GOLD }} />
+                  <p className="text-[14px] font-bold flex-1" style={{ color: '#fff' }}>{a.title}</p>
+                  <span className="text-[10px] shrink-0" style={{ color: dim(0.4) }}>{new Date(a.at).toLocaleDateString()}</span>
+                </div>
+                {a.body && <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: dim(0.65) }}>{a.body}</p>}
+              </div>
+            ))}
+          </div>
         </>
       )}
 

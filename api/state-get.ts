@@ -77,6 +77,8 @@ type AppState = {
   universityConfig: Record<string, unknown> | null;
   purgedApplicationIds: string[];
   unTrashedUserIds: string[];
+  /** CEO announcements shown in the student app. */
+  announcements: unknown[];
 };
 
 const asRecord = (value: unknown) => (value && typeof value === 'object') ? (value as Record<string, unknown>) : null;
@@ -105,6 +107,8 @@ const asState = (value: unknown): AppState => {
     universityConfig: (v.universityConfig && typeof v.universityConfig === 'object') ? (v.universityConfig as Record<string, unknown>) : null,
     purgedApplicationIds: asStringArray(v.purgedApplicationIds, 50_000),
     unTrashedUserIds: asStringArray(v.unTrashedUserIds, 50_000),
+    announcements: Array.isArray(v.announcements) ? v.announcements : [],
+    // NOTE: pushTokens intentionally omitted — device tokens never leave the server.
   };
 };
 
@@ -259,7 +263,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       Object.entries(mergedState.chatThreadReadAt).forEach(([k, v]) => {
         if (k.startsWith(`${userId}|`) || k === `complaint-${userId}` || appIds.has(k)) chatThreadReadAt[k] = v;
       });
-      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt, documentRequests } });
+      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments, chatMessages, chatThreadReadAt, documentRequests, announcements: mergedState.announcements } });
       return;
     }
 
@@ -288,7 +292,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       Object.entries(mergedState.chatThreadReadAt).forEach(([k, v]) => {
         if (k.startsWith(`${userId}|`) || appIds.has(k)) chatThreadReadAt[k] = v;
       });
-      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments: [], chatMessages, chatThreadReadAt, documentRequests, credentialRequests } });
+      res.status(200).json({ ok: true, state: { applications: apps, documents, notifications, appointments: [], chatMessages, chatThreadReadAt, documentRequests, credentialRequests, announcements: mergedState.announcements } });
       return;
     }
 

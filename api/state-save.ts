@@ -1,3 +1,5 @@
+import { sendPushToUsers, prunePushTokens, pushConfigured, type PushTokensMap } from './_push.js';
+
 type ApiRequest = { method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> };
 type ApiResponse = { status: (code: number) => ApiResponse; json: (body: unknown) => void };
 
@@ -75,6 +77,10 @@ type AppState = {
   unTrashedUserIds: string[];
   /** Server-owned (weekly digest marker) — carried through, never client-set. */
   digestMeta: Record<string, unknown> | null;
+  /** CEO announcements shown in the student app. */
+  announcements: unknown[];
+  /** Device push tokens per user — server-owned, never returned to clients. */
+  pushTokens: Record<string, unknown> | null;
 };
 
 const asStringArray = (v: unknown, cap: number): string[] =>
@@ -101,6 +107,8 @@ const asState = (value: unknown): AppState => {
     purgedApplicationIds: asStringArray(v.purgedApplicationIds, 50_000),
     unTrashedUserIds: asStringArray(v.unTrashedUserIds, 50_000),
     digestMeta: (v.digestMeta && typeof v.digestMeta === 'object') ? (v.digestMeta as Record<string, unknown>) : null,
+    announcements: Array.isArray(v.announcements) ? v.announcements : [],
+    pushTokens: (v.pushTokens && typeof v.pushTokens === 'object') ? (v.pushTokens as Record<string, unknown>) : null,
   };
 };
 
@@ -485,6 +493,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         purgedApplicationIds: Array.from(purged).slice(0, 50_000),
         unTrashedUserIds: Array.from(unTrashed).slice(0, 50_000),
         digestMeta: current.digestMeta, // server-owned
+        announcements: mergeCollection(current.announcements, incoming.announcements, 1000),
+        pushTokens: current.pushTokens, // server-owned (written by /api/register-push)
       };
     } else if (role === 'student') {
       const allowedThread = (key: string) =>
@@ -752,6 +762,33 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     } else {
       res.status(403).json({ error: 'Forbidden' });
       return;
+    }
+
+    // ── Push notifications ────────────────────────────────────────────────
+    // Any NEW notification produced by this save whose recipient has the app
+    // installed (a registered device token) is delivered as a phone push.
+    // Best-effort: failures never block the save; dead tokens are pruned.
+    if (pushConfigured() && next.pushTokens) {
+      try {
+        const beforeIds = new Set(current.notifications.map((n) => getString(asRecord(n), 'id')).filter(Boolean));
+        const tokensMap = next.pushTokens as PushTokensMap;
+        const fresh = next.notifications
+          .map(asRecord)
+          .filter((n): n is Record<string, unknown> => Boolean(n))
+          .filter((n) => !beforeIds.has(getString(n, 'id')))
+          .filter((n) => Array.isArray(tokensMap[getString(n, 'userId')]) && tokensMap[getString(n, 'userId')].length > 0)
+          .slice(0, 10);
+        let allDead: string[] = [];
+        for (const n of fresh) {
+          const result = await sendPushToUsers(tokensMap, [getString(n, 'userId')], {
+            title: getString(n, 'title') || 'The Way',
+            body: getString(n, 'message'),
+            link: getString(n, 'link') || undefined,
+          });
+          allDead = allDead.concat(result.deadTokens);
+        }
+        if (allDead.length) next.pushTokens = prunePushTokens(tokensMap, allDead);
+      } catch { /* push is best-effort */ }
     }
 
     const upserted = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state`, {

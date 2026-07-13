@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, GraduationCap, ShieldCheck, FileCheck2, MessageCircle, Plane } from 'lucide-react';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 import heroUrl from '../../IMG_2594-scaled-1.jpg';
+import MobileOnboarding, { hasOnboarded } from './MobileOnboarding';
 
 const stats = [
   { n: '5,000+', l: 'Students' },
@@ -20,6 +21,11 @@ const features = [
 
 const MobileLanding: React.FC = () => {
   const navigate = useNavigate();
+  // First launch: show the swipeable intro once, then always land here.
+  const [showOnboarding, setShowOnboarding] = useState(() => !hasOnboarded());
+  if (showOnboarding) {
+    return <MobileOnboarding onDone={() => setShowOnboarding(false)} />;
+  }
   return (
     <div className="v3 min-h-screen" style={{ background: 'var(--v3-navy)' }}>
       {/* Hero */}

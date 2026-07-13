@@ -32,7 +32,7 @@ import toast from 'react-hot-toast';
 import { tryGetSupabase } from '../lib/supabase';
 import { PageHeader, StatGrid, StatCard, DashboardSection, EmptyState, type StatTone } from '../components/dashboard/ui';
 import { UniversityAssignmentSettings, PointsAdjustTool, SlaRulesCard } from '../components/dashboard/CeoControls';
-import { Star, Trophy, Timer, Mail, Loader2 } from 'lucide-react';
+import { Star, Trophy, Timer, Mail, Loader2, Megaphone, EyeOff } from 'lucide-react';
 
 const toneFromColor = (color: string): StatTone =>
   color.includes('amber') ? 'amber'
@@ -75,8 +75,10 @@ const AdminDashboard: React.FC = () => {
     ceoRestoreFutureLead, ceoDeleteFutureLead,
     ceoDisableUser, ceoRestoreUser, ceoPurgeUser,
     credentialRequests, ceoResolveCredentialRequest, ceoRejectCredentialRequest,
-    pointsLedger,
+    pointsLedger, announcements, ceoAddAnnouncement, ceoHideAnnouncement,
   } = useAppStore();
+  const [annTitle, setAnnTitle] = useState('');
+  const [annBody, setAnnBody] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   type AdminTab = 'analytics' | 'users' | 'forms' | 'requests' | 'performance' | 'universities' | 'trash' | 'security';
   const ADMIN_TABS: AdminTab[] = ['analytics', 'users', 'forms', 'requests', 'performance', 'universities', 'trash', 'security'];
@@ -437,6 +439,62 @@ const AdminDashboard: React.FC = () => {
                   {digestSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                   Send now
                 </button>
+              </div>
+            </div>
+
+            {/* App Announcements */}
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                <Megaphone className="w-4 h-4 text-amber-500" />
+                <span className="text-base font-bold text-gray-900">Student App Announcements</span>
+                <span className="text-sm text-gray-500">— Shown in the app's home feed</span>
+              </div>
+              <div className="p-5 space-y-3">
+                <div className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
+                  <input
+                    value={annTitle}
+                    onChange={(e) => setAnnTitle(e.target.value)}
+                    placeholder="Title (e.g. Eid Mubarak! Office closed Mon)"
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
+                  />
+                  <input
+                    value={annBody}
+                    onChange={(e) => setAnnBody(e.target.value)}
+                    placeholder="Message (optional)"
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      try {
+                        ceoAddAnnouncement(annTitle, annBody);
+                        setAnnTitle(''); setAnnBody('');
+                        toast.success('Announcement published to the app');
+                      } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not publish'); }
+                    }}
+                    className="bg-amber-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-amber-700 transition-colors"
+                  >
+                    Publish
+                  </button>
+                </div>
+                {announcements.filter(a => !a.hidden).length > 0 && (
+                  <ul className="divide-y divide-gray-50 rounded-xl border border-gray-100">
+                    {announcements.filter(a => !a.hidden).slice(0, 6).map(a => (
+                      <li key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-gray-900 truncate">{a.title}</p>
+                          <p className="text-[11px] text-gray-400">{new Date(a.at).toLocaleDateString()} · {a.byName}{a.body ? ` — ${a.body.slice(0, 60)}` : ''}</p>
+                        </div>
+                        <button
+                          onClick={() => { try { ceoHideAnnouncement(a.id); toast.success('Hidden from the app'); } catch { /* noop */ } }}
+                          title="Hide from the app"
+                          className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0"
+                        >
+                          <EyeOff className="w-4 h-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
 
