@@ -20,6 +20,7 @@ const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 import NotFound from './pages/NotFound';
 const UniversitiesPage = React.lazy(() => import('./pages/UniversitiesPage'));
 const AgenciesPortal = React.lazy(() => import('./pages/AgenciesPortal'));
+const PrivacyPage = React.lazy(() => import('./pages/PrivacyPage'));
 
 // Mobile student app (/app/*) — its own design, used inside the Capacitor shell.
 const MobileLanding = React.lazy(() => import('./mobile/MobileLanding'));
@@ -195,6 +196,8 @@ function AppRoutes() {
       />
       {/* Public marketing site — reachable even while logged in (staff "Main website" link) */}
       <Route path="/welcome" element={<LandingPage />} />
+      {/* Privacy policy — public, required by the app stores */}
+      <Route path="/privacy" element={<React.Suspense fallback={null}><PrivacyPage /></React.Suspense>} />
 
       {/* ── Mobile student app (loaded by the Capacitor shell) ── */}
       <Route path="/app" element={<AppPublic>{appSuspense(<MobileLanding />)}</AppPublic>} />

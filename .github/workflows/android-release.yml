@@ -1,0 +1,71 @@
+# Builds the signed Android release (.aab for Google Play + .apk for direct install)
+# in the cloud — no Android Studio or Java needed on your machine.
+#
+# One-time setup (repo → Settings → Secrets and variables → Actions → New repository secret):
+#   ANDROID_KEYSTORE_BASE64   = contents of android/keystore-base64.txt
+#   ANDROID_KEYSTORE_PASSWORD = the password from KEYSTORE-BACKUP.txt
+#   ANDROID_KEY_ALIAS         = theway
+#   ANDROID_KEY_PASSWORD      = same password
+#
+# Run it: repo → Actions → "Android release build" → Run workflow.
+# Download: the finished run → Artifacts → theway-android-release.
+
+name: Android release build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle (production config) + sync native
+        run: npm run build:app
+
+      - name: Restore signing keystore
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/theway-upload.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=theway-upload.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Build signed .aab + .apk
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease assembleRelease
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/bundle/release/app-release.aab out/theway.aab
+          cp android/app/build/outputs/apk/release/app-release.apk out/theway.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: theway-android-release
+          path: out/
+          retention-days: 30

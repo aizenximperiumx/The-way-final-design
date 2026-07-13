@@ -26,3 +26,10 @@ dist-ssr
 # Local email preview output
 email-previews/
 email-preview.html
+
+# Release signing — NEVER commit. Back these up somewhere safe (see STORE-SUBMISSION.md)
+*.keystore
+*.jks
+android/keystore.properties
+android/keystore-base64.txt
+KEYSTORE-BACKUP.txt

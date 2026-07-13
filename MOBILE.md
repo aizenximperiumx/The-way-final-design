@@ -8,6 +8,10 @@ plus **app-exclusive features** the website doesn't have.
 > The app is **student-only** — staff/admin use the website. A non-student who logs
 > in sees a "this app is for students" screen.
 
+> **Publishing to Google Play / the App Store?** Follow
+> [STORE-SUBMISSION.md](STORE-SUBMISSION.md) — signing, cloud builds, listing
+> copy and marketing assets are all prepared (`store/`).
+
 ---
 
 ## What makes the app different from the website
