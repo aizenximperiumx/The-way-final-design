@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Send, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare, Mic, Trash2, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { useAppStore } from '../store/appStore';
+import { uploadFileToStorage } from '../lib/upload';
+import { tap, thud } from '../lib/native';
+import { useVoiceRecorder, canRecordVoice, fmtSec, AudioBubble } from './VoiceNote';
 import MobileLayout from './MobileLayout';
 
 const MobileMessages: React.FC = () => {
@@ -10,6 +14,8 @@ const MobileMessages: React.FC = () => {
   const { applications, users, chatMessages } = useApp();
   const { addChatMessage } = useAppStore();
   const [text, setText] = useState('');
+  const [sendingVoice, setSendingVoice] = useState(false);
+  const recorder = useVoiceRecorder();
   const endRef = useRef<HTMLDivElement>(null);
 
   const myApp = applications.find(a => a.studentId === user?.id) ?? null;
@@ -28,6 +34,26 @@ const MobileMessages: React.FC = () => {
     if (!t || !advisorId) return;
     addChatMessage(advisorId, t, myApp?.id);
     setText('');
+  };
+
+  const startVoice = async () => {
+    tap();
+    if (!(await recorder.start())) toast.error('Microphone unavailable');
+  };
+
+  const sendVoice = async () => {
+    const rec = await recorder.stop();
+    if (!rec || !advisorId) return;
+    setSendingVoice(true);
+    try {
+      const url = await uploadFileToStorage(rec.file);
+      addChatMessage(advisorId, '', myApp?.id, { audioUrl: url, audioSec: rec.seconds });
+      thud();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not send voice note');
+    } finally {
+      setSendingVoice(false);
+    }
   };
 
   return (
@@ -62,7 +88,14 @@ const MobileMessages: React.FC = () => {
                     borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                     border: mine ? 'none' : '1px solid rgba(245,168,0,0.12)',
                   }}>
-                    {m.text}
+                    {m.audioUrl ? (
+                      <AudioBubble
+                        url={m.audioUrl}
+                        sec={m.audioSec}
+                        accent={mine ? '#0A1628' : '#F5A800'}
+                        faint={mine ? 'rgba(10,22,40,0.30)' : 'rgba(245,240,232,0.25)'}
+                      />
+                    ) : m.text}
                   </div>
                 </div>
               );
@@ -73,17 +106,46 @@ const MobileMessages: React.FC = () => {
           {/* Composer */}
           <div className="fixed left-0 right-0 px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 64px)' }}>
             <div className="flex items-center gap-2 rounded-2xl p-1.5" style={{ background: 'rgba(13,31,60,0.95)', border: '1px solid rgba(245,168,0,0.22)', backdropFilter: 'blur(12px)' }}>
-              <input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-                placeholder="Message your advisor…"
-                className="flex-1 bg-transparent px-3 py-2.5 text-[14px] outline-none"
-                style={{ color: 'var(--v3-white)' }}
-              />
-              <button onClick={send} disabled={!text.trim()} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-40" style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}>
-                <Send className="w-4 h-4" />
-              </button>
+              {recorder.recording || sendingVoice ? (
+                <>
+                  <button onClick={() => { tap(); recorder.cancel(); }} disabled={sendingVoice} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-40" style={{ background: 'rgba(255,99,99,0.14)' }} aria-label="Cancel recording">
+                    <Trash2 className="w-4 h-4" style={{ color: '#FF9B9B' }} />
+                  </button>
+                  <div className="flex-1 flex items-center gap-2 px-2">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: '#FF6363', animation: 'twpulse 1.1s infinite' }} />
+                    <span className="text-[14px] font-bold tabular-nums" style={{ color: 'var(--v3-white)' }}>
+                      {sendingVoice ? 'Sending…' : fmtSec(recorder.seconds)}
+                    </span>
+                    <span className="text-[11px]" style={{ color: 'rgba(245,240,232,0.45)' }}>
+                      {sendingVoice ? '' : 'Recording voice note'}
+                    </span>
+                  </div>
+                  <button onClick={() => void sendVoice()} disabled={sendingVoice} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-60" style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }} aria-label="Send voice note">
+                    {sendingVoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </button>
+                  <style>{`@keyframes twpulse { 0%,100%{opacity:1} 50%{opacity:0.25} }`}</style>
+                </>
+              ) : (
+                <>
+                  <input
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
+                    placeholder="Message your advisor…"
+                    className="flex-1 bg-transparent px-3 py-2.5 text-[14px] outline-none"
+                    style={{ color: 'var(--v3-white)' }}
+                  />
+                  {!text.trim() && canRecordVoice() ? (
+                    <button onClick={() => void startVoice()} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(245,168,0,0.15)', color: 'var(--v3-yellow)' }} aria-label="Record voice note">
+                      <Mic className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button onClick={send} disabled={!text.trim()} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-40" style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)' }}>
+                      <Send className="w-4 h-4" />
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </>

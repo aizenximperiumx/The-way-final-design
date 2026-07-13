@@ -214,6 +214,8 @@ const PROTECTED_STR_FIELDS = [
     // Identity/assignment of an approved case must survive stale snapshots too.
     'studentId', 'assignedStaffId', 'university', 'program', 'studentEmail',
     'approvedBy', 'approvedAt',
+    // Student-owned arrival plan (flight date) survives stale staff snapshots.
+    'arrivalDate',
 ];
 // Application list fields that accumulate (attachments, audit trail, notes).
 const PROTECTED_ARR_FIELDS = ['intakeAttachments', 'intakeExtraDocs', 'events', 'internalNotes'];
@@ -313,6 +315,10 @@ const mergeApplication = (cur, inc) => {
     if (cur.studentCredentials && typeof cur.studentCredentials === 'object' && !(inc.studentCredentials && typeof inc.studentCredentials === 'object')) {
         merged.studentCredentials = cur.studentCredentials;
     }
+    // The student's pre-flight checklist survives snapshots that never loaded it.
+    if (Array.isArray(cur.arrivalChecklist) && !Array.isArray(inc.arrivalChecklist)) {
+        merged.arrivalChecklist = cur.arrivalChecklist;
+    }
     // Status can never regress to 'submitted' once the application was processed.
     const curStatus = getString(cur, 'status');
     const incStatus = getString(inc, 'status');
@@ -323,6 +329,16 @@ const mergeApplication = (cur, inc) => {
     if (pipeline)
         merged.pipeline = pipeline;
     return merged;
+};
+// Voice-note fields on chat messages. The student/agency branches rebuild
+// messages field-by-field, so audio survives only through this whitelist.
+const audioFields = (r) => {
+    const url = getString(r, 'audioUrl');
+    if (!url || url.length > 2000 || !/^https?:\/\//i.test(url))
+        return {};
+    const secRaw = typeof r.audioSec === 'number' ? r.audioSec : NaN;
+    const audioSec = Number.isFinite(secRaw) ? Math.max(1, Math.min(600, Math.round(secRaw))) : undefined;
+    return { audioUrl: url, ...(audioSec !== undefined ? { audioSec } : {}) };
 };
 const placeApplications = (current, incoming, purged) => {
     const curPlace = new Map();
@@ -502,7 +518,8 @@ export default async function handler(req, res) {
                 if (incomingId && knownMessageIds.has(incomingId))
                     return []; // already persisted
                 const text = getString(r, 'text');
-                if (!text || text.length > 5000)
+                const audio = audioFields(r);
+                if ((!text && !audio.audioUrl) || text.length > 5000)
                     return [];
                 const appId = getString(r, 'applicationId');
                 if (appId && !(allowedThread(appId) || appId === `complaint-${userId}`))
@@ -512,6 +529,7 @@ export default async function handler(req, res) {
                         userId,
                         toUserId: getString(r, 'toUserId'),
                         text,
+                        ...audio,
                         applicationId: appId || undefined,
                         time: now,
                     }];
@@ -567,24 +585,45 @@ export default async function handler(req, res) {
                     return a0;
                 if (getString(a, 'studentId') !== userId)
                     return a0;
-                if (a.rating && typeof a.rating === 'object')
-                    return a0; // already rated
                 const inc = incAppById.get(getString(a, 'id'));
-                const rating = inc ? asRecord(inc.rating) : null;
-                if (!rating || typeof rating.stars !== 'number')
+                if (!inc)
                     return a0;
-                const stars = Math.round(rating.stars);
-                if (stars < 1 || stars > 5)
-                    return a0;
-                const pipeline = asRecord(a.pipeline);
-                const stages = pipeline ? asRecord(pipeline.stages) : null;
-                const visaRes = stages ? asRecord(stages.visa_residency) : null;
-                const residencyDone = (pipeline && getString(pipeline, 'status') === 'closed') || Boolean(visaRes && getString(visaRes, 'completedAt'));
-                if (!residencyDone)
-                    return a0;
-                const comment = typeof rating.comment === 'string' ? rating.comment.slice(0, 2000) : undefined;
-                acceptedRatings.push({ appId: getString(a, 'id'), name: getString(a, 'name'), stars, comment });
-                return { ...a, rating: { stars, ...(comment ? { comment } : {}), at: now } };
+                let out = a;
+                // Students own their arrival plan: flight date + pre-flight checklist.
+                if ('arrivalDate' in inc) {
+                    const d = getString(inc, 'arrivalDate');
+                    if (!d) {
+                        if (out.arrivalDate) {
+                            out = { ...out };
+                            delete out.arrivalDate;
+                        }
+                    }
+                    else if (!Number.isNaN(new Date(d).getTime())) {
+                        out = { ...out, arrivalDate: d.slice(0, 40) };
+                    }
+                }
+                if (Array.isArray(inc.arrivalChecklist)) {
+                    const list = inc.arrivalChecklist
+                        .filter((x) => typeof x === 'string' && x.length > 0 && x.length <= 40)
+                        .slice(0, 24);
+                    out = { ...out, arrivalChecklist: list };
+                }
+                // One-time 1–5★ service rating after residency (validated against the
+                // CURRENT state; a given rating never disappears or changes).
+                const rating = asRecord(inc.rating);
+                if (!(a.rating && typeof a.rating === 'object') && rating && typeof rating.stars === 'number') {
+                    const stars = Math.round(rating.stars);
+                    const pipeline = asRecord(a.pipeline);
+                    const stages = pipeline ? asRecord(pipeline.stages) : null;
+                    const visaRes = stages ? asRecord(stages.visa_residency) : null;
+                    const residencyDone = (pipeline && getString(pipeline, 'status') === 'closed') || Boolean(visaRes && getString(visaRes, 'completedAt'));
+                    if (stars >= 1 && stars <= 5 && residencyDone) {
+                        const comment = typeof rating.comment === 'string' ? rating.comment.slice(0, 2000) : undefined;
+                        acceptedRatings.push({ appId: getString(a, 'id'), name: getString(a, 'name'), stars, comment });
+                        out = { ...out, rating: { stars, ...(comment ? { comment } : {}), at: now } };
+                    }
+                }
+                return out === a ? a0 : out;
             });
             // Clients can't be trusted to notify the CEO about their own rating —
             // the server generates those notifications when a rating is accepted.
@@ -632,7 +671,8 @@ export default async function handler(req, res) {
                 if (incomingId && knownMessageIds.has(incomingId))
                     return []; // already persisted
                 const text = getString(r, 'text');
-                if (!text || text.length > 5000)
+                const audio = audioFields(r);
+                if ((!text && !audio.audioUrl) || text.length > 5000)
                     return [];
                 const appId = getString(r, 'applicationId');
                 if (appId && !allowedApp(appId))
@@ -642,6 +682,7 @@ export default async function handler(req, res) {
                         userId,
                         toUserId: getString(r, 'toUserId'),
                         text,
+                        ...audio,
                         applicationId: appId || undefined,
                         time: now,
                     }];

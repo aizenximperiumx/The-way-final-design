@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Lock, Delete } from 'lucide-react';
+import { Lock, Delete, Fingerprint } from 'lucide-react';
 import { GOLD, NAVY, dim, goldA } from './ui';
-import { tap, thud } from '../lib/native';
+import { tap, thud, biometricVerify } from '../lib/native';
 
 /**
  * App Lock — a 4-digit PIN gate over the student app. The PIN is stored as a
  * SHA-256 hash per user on the device; unlocking lasts for the session (the
- * app re-locks when it is fully restarted). Biometric unlock can be layered
- * on later; the PIN is the universal fallback.
+ * app re-locks when it is fully restarted). On devices with the biometric
+ * plugin installed, fingerprint/Face-ID unlock can be enabled on top — the
+ * PIN stays as the universal fallback.
  */
 
 const pinKey = (userId: string) => `tw_applock_pin_${userId}`;
 const sessionKey = (userId: string) => `tw_applock_ok_${userId}`;
+const bioKey = (userId: string) => `tw_applock_bio_${userId}`;
 
 const sha256Hex = async (text: string): Promise<string> => {
   const data = new TextEncoder().encode(text);
@@ -35,11 +37,21 @@ export const verifyAppLockPin = async (userId: string, pin: string): Promise<boo
 
 export const clearAppLock = (userId: string): void => {
   localStorage.removeItem(pinKey(userId));
+  localStorage.removeItem(bioKey(userId));
   sessionStorage.removeItem(sessionKey(userId));
 };
 
 export const isUnlockedThisSession = (userId?: string): boolean =>
   Boolean(userId && sessionStorage.getItem(sessionKey(userId)));
+
+/** Biometric-unlock preference (only honored when the native plugin exists). */
+export const isBioUnlockEnabled = (userId?: string): boolean =>
+  Boolean(userId && localStorage.getItem(bioKey(userId)));
+
+export const setBioUnlockEnabled = (userId: string, on: boolean): void => {
+  if (on) localStorage.setItem(bioKey(userId), '1');
+  else localStorage.removeItem(bioKey(userId));
+};
 
 /** Shared PIN pad (used by the gate and by the Profile setup flow). */
 export const PinPad: React.FC<{
@@ -79,6 +91,19 @@ export const PinPad: React.FC<{
 export const AppLockGate: React.FC<{ userId: string; userName?: string; onUnlock: () => void }> = ({ userId, userName, onUnlock }) => {
   const [pin, setPin] = useState('');
   const [shake, setShake] = useState(false);
+  const bioEnabled = isBioUnlockEnabled(userId);
+
+  const tryBiometric = React.useCallback(async () => {
+    if (!isBioUnlockEnabled(userId)) return;
+    if (await biometricVerify('Unlock The Way')) {
+      sessionStorage.setItem(sessionKey(userId), '1');
+      thud();
+      onUnlock();
+    }
+  }, [userId, onUnlock]);
+
+  // Offer fingerprint/Face ID immediately; the PIN pad stays as fallback.
+  useEffect(() => { void tryBiometric(); }, [tryBiometric]);
 
   useEffect(() => {
     if (pin.length !== 4) return;
@@ -109,6 +134,15 @@ export const AppLockGate: React.FC<{ userId: string; userName?: string; onUnlock
       <div style={{ animation: shake ? 'twshake 0.4s' : undefined }}>
         <PinPad value={pin} onDigit={(d) => setPin(p => (p + d).slice(0, 4))} onBackspace={() => setPin(p => p.slice(0, -1))} />
       </div>
+      {bioEnabled && (
+        <button
+          onClick={() => { tap(); void tryBiometric(); }}
+          className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[12px] font-bold"
+          style={{ background: 'rgba(255,255,255,0.06)', color: dim(0.8), border: `1px solid ${goldA(0.25)}` }}
+        >
+          <Fingerprint className="w-4 h-4" style={{ color: GOLD }} /> Use fingerprint / face
+        </button>
+      )}
       <style>{`@keyframes twshake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-10px)} 40%,80%{transform:translateX(10px)} }`}</style>
     </div>
   );

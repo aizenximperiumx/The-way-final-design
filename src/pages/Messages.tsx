@@ -9,7 +9,10 @@ import {
   Plus,
   X,
   CheckCircle2,
-  Info
+  Info,
+  Mic,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
@@ -17,6 +20,8 @@ import { useAppStore } from '../store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
+import { uploadFileToStorage } from '../lib/upload';
+import { useVoiceRecorder, canRecordVoice, fmtSec, AudioBubble } from '../mobile/VoiceNote';
 
 const pairKey = (a: string, b: string) => [a, b].sort().join('|');
 const threadKeyFromMessage = (m: { userId: string; toUserId: string; applicationId?: string }) =>
@@ -35,6 +40,8 @@ const Messages: React.FC = () => {
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
   const [virtualThread, setVirtualThread] = useState<VirtualThread | null>(null);
   const [draft, setDraft] = useState('');
+  const [sendingVoice, setSendingVoice] = useState(false);
+  const recorder = useVoiceRecorder();
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
   const [newChatSearch, setNewChatSearch] = useState('');
@@ -92,7 +99,7 @@ const Messages: React.FC = () => {
 
       const prev = byKey.get(key);
       if (!prev || new Date(m.time).getTime() >= new Date(prev.time || 0).getTime()) {
-        byKey.set(key, { key, otherUserId, applicationId: m.applicationId, name, lastMessage: m.text, time: m.time, unread: (prev?.unread ?? 0) + unreadInc });
+        byKey.set(key, { key, otherUserId, applicationId: m.applicationId, name, lastMessage: m.text || (m.audioUrl ? '🎤 Voice note' : ''), time: m.time, unread: (prev?.unread ?? 0) + unreadInc });
       } else if (unreadInc) {
         byKey.set(key, { ...prev, unread: (prev.unread ?? 0) + unreadInc });
       }
@@ -317,6 +324,25 @@ const Messages: React.FC = () => {
     }
     setDraft('');
     if (virtualThread) setVirtualThread(null);
+  };
+
+  const startVoice = async () => {
+    if (!(await recorder.start())) toast.error('Microphone unavailable');
+  };
+
+  const sendVoice = async () => {
+    const rec = await recorder.stop();
+    if (!rec || !activeThread) return;
+    setSendingVoice(true);
+    try {
+      const url = await uploadFileToStorage(rec.file);
+      addChatMessage(activeThread.otherUserId, '', activeThread.applicationId, { audioUrl: url, audioSec: rec.seconds });
+      if (virtualThread) setVirtualThread(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not send voice note');
+    } finally {
+      setSendingVoice(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -650,7 +676,17 @@ const Messages: React.FC = () => {
                                   : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm'
                               }`}
                             >
-                              <p className="text-sm leading-relaxed">{m.text}</p>
+                              {m.audioUrl ? (
+                                <AudioBubble
+                                  url={m.audioUrl}
+                                  sec={m.audioSec}
+                                  accent={isMine ? '#ffffff' : '#d97706'}
+                                  buttonFg={isMine ? '#d97706' : '#ffffff'}
+                                  faint={isMine ? 'rgba(255,255,255,0.35)' : 'rgba(120,113,108,0.25)'}
+                                />
+                              ) : (
+                                <p className="text-sm leading-relaxed">{m.text}</p>
+                              )}
                               <p className={`text-[11px] mt-1.5 ${isMine ? 'text-amber-200' : 'text-gray-400'}`}>
                                 {new Date(m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </p>
@@ -663,22 +699,59 @@ const Messages: React.FC = () => {
 
                   {/* Message Input */}
                   <div className="px-5 py-4 bg-white border-t border-gray-100 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        placeholder="Type a message..."
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
-                      />
-                      <button
-                        onClick={handleSendMessage}
-                        className="w-10 h-10 bg-amber-600 text-white rounded-lg flex items-center justify-center hover:bg-amber-700 transition-colors shrink-0"
-                      >
-                        <Send className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {recorder.recording || sendingVoice ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => recorder.cancel()}
+                          disabled={sendingVoice}
+                          className="w-10 h-10 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 transition-colors shrink-0 disabled:opacity-40"
+                          aria-label="Cancel recording"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <div className="flex-1 flex items-center gap-2 px-3 py-2.5 bg-red-50/60 border border-red-100 rounded-xl">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                          <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                            {sendingVoice ? 'Sending…' : fmtSec(recorder.seconds)}
+                          </span>
+                          <span className="text-xs text-gray-400">{sendingVoice ? '' : 'Recording voice note'}</span>
+                        </div>
+                        <button
+                          onClick={() => void sendVoice()}
+                          disabled={sendingVoice}
+                          className="w-10 h-10 bg-amber-600 text-white rounded-lg flex items-center justify-center hover:bg-amber-700 transition-colors shrink-0 disabled:opacity-60"
+                          aria-label="Send voice note"
+                        >
+                          {sendingVoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Type a message..."
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
+                        />
+                        {!draft.trim() && canRecordVoice() && (
+                          <button
+                            onClick={() => void startVoice()}
+                            className="w-10 h-10 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center hover:bg-amber-100 transition-colors shrink-0"
+                            aria-label="Record voice note"
+                          >
+                            <Mic className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={handleSendMessage}
+                          className="w-10 h-10 bg-amber-600 text-white rounded-lg flex items-center justify-center hover:bg-amber-700 transition-colors shrink-0"
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (

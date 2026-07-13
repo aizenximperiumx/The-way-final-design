@@ -7,6 +7,7 @@ import { useI18n } from '../lib/i18n';
 import { tap } from '../lib/native';
 import { GOLD, dim, goldA, card, sectionLabel } from './ui';
 import MobileLayout from './MobileLayout';
+import PartnerMap from './PartnerMap';
 
 /**
  * Life in Georgia — app-exclusive survival guide for arriving students:
@@ -159,6 +160,10 @@ const MobileGeorgia: React.FC = () => {
             : t('Approximate rate (offline)', 'سعر تقريبي (بدون إنترنت)')}
         </p>
       </div>
+
+      {/* Partner map — physical partner spots across Tbilisi */}
+      <p className="mt-6 mb-3" style={sectionLabel}>{t('Partner map', 'خريطة الشركاء')}</p>
+      <PartnerMap />
 
       {/* Guide sections */}
       <p className="mt-6 mb-3" style={sectionLabel}>{t('Student survival guide', 'دليل الطالب')}</p>

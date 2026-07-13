@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LogOut, BadgeCheck, GraduationCap, CalendarClock, ShieldAlert,
   QrCode, MessageSquare, KeyRound, ChevronRight, Loader2,
-  Lock, Languages, Compass,
+  Lock, Languages, Compass, Fingerprint,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -11,8 +11,8 @@ import { useApp } from '../context/AppContext';
 import { useAppStore } from '../store/appStore';
 import { getUniversityName } from '../lib/universities';
 import { useI18n } from '../lib/i18n';
-import { tap, thud } from '../lib/native';
-import { PinPad, isAppLockEnabled, setAppLockPin, clearAppLock, verifyAppLockPin } from './AppLock';
+import { tap, thud, biometricAvailable } from '../lib/native';
+import { PinPad, isAppLockEnabled, setAppLockPin, clearAppLock, verifyAppLockPin, isBioUnlockEnabled, setBioUnlockEnabled } from './AppLock';
 import { GOLD, NAVY, card, dim, goldA, sectionLabel, daysUntil } from './ui';
 import MobileLayout from './MobileLayout';
 
@@ -32,6 +32,10 @@ const MobileProfile: React.FC = () => {
   const [lockStep, setLockStep] = useState<'set' | 'confirm' | 'disable'>('set');
   const [pin1, setPin1] = useState('');
   const [pin2, setPin2] = useState('');
+  // Biometric unlock (only offered when the native plugin reports a sensor)
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioOn, setBioOn] = useState(() => isBioUnlockEnabled(user?.id));
+  useEffect(() => { void biometricAvailable().then(setBioAvailable); }, []);
 
   if (!user) return null;
   const myApp = applications.find(a => a.studentId === user.id) ?? null;
@@ -218,6 +222,29 @@ const MobileProfile: React.FC = () => {
                 onBackspace={onLockBackspace}
               />
             </div>
+          )}
+          {/* Fingerprint / Face unlock — only on devices with the biometric plugin */}
+          {lockEnabled && bioAvailable && user && (
+            <button
+              onClick={() => {
+                tap();
+                const next = !bioOn;
+                setBioUnlockEnabled(user.id, next);
+                setBioOn(next);
+                toast.success(next ? t('Biometric unlock is on', 'تم تفعيل البصمة') : t('Biometric unlock is off', 'تم إيقاف البصمة'));
+              }}
+              className="w-full p-4 flex items-center gap-3 text-left"
+              style={{ borderTop: `1px solid ${goldA(0.12)}` }}
+            >
+              <Fingerprint className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
+              <span className="text-[14px] font-semibold flex-1" style={{ color: '#fff' }}>{t('Fingerprint / Face unlock', 'فتح بالبصمة / الوجه')}</span>
+              <span className="text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-full" style={{
+                background: bioOn ? 'rgba(76,175,80,0.16)' : 'rgba(255,255,255,0.06)',
+                color: bioOn ? '#7BE08A' : dim(0.5),
+              }}>
+                {bioOn ? t('On', 'مفعل') : t('Off', 'متوقف')}
+              </span>
+            </button>
           )}
         </div>
 

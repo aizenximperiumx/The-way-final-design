@@ -4,7 +4,7 @@
 // The app ships FULLY SELF-CONTAINED (no server.url): the UI lives inside the
 // binary and only data crosses the network. That's why this module rewrites
 // relative `/api/*` calls to the live backend and boots the shell into /app.
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { App as CapApp } from '@capacitor/app';
@@ -61,6 +61,41 @@ export const tap = () => {
 export const thud = () => {
   if (!isNative()) return;
   void Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {});
+};
+
+// ── Biometric unlock (activates once the native plugin is installed) ────────
+// Same dormant pattern as push: install @capgo/capacitor-native-biometric and
+// `npx cap sync`, and fingerprint/Face-ID unlock lights up with no code changes.
+type BiometricPlugin = {
+  isAvailable: () => Promise<{ isAvailable?: boolean }>;
+  verifyIdentity: (opts: { reason?: string; title?: string; subtitle?: string }) => Promise<void>;
+};
+
+let biometricProxy: BiometricPlugin | null = null;
+const getBiometricPlugin = (): BiometricPlugin | undefined => {
+  if (!isNative() || !Capacitor.isPluginAvailable('NativeBiometric')) return undefined;
+  if (!biometricProxy) biometricProxy = registerPlugin<BiometricPlugin>('NativeBiometric');
+  return biometricProxy;
+};
+
+/** True when the device offers fingerprint/face unlock (native only). */
+export const biometricAvailable = async (): Promise<boolean> => {
+  try {
+    const plugin = getBiometricPlugin();
+    if (!plugin) return false;
+    const r = await plugin.isAvailable();
+    return Boolean(r?.isAvailable);
+  } catch { return false; }
+};
+
+/** Shows the native biometric prompt; resolves true on success. */
+export const biometricVerify = async (reason: string): Promise<boolean> => {
+  try {
+    const plugin = getBiometricPlugin();
+    if (!plugin) return false;
+    await plugin.verifyIdentity({ reason, title: 'The Way' });
+    return true;
+  } catch { return false; }
 };
 
 // ── Push notifications (activates once the native plugin is installed) ──────

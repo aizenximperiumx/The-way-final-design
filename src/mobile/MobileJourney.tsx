@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
-  CheckCircle2, Circle, Clock, Download, FileText, Loader2, Star, Upload, Inbox,
+  CheckCircle2, Circle, Clock, Download, FileText, Loader2, Star, Upload, Inbox, ScanLine,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +11,7 @@ import { uploadFileToStorage } from '../lib/upload';
 import { openStorageUrl } from '../lib/storage';
 import { GOLD, NAVY, card, goldCard, dim, goldA, sectionLabel } from './ui';
 import MobileLayout from './MobileLayout';
+import DocScanner from './DocScanner';
 
 /** Journey — the full case: stages, uploads we need from you, your documents. */
 const MobileJourney: React.FC = () => {
@@ -18,6 +19,7 @@ const MobileJourney: React.FC = () => {
   const { applications, documents } = useApp();
   const { documentRequests, studentFulfillRequest, studentRateService } = useAppStore();
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [scanFor, setScanFor] = useState<DocumentRequest | null>(null);
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState('');
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -176,15 +178,25 @@ const MobileJourney: React.FC = () => {
                       className="hidden"
                       onChange={e => { void handleFile(req, e.target.files?.[0]); e.target.value = ''; }}
                     />
-                    <button
-                      onClick={() => fileRefs.current[req.id]?.click()}
-                      disabled={uploadingId === req.id}
-                      className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-black uppercase tracking-wider"
-                      style={{ background: GOLD, color: NAVY, opacity: uploadingId === req.id ? 0.6 : 1 }}
-                    >
-                      {uploadingId === req.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                      {req.status === 'rejected' ? 'Re-upload' : 'Upload now'}
-                    </button>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => setScanFor(req)}
+                        disabled={uploadingId === req.id}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-black uppercase tracking-wider"
+                        style={{ background: GOLD, color: NAVY, opacity: uploadingId === req.id ? 0.6 : 1 }}
+                      >
+                        {uploadingId === req.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanLine className="w-4 h-4" />}
+                        {req.status === 'rejected' ? 'Re-scan' : 'Scan'}
+                      </button>
+                      <button
+                        onClick={() => fileRefs.current[req.id]?.click()}
+                        disabled={uploadingId === req.id}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-black uppercase tracking-wider"
+                        style={{ background: goldA(0.14), color: GOLD, border: `1px solid ${goldA(0.35)}`, opacity: uploadingId === req.id ? 0.6 : 1 }}
+                      >
+                        <Upload className="w-4 h-4" /> File
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
@@ -219,6 +231,16 @@ const MobileJourney: React.FC = () => {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Document scanner (camera + frame overlay + scan look) */}
+      {scanFor && (
+        <DocScanner
+          title={scanFor.title}
+          onCapture={file => { const req = scanFor; setScanFor(null); void handleFile(req, file); }}
+          onFallback={() => { const req = scanFor; setScanFor(null); fileRefs.current[req.id]?.click(); }}
+          onClose={() => setScanFor(null)}
+        />
       )}
     </MobileLayout>
   );

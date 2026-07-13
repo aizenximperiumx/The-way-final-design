@@ -19,12 +19,16 @@ plus **app-exclusive features** the website doesn't have.
 | Feature | Where |
 |---|---|
 | 3-slide welcome **onboarding** (first launch only) | `src/mobile/MobileOnboarding.tsx` |
+| **Arrival countdown** — student sets their flight date; the app counts down with a pre-flight checklist and celebrates on landing day | `src/mobile/ArrivalCard.tsx` (Home) |
+| **Document scanner** — in-app camera with a gold document frame, auto-crop + "scanned" contrast look | `src/mobile/DocScanner.tsx` (Journey uploads) |
+| **Voice notes** — WhatsApp-style recorder + waveform player in the advisor chat (staff can send/play from the web Messages page too) | `src/mobile/VoiceNote.tsx` |
 | **Life in Georgia** hub — live GEL currency converter + survival guide (SIM, banks, transport, halal food, emergency numbers) | `src/mobile/MobileGeorgia.tsx` → `/app/georgia` |
+| **Partner map** — offline schematic Tbilisi map with gold pins for every physical partner | `src/mobile/PartnerMap.tsx` (Georgia hub) |
 | **News from The Way** — CEO announcements feed (published from Admin → Analytics) | `MobileHome.tsx`, store `announcements` |
-| **App Lock** — optional 4-digit PIN (SHA-256, stored on-device) | `src/mobile/AppLock.tsx`, enabled in Profile |
+| **App Lock** — optional 4-digit PIN (SHA-256, on-device) + **fingerprint/Face-ID unlock** | `src/mobile/AppLock.tsx`, enabled in Profile |
 | **Arabic** — one-tap English ⇄ العربية toggle in Profile | `src/lib/i18n` + `t()` calls |
 | Native feel — page transitions, pull-to-refresh, offline banner, haptic taps | `src/mobile/MobileLayout.tsx`, `src/lib/native.ts` |
-| Student ID + **QR member card** for partner discounts | `/app/card` |
+| Student ID + **QR member card** — fullscreen present mode, save-as-image, optional Google Wallet | `/app/card` |
 | **Push notifications** (plumbed end-to-end, needs Firebase key — see below) | `api/_push.ts`, `api/register-push.ts` |
 
 ---
@@ -105,6 +109,35 @@ to clients; dead tokens are pruned automatically.
 
 ---
 
+## 💳 Google Wallet member card — 2 env vars to turn on
+
+The "Add to Google Wallet" button on the member card appears automatically
+once the server can sign passes (`api/wallet-pass.ts`; hidden until then):
+
+1. Sign up at **pay.google.com/business/console** → Google Wallet API →
+   note your **Issuer ID**.
+2. Create a Google Cloud service account with the Wallet API enabled and
+   download its JSON key.
+3. In Render env vars set `GOOGLE_WALLET_ISSUER_ID` and
+   `GOOGLE_WALLET_SERVICE_ACCOUNT` (the full JSON).
+
+Apple Wallet passes need an Apple Developer pass-type certificate — worth
+adding after the iOS app ships. Meanwhile every student can already use
+**Save to phone** (a designed card image) and the fullscreen present mode.
+
+---
+
+## 📱 iOS Info.plist strings (when you generate `ios/`)
+
+Add these usage descriptions in Xcode or they'll be rejected at review:
+
+- `NSCameraUsageDescription` — "Scan and upload your enrollment documents."
+- `NSMicrophoneUsageDescription` — "Record voice notes to your advisor."
+- `NSFaceIDUsageDescription` — "Unlock the app with Face ID."
+- `NSPhotoLibraryAddUsageDescription` — "Save your member card to Photos."
+
+---
+
 ## 🔄 OTA updates without app-store resubmission (optional)
 
 Since the UI is bundled, JS/UI changes normally require a store update. If you
@@ -122,8 +155,10 @@ plugin/permission changes still need a store release.
 - **Status bar / back button / offline detection** — handled in `native.ts`.
 - **Local notifications** — 9 AM follow-up reminders for reps (no server needed).
 - **Haptics** — tab taps and PIN pad feedback via `@capacitor/haptics`.
+- **Biometric unlock** — `@capgo/capacitor-native-biometric` is installed;
+  the toggle appears in Profile → App Lock on devices with a sensor.
 - **Permissions** (AndroidManifest.xml): internet, camera + media (document
-  uploads), notifications.
+  uploads/scanner), microphone (voice notes), biometrics, notifications.
 
 ---
 

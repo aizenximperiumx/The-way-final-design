@@ -162,6 +162,9 @@ export interface Application {
   pipeline?: ApplicationPipeline;
   /** Student service rating collected after residency upload. */
   rating?: { stars: number; comment?: string; at: string };
+  /** Student-owned arrival plan: flight date + checked pre-flight items. */
+  arrivalDate?: string;
+  arrivalChecklist?: string[];
   // Login identity for the created student account. The PASSWORD is never
   // stored — it is shown once at creation and delivered by email; agencies
   // request a reset (CEO-approved) when access is lost.
@@ -283,6 +286,9 @@ export interface ChatMessage {
   applicationId?: string;
   text: string;
   time: string;
+  /** Voice note attachment (uploaded audio file) and its length in seconds. */
+  audioUrl?: string;
+  audioSec?: number;
 }
 
 export interface AppStoreState {
@@ -402,7 +408,7 @@ export interface AppStoreState {
   ceoRejectCredentialRequest: (requestId: string, note?: string) => void;
 
   addAppointment: (appt: Omit<Appointment, 'id'>) => void;
-  addChatMessage: (toUserId: string, text: string, applicationId?: string) => void;
+  addChatMessage: (toUserId: string, text: string, applicationId?: string, audio?: { audioUrl: string; audioSec?: number }) => void;
   markChatThreadRead: (threadKey: string) => void;
   checkChatReminders: () => void;
   requestMoreInfo: (applicationId: string, message: string) => void;
@@ -410,6 +416,8 @@ export interface AppStoreState {
   checkExpiries: () => void;
   staffRequestDocument: (studentId: string, applicationId: string | undefined, title: string, description?: string, target?: 'student' | 'agency') => void;
   studentFulfillRequest: (requestId: string, fileUrl: string) => void;
+  /** Student sets/clears their flight date and pre-flight checklist. */
+  studentSetArrivalPlan: (updates: { arrivalDate?: string | null; checklist?: string[] }) => void;
   agentFulfillRequest: (requestId: string, fileUrl: string) => void;
   reviewDocumentRequest: (requestId: string, decision: 'approved' | 'rejected' | 'reupload', note?: string) => void;
 
@@ -2548,7 +2556,7 @@ const useAppStore = create<AppStoreState>()(
         }));
       },
 
-      addChatMessage: (toUserId: string, text: string, applicationId?: string) => {
+      addChatMessage: (toUserId: string, text: string, applicationId?: string, audio?: { audioUrl: string; audioSec?: number }) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         const toUser = get().users.find(u => u.id === toUserId);
         if (!toUser) throw new Error('Recipient not found');
@@ -2596,7 +2604,7 @@ const useAppStore = create<AppStoreState>()(
             applicationId = applicationId ?? `complaint-${toUserId}`;
           }
         }
-        const msg: ChatMessage = { id: Date.now().toString(), userId: actor.id, toUserId, applicationId, text, time: new Date().toISOString() };
+        const msg: ChatMessage = { id: Date.now().toString(), userId: actor.id, toUserId, applicationId, text, time: new Date().toISOString(), ...(audio ?? {}) };
         set((state) => ({ chatMessages: [...state.chatMessages, msg] }));
         const threadKey = `${applicationId ?? 'direct'}|${[actor.id, toUserId].sort().join('|')}`;
         const readKey = `${actor.id}|${threadKey}`;
@@ -2738,6 +2746,26 @@ const useAppStore = create<AppStoreState>()(
           ctaPath: effectiveTarget === 'agency' ? '/agencies' : '/dashboard',
           note: 'Please upload this document as soon as possible so we can continue processing the application.',
         }, { dedupeKey: `${req.id}-request` });
+        queueBackendSave(get);
+      },
+
+      studentSetArrivalPlan: (updates: { arrivalDate?: string | null; checklist?: string[] }) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['student']);
+        const app = get().applications.find(a => a.studentId === actor.id);
+        if (!app) throw new Error('No application yet');
+        set((state) => ({
+          applications: state.applications.map(a => {
+            if (a.id !== app.id) return a;
+            const next = { ...a };
+            if (updates.arrivalDate !== undefined) {
+              if (updates.arrivalDate) next.arrivalDate = updates.arrivalDate;
+              else delete next.arrivalDate;
+            }
+            if (updates.checklist) next.arrivalChecklist = updates.checklist.slice(0, 24);
+            return next;
+          }),
+        }));
         queueBackendSave(get);
       },
 

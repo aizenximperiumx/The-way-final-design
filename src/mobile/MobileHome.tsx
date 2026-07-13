@@ -13,6 +13,7 @@ import { PIPELINE_STAGES } from '../lib/pipeline';
 import { BENEFIT_CATEGORIES } from './benefits';
 import { GOLD, NAVY, card, goldCard, dim, goldA, sectionLabel, daysUntil } from './ui';
 import MobileLayout from './MobileLayout';
+import ArrivalCard from './ArrivalCard';
 
 /**
  * Home — adapts to where the student is in their life with The Way:
@@ -188,6 +189,9 @@ const MobileHome: React.FC = () => {
               </p>
             )}
           </div>
+
+          {/* Flight countdown + pre-flight checklist (student-owned) */}
+          {myApp && <ArrivalCard app={myApp} />}
 
           {/* Next action */}
           {myRequests.length > 0 ? (

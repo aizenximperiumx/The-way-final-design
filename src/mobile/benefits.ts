@@ -15,6 +15,12 @@ export interface BenefitPartner {
   deal: string;
   /** Not yet signed — shown greyed with a "soon" tag. */
   comingSoon?: boolean;
+  /**
+   * Position on the schematic Tbilisi partner map (0–100 × 0–100 space,
+   * see PartnerMap.tsx) + the neighbourhood label shown when selected.
+   * Delivery/ride services have no physical spot and stay off the map.
+   */
+  spot?: { x: number; y: number; area: string };
 }
 
 export interface BenefitCategory {
@@ -30,9 +36,9 @@ export const BENEFIT_CATEGORIES: BenefitCategory[] = [
     label: 'Supermarkets',
     icon: ShoppingCart,
     partners: [
-      { name: 'Carrefour Georgia', deal: 'Member discount at checkout', comingSoon: true },
-      { name: 'Nikora', deal: 'Weekly student offers', comingSoon: true },
-      { name: 'Agrohub', deal: 'Discount on fresh groceries', comingSoon: true },
+      { name: 'Carrefour Georgia', deal: 'Member discount at checkout', comingSoon: true, spot: { x: 24, y: 62, area: 'Saburtalo' } },
+      { name: 'Nikora', deal: 'Weekly student offers', comingSoon: true, spot: { x: 55, y: 34, area: 'Marjanishvili' } },
+      { name: 'Agrohub', deal: 'Discount on fresh groceries', comingSoon: true, spot: { x: 33, y: 78, area: 'Vake' } },
     ],
   },
   {
@@ -40,8 +46,8 @@ export const BENEFIT_CATEGORIES: BenefitCategory[] = [
     label: 'Cafés & Restaurants',
     icon: Coffee,
     partners: [
-      { name: 'Coffeesta', deal: 'Student price on all drinks', comingSoon: true },
-      { name: 'Machakhela', deal: 'Discount on Georgian classics', comingSoon: true },
+      { name: 'Coffeesta', deal: 'Student price on all drinks', comingSoon: true, spot: { x: 52, y: 56, area: 'Rustaveli' } },
+      { name: 'Machakhela', deal: 'Discount on Georgian classics', comingSoon: true, spot: { x: 63, y: 70, area: 'Old Town' } },
     ],
   },
   {
@@ -58,7 +64,7 @@ export const BENEFIT_CATEGORIES: BenefitCategory[] = [
     label: 'Gyms & Fitness',
     icon: Dumbbell,
     partners: [
-      { name: 'Snap Fitness Tbilisi', deal: 'Reduced student membership', comingSoon: true },
+      { name: 'Snap Fitness Tbilisi', deal: 'Reduced student membership', comingSoon: true, spot: { x: 40, y: 71, area: 'Vake' } },
     ],
   },
   {
@@ -66,8 +72,8 @@ export const BENEFIT_CATEGORIES: BenefitCategory[] = [
     label: 'Pharmacies',
     icon: Pill,
     partners: [
-      { name: 'PSP Pharmacy', deal: 'Member discount card', comingSoon: true },
-      { name: 'Aversi', deal: 'Discount on essentials', comingSoon: true },
+      { name: 'PSP Pharmacy', deal: 'Member discount card', comingSoon: true, spot: { x: 47, y: 47, area: 'Rustaveli' } },
+      { name: 'Aversi', deal: 'Discount on essentials', comingSoon: true, spot: { x: 29, y: 55, area: 'Saburtalo' } },
     ],
   },
   {
@@ -83,8 +89,8 @@ export const BENEFIT_CATEGORIES: BenefitCategory[] = [
     label: 'Mobile & Internet',
     icon: Smartphone,
     partners: [
-      { name: 'Magti', deal: 'Student SIM bundle', comingSoon: true },
-      { name: 'Silknet', deal: 'Home internet offer', comingSoon: true },
+      { name: 'Magti', deal: 'Student SIM bundle', comingSoon: true, spot: { x: 58, y: 48, area: 'Rustaveli' } },
+      { name: 'Silknet', deal: 'Home internet offer', comingSoon: true, spot: { x: 36, y: 44, area: 'Saburtalo' } },
     ],
   },
   {
@@ -92,7 +98,7 @@ export const BENEFIT_CATEGORIES: BenefitCategory[] = [
     label: 'Entertainment',
     icon: Clapperboard,
     partners: [
-      { name: 'Cavea Cinemas', deal: 'Student ticket price', comingSoon: true },
+      { name: 'Cavea Cinemas', deal: 'Student ticket price', comingSoon: true, spot: { x: 72, y: 40, area: 'East Point' } },
     ],
   },
 ];
