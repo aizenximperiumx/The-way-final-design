@@ -101,17 +101,19 @@ reminders without any server setup.
 
 ---
 
-## Branding the icon & splash (optional, recommended)
+## Icon & splash — already branded ✅
 
-Use the official asset generator with a 1024×1024 icon and a splash logo:
+The launcher icon (gold graduate mark on navy) and navy splash screens are
+generated and committed for Android. The 1024/2732px **source files live in
+`assets/`** (`icon.png`, `icon-foreground.png`, `icon-background.png`,
+`splash.png`, `splash-dark.png`). To regenerate (e.g. after adding iOS):
 
 ```bash
-npm i -D @capacitor/assets
-# place assets/icon.png (1024×1024) and assets/splash.png (2732×2732)
-npx capacitor-assets generate
+npx capacitor-assets generate --iconBackgroundColor "#0A1628" --splashBackgroundColor "#0A1628"
 ```
 
-This produces all the required icon/splash sizes for both platforms.
+**Android permissions** are set in `AndroidManifest.xml`: internet, camera +
+media (document uploads), and notifications.
 
 ---
 

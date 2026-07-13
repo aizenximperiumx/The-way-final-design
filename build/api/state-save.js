@@ -482,6 +482,10 @@ export default async function handler(req, res) {
                     return;
                 mergedReadAt[k] = v;
             });
+            // Keep the client's message id when it isn't stored yet — regenerating
+            // ids made every save/load cycle re-append the same messages (visible
+            // as duplicated bubbles in the chat).
+            const knownMessageIds = new Set(current.chatMessages.map((m) => getString(asRecord(m), 'id')).filter(Boolean));
             const newMessages = incoming.chatMessages.flatMap((m) => {
                 const r = asRecord(m);
                 if (!r)
@@ -489,6 +493,9 @@ export default async function handler(req, res) {
                 const sender = getString(r, 'fromUserId') || getString(r, 'userId');
                 if (sender !== userId)
                     return [];
+                const incomingId = getString(r, 'id');
+                if (incomingId && knownMessageIds.has(incomingId))
+                    return []; // already persisted
                 const text = getString(r, 'text');
                 if (!text || text.length > 5000)
                     return [];
@@ -496,7 +503,7 @@ export default async function handler(req, res) {
                 if (appId && !(allowedThread(appId) || appId === `complaint-${userId}`))
                     return [];
                 return [{
-                        id: `${userId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                        id: incomingId || `${userId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
                         userId,
                         toUserId: getString(r, 'toUserId'),
                         text,
@@ -606,6 +613,9 @@ export default async function handler(req, res) {
         }
         else if (role === 'agency') {
             const allowedApp = (id) => current.applications.some((a) => getString(asRecord(a), 'agencyId') === userId && getString(asRecord(a), 'id') === id);
+            // Same duplication guard as the student branch: never regenerate ids
+            // for messages that are already stored.
+            const knownMessageIds = new Set(current.chatMessages.map((m) => getString(asRecord(m), 'id')).filter(Boolean));
             const newMessages = incoming.chatMessages.flatMap((m) => {
                 const r = asRecord(m);
                 if (!r)
@@ -613,6 +623,9 @@ export default async function handler(req, res) {
                 const sender = getString(r, 'fromUserId') || getString(r, 'userId');
                 if (sender !== userId)
                     return [];
+                const incomingId = getString(r, 'id');
+                if (incomingId && knownMessageIds.has(incomingId))
+                    return []; // already persisted
                 const text = getString(r, 'text');
                 if (!text || text.length > 5000)
                     return [];
@@ -620,7 +633,7 @@ export default async function handler(req, res) {
                 if (appId && !allowedApp(appId))
                     return [];
                 return [{
-                        id: `${userId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                        id: incomingId || `${userId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
                         userId,
                         toUserId: getString(r, 'toUserId'),
                         text,
