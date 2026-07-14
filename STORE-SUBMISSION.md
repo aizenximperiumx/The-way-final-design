@@ -31,7 +31,7 @@ The Android release is signed with `android/theway-upload.keystore`
    `theway-android-release`** → download. Inside: `theway.aab` (for Play) and
    `theway.apk` (for direct installs from theway.ge — free distribution).
 
-**B. Locally:** install Android Studio (brings Java 17 + SDK), then
+**B. Locally:** install Android Studio (brings Java 21 + SDK), then
 `npm run build:app && cd android && gradlew.bat bundleRelease` —
 output at `android/app/build/outputs/bundle/release/app-release.aab`
 (signing picks up `android/keystore.properties` automatically).
