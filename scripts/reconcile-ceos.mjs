@@ -28,6 +28,7 @@
 const APPLY = process.argv.includes('--apply');
 const DELETE_EXTRAS = process.argv.includes('--delete-extras');
 const FORCE_DELETE_RENAMED = process.argv.includes('--force-delete-renamed');
+const FORCE_NEW_EMAIL = process.argv.includes('--force-new-email');
 const DEMOTE_ROLE = 'staff';
 
 const env = process.env;
@@ -41,19 +42,23 @@ if (!SERVICE_KEY) fail('SUPABASE_SERVICE_ROLE_KEY missing. The anon key will NOT
 if (SERVICE_KEY.startsWith('sb_publishable_')) fail('That is the publishable (public) key. Use the SECRET service role key.');
 
 // Desired CEOs, from env only.
+// CEO*_EMAIL is OPTIONAL: if omitted, the script resolves the email from the
+// EXISTING account that already owns CEO*_USERNAME. That is almost always what
+// you want — it keeps the real account (and its history) and just resets the
+// password/role, instead of creating an empty duplicate under a new domain.
 const desired = [];
 for (const n of [1, 2]) {
-  const email = String(env[`CEO${n}_EMAIL`] || '').trim().toLowerCase();
   const password = String(env[`CEO${n}_PASSWORD`] || '').trim();
-  if (!email || !password) continue;
+  const username = String(env[`CEO${n}_USERNAME`] || '').trim();
+  if (!password || !username) continue;
   desired.push({
-    email,
+    email: String(env[`CEO${n}_EMAIL`] || '').trim().toLowerCase(), // may be '' → resolve by username
     password,
-    username: String(env[`CEO${n}_USERNAME`] || email.split('@')[0]).trim(),
+    username,
     name: String(env[`CEO${n}_NAME`] || '').trim(),
   });
 }
-if (desired.length === 0) fail('No desired CEOs defined. Set CEO1_EMAIL/CEO1_USERNAME/CEO1_PASSWORD (and CEO2_*).');
+if (desired.length === 0) fail('No desired CEOs defined. Set CEO1_USERNAME + CEO1_PASSWORD (and CEO2_*). CEO*_EMAIL is optional.');
 
 // ---- Supabase helpers (mirrors server.mjs key handling) ----
 const authHeaders = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
@@ -126,6 +131,40 @@ const main = async () => {
     return { appRole: appRole || '', profRole: profRole || '' };
   };
   const isCeo = (u) => { const { appRole, profRole } = roleOf(u); return appRole === 'ceo' || profRole === 'ceo'; };
+
+  // ---- resolve each desired CEO to a REAL existing account where possible ----
+  // Priority: explicit CEO*_EMAIL that already exists > account owning the
+  // username > explicit CEO*_EMAIL (create new) > fail.
+  console.log('--- RESOLVING DESIRED ACCOUNTS ---');
+  const userByEmail = new Map(users.map((u) => [String(u.email || '').toLowerCase(), u]));
+  const findByUsername = (uname) => {
+    const target = uname.toLowerCase();
+    const prof = profiles.find((p) => String(p.username || '').toLowerCase() === target);
+    if (prof) { const u = users.find((x) => x.id === prof.id); if (u) return u; }
+    return users.find((u) => String(u?.app_metadata?.username || u?.user_metadata?.username || '').toLowerCase() === target);
+  };
+  for (const d of desired) {
+    const byEmail = d.email ? userByEmail.get(d.email) : null;
+    const byName = findByUsername(d.username);
+    if (byEmail) {
+      console.log(`  "${d.username}" → ${d.email} (existing account matched by email)`);
+    } else if (byName) {
+      const realEmail = String(byName.email || '').toLowerCase();
+      if (d.email && d.email !== realEmail) {
+        console.log(`  ⚠ "${d.username}" already exists as ${realEmail}, but you asked for ${d.email}.`);
+        console.log(`     Using the EXISTING account (${realEmail}) so its history is preserved.`);
+        console.log(`     To instead force a brand-new account, set CEO*_EMAIL and pass --force-new-email.`);
+      } else {
+        console.log(`  "${d.username}" → ${realEmail} (resolved from existing username)`);
+      }
+      if (!FORCE_NEW_EMAIL) d.email = realEmail;
+    } else if (d.email) {
+      console.log(`  "${d.username}" → ${d.email} (no existing account — will be CREATED)`);
+    } else {
+      fail(`No account owns username "${d.username}" and no CEO*_EMAIL was given. Set the email explicitly to create it.`);
+    }
+  }
+  console.log('');
 
   const currentCeos = users.filter(isCeo);
   const desiredEmails = new Set(desired.map((d) => d.email));
