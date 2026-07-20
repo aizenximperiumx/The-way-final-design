@@ -40,6 +40,8 @@ const fail = (msg) => { console.error(`\n✗ ${msg}\n`); process.exit(1); };
 if (!SUPABASE_URL || !/^https?:\/\//i.test(SUPABASE_URL)) fail('SUPABASE_URL missing/invalid (must be https://xxxx.supabase.co).');
 if (!SERVICE_KEY) fail('SUPABASE_SERVICE_ROLE_KEY missing. The anon key will NOT work — this needs the secret service role key.');
 if (SERVICE_KEY.startsWith('sb_publishable_')) fail('That is the publishable (public) key. Use the SECRET service role key.');
+if (/\s/.test(SERVICE_KEY)) fail('SUPABASE_SERVICE_ROLE_KEY contains spaces or line breaks. Re-paste it as ONE unbroken line.');
+if (/^https?:\/\//i.test(SERVICE_KEY)) fail('SUPABASE_SERVICE_ROLE_KEY looks like a URL. You swapped the URL and the key.');
 
 // Desired CEOs, from env only.
 // CEO*_EMAIL is OPTIONAL: if omitted, the script resolves the email from the
@@ -59,6 +61,17 @@ for (const n of [1, 2]) {
   });
 }
 if (desired.length === 0) fail('No desired CEOs defined. Set CEO1_USERNAME + CEO1_PASSWORD (and CEO2_*). CEO*_EMAIL is optional.');
+
+// LOCKOUT GUARD: deleting extras while only ONE CEO is declared would delete
+// every other CEO — including the account you are currently using. Refuse.
+if (DELETE_EXTRAS && desired.length < 2 && !process.argv.includes('--allow-single-ceo')) {
+  fail(
+    `Refusing to --delete-extras with only ${desired.length} CEO declared.\n` +
+    `  Every OTHER ceo account would be deleted — including your own login.\n` +
+    `  You almost certainly forgot the CEO2_* lines. Set them, then re-run.\n` +
+    `  (If deleting all but one really is intended: --allow-single-ceo)`
+  );
+}
 
 // ---- Supabase helpers (mirrors server.mjs key handling) ----
 const authHeaders = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
