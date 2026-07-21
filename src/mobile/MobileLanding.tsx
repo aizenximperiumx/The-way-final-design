@@ -54,7 +54,7 @@ const MobileLanding: React.FC = () => {
         {stats.map((s) => (
           <div key={s.l} className="py-4 text-center border-r last:border-r-0" style={{ borderColor: 'rgba(245,168,0,0.10)' }}>
             <div className="v3-serif text-[18px] font-bold" style={{ color: 'var(--v3-yellow)' }}>{s.n}</div>
-            <div className="text-[9px] tracking-wide uppercase mt-0.5" style={{ color: 'rgba(245,240,232,0.45)' }}>{s.l}</div>
+            <div className="text-[9px] tracking-wide uppercase mt-0.5" style={{ color: 'rgba(245,240,232,0.62)' }}>{s.l}</div>
           </div>
         ))}
       </div>
@@ -73,7 +73,7 @@ const MobileLanding: React.FC = () => {
               </div>
               <div>
                 <p className="text-[14px] font-bold" style={{ color: 'var(--v3-white)' }}>{f.t}</p>
-                <p className="text-[12px] leading-relaxed mt-0.5" style={{ color: 'rgba(245,240,232,0.5)' }}>{f.d}</p>
+                <p className="text-[12px] leading-relaxed mt-0.5" style={{ color: 'rgba(245,240,232,0.62)' }}>{f.d}</p>
               </div>
             </div>
           ))}

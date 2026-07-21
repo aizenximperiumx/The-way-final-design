@@ -226,7 +226,7 @@ export default function LandingPageV3Test() {
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="absolute top-6 right-6 p-2"
+                  className="absolute top-6 end-6 p-2"
                   aria-label="Close menu"
                 >
                   <X className="w-7 h-7" style={{ color: 'var(--v3-yellow)' }} />
@@ -537,7 +537,7 @@ export default function LandingPageV3Test() {
                   style={{ background: 'var(--v3-navy-mid)' }}
                 >
                   <div className="relative h-[200px]" style={{ background: 'var(--v3-white)' }}>
-                    <img src={u.img} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={u.img} alt={u.name} className="absolute inset-0 w-full h-full object-cover" />
                     <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.0), rgba(255,255,255,0.0), rgba(10,22,40,0.22))' }} />
                     <div className="absolute top-3 right-3 px-3 py-1 text-[9px] font-bold tracking-[1.5px] uppercase"
                       style={{ background: 'var(--v3-yellow)', color: 'var(--v3-navy)', borderRadius: 2 }}
@@ -548,11 +548,11 @@ export default function LandingPageV3Test() {
                   <div className="p-6">
                     <div className="text-[11px] font-bold tracking-[2px] uppercase" style={{ color: 'var(--v3-yellow)' }}>{u.abbr}</div>
                     <div className="v3-serif mt-2 text-[18px] font-bold" style={{ color: 'var(--v3-white)' }}>{u.name}</div>
-                    <div className="mt-2 text-[12px]" style={{ color: 'rgba(245,240,232,0.45)' }}>{u.location}</div>
+                    <div className="mt-2 text-[12px]" style={{ color: 'rgba(245,240,232,0.60)' }}>{u.location}</div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {u.tags.map((t) => (
                         <span key={t} className="px-2.5 py-1 text-[10px] tracking-[1px] uppercase border"
-                          style={{ color: 'rgba(245,240,232,0.50)', borderColor: 'rgba(245,168,0,0.20)', borderRadius: 2 }}
+                          style={{ color: 'rgba(245,240,232,0.60)', borderColor: 'rgba(245,168,0,0.20)', borderRadius: 2 }}
                         >
                           {t}
                         </span>
@@ -864,7 +864,7 @@ export default function LandingPageV3Test() {
               <div className="flex items-center gap-3">
                 <img src={logoUrl} alt="The Way" className="h-12 w-auto object-contain" />
               </div>
-              <p className="mt-4 text-[13px] leading-[1.82]" style={{ color: 'rgba(245,240,232,0.38)', maxWidth: 320 }}>
+              <p className="mt-4 text-[13px] leading-[1.82]" style={{ color: 'rgba(245,240,232,0.55)', maxWidth: 320 }}>
                 {tr('Helping international students gain admission to Georgia’s top universities with clear steps, fast follow-up, and full guidance.', 'نساعد الطلاب الدوليين على الالتحاق بأفضل جامعات جورجيا بخطوات واضحة ومتابعة سريعة وإرشاد كامل.')}
               </p>
               <div className="mt-6 flex gap-2">

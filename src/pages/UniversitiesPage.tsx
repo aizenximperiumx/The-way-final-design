@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, ChevronLeft, ExternalLink, Globe, GraduationCap, MapPin, Search, X } from 'lucide-react';
-import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
+import logoUrl from '../../thewaynewlogo-removebg-preview.png';
 import ugPhotoUrl from '../../University of Georgia ( UG ).jpg';
 import gauPhotoUrl from '../../Georgian American University (GAU).jpg';
 import tsuPhotoUrl from '../../Ivane Javakhishvili Tbilisi State University (TSU).jpg';
@@ -1298,7 +1298,7 @@ export default function UniversitiesPage() {
                   >
                     {u.imageUrl ? (
                       <div className="relative overflow-hidden h-44">
-                        <img src={u.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                        <img src={u.imageUrl} alt={language === 'ar' ? u.name : (u.nameEn || u.name)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                         {u.city ? (
                           <div className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-1 text-xs font-semibold text-gray-700">
@@ -1353,7 +1353,7 @@ export default function UniversitiesPage() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 {active.imageUrl ? (
                   <div className="relative h-52 sm:h-64">
-                    <img src={active.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    <img src={active.imageUrl} alt={language === 'ar' ? active.name : (active.nameEn || active.name)} className="w-full h-full object-cover" loading="lazy" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
                     <div className="absolute bottom-5 left-6 right-6 flex items-end justify-between gap-4">
                       <div>

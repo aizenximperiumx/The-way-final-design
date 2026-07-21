@@ -143,7 +143,7 @@ const HomeRoute = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
           <img src={logoUrl} alt="The Way" className="mx-auto h-12 w-auto object-contain animate-bounce" />
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500 mx-auto mt-4"></div>
