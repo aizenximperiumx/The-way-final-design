@@ -1,3 +1,4 @@
+import { sendMail, mailerConfigured } from './_mailer.js';
 const clamp = (v, max) => (v.length > max ? v.slice(0, max) : v);
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const getBearer = (req) => {
@@ -118,27 +119,15 @@ export default async function handler(req, res) {
             res.status(400).json({ error: 'Missing fields' });
             return;
         }
-        const apiKey = process.env.RESEND_API_KEY;
-        if (!apiKey) {
+        if (!mailerConfigured()) {
             res.status(500).json({ error: 'Email is not configured' });
             return;
         }
-        const resp = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                from: process.env.EMAIL_FROM || 'The Way <no-reply@info.theway.ge>',
-                to: [to],
-                subject,
-                html: html ?? `<pre>${text}</pre>`,
-                text,
-            }),
-        });
-        if (!resp.ok) {
-            const msg = await resp.text();
+        try {
+            await sendMail(to, subject, html ?? `<pre>${text}</pre>`, text ?? '');
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to send';
             res.status(500).json({ error: 'Failed to send', details: msg });
             return;
         }

@@ -17,7 +17,7 @@ import {
   Calendar,
   ShieldCheck
 } from 'lucide-react';
-import { useAppStore } from '../store/appStore';
+import { useAppStore, sourceChannel } from '../store/appStore';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -61,7 +61,7 @@ const StaffDashboard: FC = () => {
       return base.filter(app => app.assignedStaffId === currentUser.id);
     }
     if (currentUser?.role === 'agency_staff') {
-      return base.filter(app => (app.source ?? 'public') === 'agency' && app.assignedStaffId === currentUser.id);
+      return base.filter(app => sourceChannel(app.source) === 'agency' && app.assignedStaffId === currentUser.id);
     }
     return base;
   }, [applications, currentUser]);
@@ -407,7 +407,7 @@ const StaffDashboard: FC = () => {
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${app.stage === 'enrolled' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                             {app.stage || 'Applied'}
                           </span>
-                          {(app.source ?? 'public') === 'agency' ? (
+                          {sourceChannel(app.source) === 'agency' ? (
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Agency</span>
                           ) : (
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Direct</span>
@@ -478,7 +478,7 @@ const StaffDashboard: FC = () => {
                       <div>
                         <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1">Source</label>
                         <div className="flex items-center gap-2 pt-1">
-                          {(selectedStudent.source ?? 'public') === 'agency' ? (
+                          {sourceChannel(selectedStudent.source) === 'agency' ? (
                             <span className="rounded-full text-xs font-semibold px-2.5 py-0.5 bg-amber-100 text-amber-700">Agency Referral</span>
                           ) : (
                             <span className="rounded-full text-xs font-semibold px-2.5 py-0.5 bg-blue-100 text-blue-700">Direct Application</span>
@@ -1130,7 +1130,7 @@ const StaffDashboard: FC = () => {
                     ? 'The agency (agent) will be notified and can upload the file from their portal.'
                     : 'The student will receive a notification asking them to upload this document.'}
                 </p>
-                {(selectedStudent.source ?? 'public') === 'agency' && selectedStudent.agencyId && (
+                {sourceChannel(selectedStudent.source) === 'agency' && selectedStudent.agencyId && (
                   <div>
                     <label className="text-xs text-gray-500 uppercase tracking-wider font-semibold block mb-1.5">Request from</label>
                     <div className="grid grid-cols-2 gap-2">

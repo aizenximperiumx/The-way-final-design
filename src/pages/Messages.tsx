@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
-import { useAppStore } from '../store/appStore';
+import { useAppStore, sourceChannel } from '../store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
@@ -137,7 +137,7 @@ const Messages: React.FC = () => {
             byKey.set(key, { key, otherUserId: app.studentId, applicationId: app.id, name: `${app.name} • ${stu?.name ?? 'Student'}`, lastMessage: '', time: '', unread: 0 });
           }
         }
-        if ((app.source ?? 'public') === 'agency' && app.agencyId) {
+        if (sourceChannel(app.source) === 'agency' && app.agencyId) {
           const key = `${app.id}|${pairKey(user.id, app.agencyId)}`;
           if (!byKey.has(key)) {
             const ag = users.find(u => u.id === app.agencyId);
@@ -161,7 +161,7 @@ const Messages: React.FC = () => {
     // Pre-populate sales threads: approved public-source applications
     if (user.role === 'sales') {
       applications
-        .filter(a => a.status === 'approved' && (a.source ?? 'public') === 'public' && a.studentId)
+        .filter(a => a.status === 'approved' && sourceChannel(a.source) === 'public' && a.studentId)
         .forEach((app) => {
           const key = `${app.id}|${pairKey(user.id, app.studentId!)}`;
           if (!byKey.has(key)) {
@@ -253,7 +253,7 @@ const Messages: React.FC = () => {
           userId: u.id,
           name: `${u.name} (${u.role})`,
           applicationId: u.role === 'student'
-            ? applications.find(a => a.studentId === u.id && (a.source ?? 'public') === 'public')?.id
+            ? applications.find(a => a.studentId === u.id && sourceChannel(a.source) === 'public')?.id
             : undefined,
         }));
     }
@@ -286,7 +286,7 @@ const Messages: React.FC = () => {
             const stu = users.find(u => u.id === a.studentId);
             if (stu && match(stu.name)) results.push({ userId: stu.id, name: `${a.name} • ${stu.name}`, applicationId: a.id });
           }
-          if ((a.source ?? 'public') === 'agency' && a.agencyId) {
+          if (sourceChannel(a.source) === 'agency' && a.agencyId) {
             const ag = users.find(u => u.id === a.agencyId);
             if (ag && match(ag.name)) results.push({ userId: ag.id, name: `${a.name} • ${ag.name}`, applicationId: a.id });
           }

@@ -118,8 +118,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, unknown>) : {};
     const sourceRaw = asString(body.source).trim() || 'public';
-    const source = (sourceRaw === 'agency' || sourceRaw === 'public') ? sourceRaw : 'public';
-    if (!allow(`apply:${source}:${ip}`, source === 'public' ? 10 : 30, 60_000)) {
+    const source = (sourceRaw === 'agency' || sourceRaw === 'public' || sourceRaw === 'mobile-app') ? sourceRaw : 'public';
+    if (!allow(`apply:${source}:${ip}`, source === 'agency' ? 30 : 10, 60_000)) {
       res.status(429).json({ error: 'Too many requests' });
       return;
     }
@@ -174,7 +174,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       stage: 'applied',
       createdAt: clamp(asString(body.createdAt), 40) || now,
       internalNotes: null,
-      events: [{ id: `${appId}-submitted`, type: 'submitted', byId: agencyId, byName: source === 'agency' ? 'Agency' : 'Website', time: now, details: source === 'agency' ? 'Agency submission' : 'Public submission' }],
+      referralCode: clamp(asString(body.referralCode), 60) || null,
+      events: [{ id: `${appId}-submitted`, type: 'submitted', byId: agencyId, byName: source === 'agency' ? 'Agency' : source === 'mobile-app' ? 'Mobile App' : 'Website', time: now, details: source === 'agency' ? 'Agency submission' : source === 'mobile-app' ? 'Mobile app submission' : 'Public submission' }],
       hold: null,
       approvedBy: null,
       approvedAt: null,

@@ -1,4 +1,5 @@
 import { renderEmail } from './_email-template.js';
+import { sendMail, mailerConfigured } from './_mailer.js';
 const asString = (v) => (typeof v === 'string' ? v : '');
 const getBearer = (req) => {
     const raw = req.headers?.authorization || req.headers?.Authorization;
@@ -18,26 +19,6 @@ const fetchJson = async (url, init) => {
         return null;
     } })() : null;
     return { ok: resp.ok, status: resp.status, text, json };
-};
-const sendResend = async (apiKey, to, subject, html, text) => {
-    const resp = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-            from: process.env.EMAIL_FROM || 'The Way <no-reply@info.theway.ge>',
-            to: [to],
-            subject,
-            html,
-            text,
-        }),
-    });
-    if (!resp.ok) {
-        const details = await resp.text();
-        throw new Error(details || 'Failed to send email');
-    }
 };
 const validateSupabaseEnv = (supabaseUrl, serviceKey) => {
     if (!supabaseUrl || !serviceKey)
@@ -107,7 +88,6 @@ export default async function handler(req, res) {
         }
         const supabaseUrl = process.env.SUPABASE_URL;
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-        const resendKey = process.env.RESEND_API_KEY;
         const envError = validateSupabaseEnv(supabaseUrl, serviceKey);
         if (envError) {
             res.status(500).json({ error: envError });
@@ -217,7 +197,7 @@ export default async function handler(req, res) {
         const role = row && typeof row.role === 'string' ? row.role : '';
         let emailSent = false;
         let emailWarning = '';
-        if (email && resendKey) {
+        if (email && mailerConfigured()) {
             const subject = role === 'student' ? 'Your student account credentials updated' : 'Your account credentials updated';
             const { html, text } = renderEmail({
                 title: 'Your credentials were updated',
@@ -230,7 +210,7 @@ export default async function handler(req, res) {
                 note: 'If you did not request this change, please contact us immediately.',
             });
             try {
-                await sendResend(resendKey, email, subject, html, text);
+                await sendMail(email, subject, html, text);
                 emailSent = true;
             }
             catch (e) {

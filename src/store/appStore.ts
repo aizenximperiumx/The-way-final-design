@@ -23,6 +23,7 @@ import { getSupabase, tryGetSupabase } from '../lib/supabase';
 
 export type { ApplicationPipeline, PipelineStageId, PointsEntry, UniversityConfig } from '../lib/pipeline';
 
+export const sourceChannel = (raw?: string): 'public' | 'agency' => raw === 'agency' ? 'agency' : 'public';
 
 export type UserRole = 'ceo' | 'sales' | 'ops' | 'staff' | 'agency_staff' | 'student' | 'agency' | 'customer_support';
 
@@ -137,7 +138,7 @@ export interface Application {
   ownerId?: string;
   salesOwnerId?: string;
   assignedStaffId?: string;
-  source?: 'public' | 'agency';
+  source?: 'public' | 'agency' | 'mobile-app';
   agencyId?: string;
   contactEmail?: string;
   studentEmail?: string;
@@ -592,8 +593,8 @@ const emailNotifyUser = (
 
     if (recipient.role === 'student') {
       const studentApp = state.applications.find(a => a.studentId === recipientUserId)
-        ?? state.applications.find(a => a.studentId === recipientUserId && (a.source ?? 'public') === 'agency');
-      const isAgencySourced = studentApp && (studentApp.source ?? 'public') === 'agency' && studentApp.agencyId;
+        ?? state.applications.find(a => a.studentId === recipientUserId && sourceChannel(a.source) === 'agency');
+      const isAgencySourced = studentApp && sourceChannel(studentApp.source) === 'agency' && studentApp.agencyId;
       if (isAgencySourced) {
         const agency = state.users.find(u => u.id === studentApp!.agencyId);
         if (agency?.email) {
@@ -1190,7 +1191,7 @@ const useAppStore = create<AppStoreState>()(
       },
 
       addApplication: async (application: Omit<Application, 'id'>) => {
-        const source = application.source ?? 'public';
+        const source = sourceChannel(application.source);
         if (source === 'agency') {
           const actor = ensureSignedIn(get().currentUser, get().authStatus);
           requireRole(actor, ['agency', 'ceo']);
@@ -1226,7 +1227,7 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['sales', 'ops', 'ceo']);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (actor.role === 'sales' && source === 'agency') throw new Error('Forbidden');
         if (actor.role === 'ops' && source !== 'agency') throw new Error('Forbidden');
         set((state) => ({
@@ -1247,7 +1248,7 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['sales', 'ops', 'ceo']);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (actor.role === 'sales' && source === 'agency') throw new Error('Forbidden');
         if (actor.role === 'ops' && source !== 'agency') throw new Error('Forbidden');
         set((state) => ({
@@ -1269,7 +1270,7 @@ const useAppStore = create<AppStoreState>()(
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
         if (app.status !== 'submitted') throw new Error('Application already processed');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (source === 'agency') requireRole(actor, ['ops', 'ceo']);
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
         if (source === 'public' && !app.intakeDetails) throw new Error('Fill intake before approval');
@@ -1538,7 +1539,7 @@ const useAppStore = create<AppStoreState>()(
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
         if (app.status !== 'submitted') throw new Error('Application already processed');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (source === 'agency') requireRole(actor, ['ops', 'ceo']);
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
 
@@ -1594,7 +1595,7 @@ const useAppStore = create<AppStoreState>()(
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (source === 'agency') requireRole(actor, ['ops', 'ceo']);
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
         const firstTime = !app?.intakeDetails;
@@ -1647,7 +1648,7 @@ const useAppStore = create<AppStoreState>()(
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (source === 'agency') requireRole(actor, ['ops', 'ceo']);
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
         set((state) => ({
@@ -1670,7 +1671,7 @@ const useAppStore = create<AppStoreState>()(
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (source === 'agency') requireRole(actor, ['ops', 'ceo']);
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
         set((state) => {
@@ -1704,7 +1705,7 @@ const useAppStore = create<AppStoreState>()(
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (source === 'agency') requireRole(actor, ['ops', 'ceo']);
         if (source === 'public') requireRole(actor, ['sales', 'ceo']);
         set((state) => ({
@@ -1866,7 +1867,7 @@ const useAppStore = create<AppStoreState>()(
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
         requireRole(actor, ['sales', 'ops', 'staff', 'agency_staff', 'ceo']);
         const app = get().applications.find(a => a.studentId === studentUserId);
-        const source = app?.source ?? 'public';
+        const source = sourceChannel(app?.source);
         if (actor.role === 'sales' && source === 'agency') throw new Error('Forbidden');
         if (actor.role === 'ops' && source !== 'agency') throw new Error('Forbidden');
         const firstAssign = !app?.university;
@@ -1960,7 +1961,7 @@ const useAppStore = create<AppStoreState>()(
         emailNotifyUser(get, staffUserId, {
           subject: 'New student assigned — The Way',
           title: 'A new student was assigned to you',
-          intro: `You have been assigned a new student: ${a?.name ?? 'New student'}.`,
+          intro: `You have been assigned a new student: ${a?.name ?? 'New student'}${a?.university ? ` — ${getUniversityName(a.university)}` : ''}.`,
           ctaLabel: 'Open your dashboard',
           ctaPath: '/staff',
           outro: 'Log in to review their application and documents.',
@@ -1973,7 +1974,7 @@ const useAppStore = create<AppStoreState>()(
         if (!get().users.some(u => u.id === staffUserId && u.role === 'staff')) throw new Error('Staff not found');
         const app = get().applications.find(a => a.studentId === studentUserId);
         if (!app || app.status !== 'approved') throw new Error('Student not found or not approved');
-        const source = app.source ?? 'public';
+        const source = sourceChannel(app.source);
         if (actor.role === 'sales' && source === 'agency') throw new Error('Forbidden');
         if (actor.role === 'ops' && source !== 'agency') throw new Error('Forbidden');
         set((state) => ({
@@ -1985,7 +1986,19 @@ const useAppStore = create<AppStoreState>()(
               { id: `${a.id}-assigned-${staffUserId}-${Date.now()}`, type: 'assigned_staff' as const, byId: actor.id, byName: actor.name, time: new Date().toISOString(), details: staffUserId },
             ],
           } : a),
+          notifications: [
+            ...state.notifications,
+            { id: `${studentUserId}-assign`, userId: staffUserId, title: 'New Student Assigned', message: app.name ?? 'New student', type: 'info', time: new Date().toISOString(), read: false, link: `/staff?student=${app.id}` }
+          ],
         }));
+        emailNotifyUser(get, staffUserId, {
+          subject: 'New student assigned — The Way',
+          title: 'A new student was assigned to you',
+          intro: `You have been assigned a new student: ${app.name ?? 'New student'}${app.university ? ` — ${getUniversityName(app.university)}` : ''}.`,
+          ctaLabel: 'Open your dashboard',
+          ctaPath: '/staff',
+          outro: 'Log in to review their application and documents.',
+        }, { dedupeKey: `${studentUserId}-assign-${staffUserId}` });
       },
 
       setArrivalStatus: (applicationId: string, arrived: boolean) => {
@@ -2281,7 +2294,7 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['agency']);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        if ((app.source ?? 'public') !== 'agency' || app.agencyId !== actor.id) throw new Error('Forbidden');
+        if (sourceChannel(app.source) !== 'agency' || app.agencyId !== actor.id) throw new Error('Forbidden');
         if (!app.studentId) throw new Error('Student account not created yet');
         const trimmed = reason.trim();
         if (!trimmed) throw new Error('Please add a reason for the change');
@@ -2486,7 +2499,7 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['ops', 'ceo']);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        if ((app.source ?? 'public') !== 'agency') throw new Error('Only agency applications support requests');
+        if (sourceChannel(app.source) !== 'agency') throw new Error('Only agency applications support requests');
         if (app.status !== 'submitted') throw new Error('Only submitted applications can be requested');
         if (!app.agencyId) throw new Error('Agency not found');
 
@@ -2524,7 +2537,7 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['agency']);
         const app = get().applications.find(a => a.id === applicationId);
         if (!app) throw new Error('Application not found');
-        if ((app.source ?? 'public') !== 'agency') throw new Error('Only agency applications support this');
+        if (sourceChannel(app.source) !== 'agency') throw new Error('Only agency applications support this');
         if (app.agencyId !== actor.id) throw new Error('Forbidden');
         if (app.status !== 'submitted') throw new Error('Only submitted applications can be updated');
         if (!files.length) return;
@@ -2573,7 +2586,7 @@ const useAppStore = create<AppStoreState>()(
           if (toUser.role === 'agency') {
             if (!applicationId) throw new Error('Thread required');
             const app = get().applications.find(a => a.id === applicationId);
-            if (!app || (app.source ?? 'public') !== 'agency') throw new Error('Application not found');
+            if (!app || sourceChannel(app.source) !== 'agency') throw new Error('Application not found');
             if (!app.assignedStaffId || app.assignedStaffId !== actor.id) throw new Error('Forbidden');
             if (!app.agencyId || app.agencyId !== toUserId) throw new Error('Forbidden');
           } else {
@@ -2585,12 +2598,12 @@ const useAppStore = create<AppStoreState>()(
         } else if (actor.role === 'sales') {
           // Sales can message students (their approved apps), staff, ops, and CEO
           if (toUser.role === 'student') {
-            applicationId = applicationId ?? get().applications.find(a => a.studentId === toUserId && (a.source ?? 'public') === 'public')?.id;
+            applicationId = applicationId ?? get().applications.find(a => a.studentId === toUserId && sourceChannel(a.source) === 'public')?.id;
           }
         } else if (actor.role === 'agency') {
           if (!applicationId) throw new Error('Thread required');
           const app = get().applications.find(a => a.id === applicationId);
-          if (!app || (app.source ?? 'public') !== 'agency') throw new Error('Application not found');
+          if (!app || sourceChannel(app.source) !== 'agency') throw new Error('Application not found');
           if (app.agencyId !== actor.id) throw new Error('Forbidden');
           if (!app.assignedStaffId || app.assignedStaffId !== toUserId) throw new Error('You can only message the assigned admin');
           if (toUser.role !== 'staff' && toUser.role !== 'agency_staff') throw new Error('Recipient must be an admin');
@@ -2701,7 +2714,7 @@ const useAppStore = create<AppStoreState>()(
           ? get().applications.find(a => a.id === applicationId)
           : get().applications.find(a => a.studentId === studentId);
         const effectiveTarget: 'student' | 'agency' = target
-          ?? (((app?.source ?? 'public') === 'agency' && app?.agencyId) ? 'agency' : 'student');
+          ?? ((sourceChannel(app?.source) === 'agency' && app?.agencyId) ? 'agency' : 'student');
         const agencyId = effectiveTarget === 'agency' ? app?.agencyId : undefined;
         if (effectiveTarget === 'agency' && !agencyId) throw new Error('This application has no agency to request from');
         const req: DocumentRequest = {

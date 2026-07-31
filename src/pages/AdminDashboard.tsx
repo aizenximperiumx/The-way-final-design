@@ -24,7 +24,7 @@ import {
   KeyRound,
   Clock
 } from 'lucide-react';
-import { useAppStore } from '../store/appStore';
+import { useAppStore, sourceChannel } from '../store/appStore';
 import { PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { motion } from 'framer-motion';
 import { UNIVERSITY_OPTIONS, getUniversityName } from '../lib/universities';
@@ -180,7 +180,7 @@ const AdminDashboard: React.FC = () => {
     { label: 'Closed Cases', value: closedCount, trend: '', icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
     { label: 'Total Applications', value: applications.length, trend: '', icon: FileText, color: 'text-amber-600', bg: 'bg-amber-100' },
   ];
-  const agencyApps = applications.filter(a => (a.source ?? 'public') === 'agency');
+  const agencyApps = applications.filter(a => sourceChannel(a.source) === 'agency');
   const agencyEnrolled = agencyApps.filter(a => isComplete(a.studentId)).length;
   const agencyProcessing = agencyApps.filter(a => !isComplete(a.studentId) && a.status === 'approved').length;
   const agencyClosed = agencyApps.filter(a => a.stage === 'enrolled' && a.arrived).length;
@@ -608,13 +608,13 @@ const AdminDashboard: React.FC = () => {
                     <div key={source}>
                       <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">{label}</p>
                       <div className="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar">
-                        {applications.filter(a => (a.source ?? 'public') === source && a.status === 'approved').map((a) => (
+                        {applications.filter(a => sourceChannel(a.source) === source && a.status === 'approved').map((a) => (
                           <div key={a.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50">
                             <p className="font-semibold text-sm text-gray-900">{a.name}</p>
                             <p className="text-xs text-gray-500 mt-0.5">{a.university || 'No university set'}</p>
                           </div>
                         ))}
-                        {applications.filter(a => (a.source ?? 'public') === source && a.status === 'approved').length === 0 && (
+                        {applications.filter(a => sourceChannel(a.source) === source && a.status === 'approved').length === 0 && (
                           <p className="text-xs text-gray-400">No {source} students</p>
                         )}
                       </div>

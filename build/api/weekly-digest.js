@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { DEFAULT_SLA_GROUPS, STAGE_LABELS, getSlaWindow } from './sla-evaluate.js';
 import { renderEmail } from './_email-template.js';
+import { sendMail, mailerConfigured } from './_mailer.js';
 const getBearer = (req) => {
     const raw = req.headers?.authorization || req.headers?.Authorization;
     const value = Array.isArray(raw) ? raw[0] : raw;
@@ -57,11 +58,10 @@ const getString = (r, key) => (r && typeof r[key] === 'string' ? r[key] : '');
 export async function runWeeklyDigest(force = false) {
     const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
     const serviceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '').trim();
-    const resendKey = String(process.env.RESEND_API_KEY || '').trim();
     if (!supabaseUrl || !serviceKey)
         return { ok: false, sent: 0, error: 'Supabase is not configured' };
-    if (!resendKey)
-        return { ok: false, sent: 0, error: 'RESEND_API_KEY is not configured' };
+    if (!mailerConfigured())
+        return { ok: false, sent: 0, error: 'SMTP is not configured' };
     const base = supabaseUrl.replace(/\/$/, '');
     const stateResp = await fetchJsonWithAdminHeaders(`${base}/rest/v1/app_state?org_id=eq.default&select=state&limit=1`, { method: 'GET' }, serviceKey);
     const rawState = Array.isArray(stateResp.json) && stateResp.json[0] ? stateResp.json[0].state : null;
@@ -171,19 +171,13 @@ export async function runWeeklyDigest(force = false) {
         const email = (u.ok && u.json && typeof u.json === 'object') ? getString(u.json, 'email') : '';
         if (!email)
             continue;
-        const resp = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
-            body: JSON.stringify({
-                from: process.env.EMAIL_FROM || 'The Way <no-reply@info.theway.ge>',
-                to: [email],
-                subject: `Weekly digest — ${newApps} new, ${closed} closed, ${overdue.length} overdue`,
-                html,
-                text,
-            }),
-        });
-        if (resp.ok)
+        try {
+            await sendMail(email, `Weekly digest — ${newApps} new, ${closed} closed, ${overdue.length} overdue`, html, text);
             sent += 1;
+        }
+        catch {
+            // non-fatal: skip this recipient, continue the digest
+        }
     }
     // Persist the last-sent marker (merged into state, other keys untouched).
     if (sent > 0 || !force) {

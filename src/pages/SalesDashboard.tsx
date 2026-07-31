@@ -18,7 +18,7 @@ import {
   Pencil,
   MessageSquareWarning
 } from 'lucide-react';
-import { useAppStore, type Application } from '../store/appStore';
+import { useAppStore, sourceChannel, type Application } from '../store/appStore';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -160,7 +160,7 @@ const SalesDashboard: React.FC = () => {
       );
     };
     return applications
-      .filter(app => app.status === 'submitted' && (app.source ?? 'public') === allowedSource)
+      .filter(app => app.status === 'submitted' && sourceChannel(app.source) === allowedSource)
       .filter(app => {
         if (quickFilter === 'all') return true;
         if (quickFilter === 'today') return new Date(app.createdAt).getTime() >= startOfToday;
@@ -204,7 +204,7 @@ const SalesDashboard: React.FC = () => {
       );
     };
     applications
-      .filter(app => app.status === 'submitted' && (app.source ?? 'public') === allowedSource)
+      .filter(app => app.status === 'submitted' && sourceChannel(app.source) === allowedSource)
       .forEach(app => {
         counts.all += 1;
         const createdAt = new Date(app.createdAt).getTime();
@@ -452,7 +452,7 @@ Video: ${intake.videoUrl}`;
   const stats = [
     {
       label: 'New This Week',
-      value: applications.filter(a => (a.source ?? 'public') === allowedSource && new Date(a.createdAt) >= thisWeekStart).length,
+      value: applications.filter(a => sourceChannel(a.source) === allowedSource && new Date(a.createdAt) >= thisWeekStart).length,
       icon: Clock,
       color: 'text-amber-600',
       bg: 'bg-amber-50',
@@ -460,7 +460,7 @@ Video: ${intake.videoUrl}`;
     },
     {
       label: 'Total Pipeline',
-      value: applications.filter(a => (a.source ?? 'public') === allowedSource).length,
+      value: applications.filter(a => sourceChannel(a.source) === allowedSource).length,
       icon: FileText,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
@@ -476,7 +476,7 @@ Video: ${intake.videoUrl}`;
     },
     {
       label: 'Approved',
-      value: applications.filter(a => a.status === 'approved' && (a.source ?? 'public') === allowedSource).length,
+      value: applications.filter(a => a.status === 'approved' && sourceChannel(a.source) === allowedSource).length,
       icon: UserPlus,
       color: 'text-green-600',
       bg: 'bg-green-50',
@@ -571,12 +571,12 @@ Video: ${intake.videoUrl}`;
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">My Accepted Students</h2>
           <span className="rounded-full bg-green-50 text-green-700 text-xs font-semibold px-2.5 py-0.5 border border-green-100">
-            {applications.filter(a => a.status === 'approved' && (a.source ?? 'public') === allowedSource && (a.ownerId ?? a.salesOwnerId) === user?.id).length} students
+            {applications.filter(a => a.status === 'approved' && sourceChannel(a.source) === allowedSource && (a.ownerId ?? a.salesOwnerId) === user?.id).length} students
           </span>
         </div>
         <div className="divide-y divide-gray-50">
           {applications
-            .filter(a => a.status === 'approved' && (a.source ?? 'public') === allowedSource && (a.ownerId ?? a.salesOwnerId) === user?.id)
+            .filter(a => a.status === 'approved' && sourceChannel(a.source) === allowedSource && (a.ownerId ?? a.salesOwnerId) === user?.id)
             .map((a) => {
               const staff = users.find(u => u.id === a.assignedStaffId);
               const initial = staff?.name?.charAt(0)?.toUpperCase() ?? 'A';
@@ -714,7 +714,7 @@ Video: ${intake.videoUrl}`;
                 </div>
               );
             })}
-          {applications.filter(a => a.status === 'approved' && (a.source ?? 'public') === allowedSource && (a.ownerId ?? a.salesOwnerId) === user?.id).length === 0 && (
+          {applications.filter(a => a.status === 'approved' && sourceChannel(a.source) === allowedSource && (a.ownerId ?? a.salesOwnerId) === user?.id).length === 0 && (
             <div className="py-12 flex flex-col items-center gap-3 text-center">
               <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-300">
                 <UserPlus className="w-5 h-5" />

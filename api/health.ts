@@ -56,7 +56,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const supabaseUrl = process.env.SUPABASE_URL || '';
     const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY ?? '').trim();
     const bucket = process.env.SUPABASE_STORAGE_BUCKET || '';
-    const resend = process.env.RESEND_API_KEY || '';
+    const smtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 
     const token = getBearer(req);
     if (!token) {
@@ -69,7 +69,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       checks.push({ name: 'SUPABASE_URL', ok: /^https?:\/\//i.test(supabaseUrl) });
       checks.push({ name: 'SUPABASE_SERVICE_ROLE_KEY', ok: Boolean(serviceKey) && !/^https?:\/\//i.test(serviceKey) });
       checks.push({ name: 'SUPABASE_STORAGE_BUCKET', ok: Boolean(bucket) });
-      checks.push({ name: 'RESEND_API_KEY', ok: Boolean(resend) });
+      checks.push({ name: 'SMTP', ok: smtp });
       res.status(500).json({ ok: false, error: envError, checks });
       return;
     }
@@ -106,7 +106,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     checks.push({ name: 'SUPABASE_URL', ok: Boolean(supabaseUrl) });
     checks.push({ name: 'SUPABASE_SERVICE_ROLE_KEY', ok: Boolean(serviceKey) });
     checks.push({ name: 'SUPABASE_STORAGE_BUCKET', ok: Boolean(bucket) });
-    checks.push({ name: 'RESEND_API_KEY', ok: Boolean(resend) });
+    checks.push({ name: 'SMTP', ok: smtp });
 
     if (supabaseUrl && serviceKey) {
       const pingProfiles = await fetchText(`${base}/rest/v1/profiles?select=id&limit=1`, {
