@@ -32,8 +32,14 @@ const MobileMessages = React.lazy(() => import('./mobile/MobileMessages'));
 const MobileProfile = React.lazy(() => import('./mobile/MobileProfile'));
 const MobileGeorgia = React.lazy(() => import('./mobile/MobileGeorgia'));
 
+// Mobile team app (/app/desk, /app/queue, /app/alerts) — same shell, role-aware desks.
+const TeamDesk = React.lazy(() => import('./mobile/team/TeamDesk'));
+const TeamQueue = React.lazy(() => import('./mobile/team/TeamQueue'));
+const TeamAlerts = React.lazy(() => import('./mobile/team/TeamAlerts'));
+
 // Context
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { isTeamRole } from './mobile/team/roles';
 import { AppProvider } from './context/AppContext';
 import type { UserRole } from './store/appStore';
 
@@ -169,13 +175,31 @@ const AppPublic = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   if (loading) return appLoader;
   if (user?.role === 'student') return <Navigate to="/app/home" replace />;
+  if (isTeamRole(user?.role)) return <Navigate to="/app/desk" replace />;
   return <>{children}</>;
 };
+/** Student-only screens (/app/home, /app/journey, …). */
 const AppProtected = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   if (loading) return appLoader;
   if (!user) return <Navigate to="/app/login" replace />;
-  return <>{children}</>; // MobileLayout handles the non-student case
+  if (isTeamRole(user.role)) return <Navigate to="/app/desk" replace />;
+  return <>{children}</>;
+};
+/** Screens both apps share (/app/messages, /app/profile). */
+const AppSignedIn = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  if (loading) return appLoader;
+  if (!user) return <Navigate to="/app/login" replace />;
+  return <>{children}</>;
+};
+/** Team-only screens (/app/desk, /app/queue, /app/alerts). */
+const TeamProtected = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  if (loading) return appLoader;
+  if (!user) return <Navigate to="/app/login" replace />;
+  if (!isTeamRole(user.role)) return <Navigate to="/app/home" replace />;
+  return <>{children}</>;
 };
 const appSuspense = (node: React.ReactNode) => <React.Suspense fallback={appLoader}>{node}</React.Suspense>;
 
@@ -208,8 +232,14 @@ function AppRoutes() {
       <Route path="/app/documents" element={<AppProtected>{appSuspense(<MobileJourney />)}</AppProtected>} />
       <Route path="/app/card" element={<AppProtected>{appSuspense(<MobileCard />)}</AppProtected>} />
       <Route path="/app/georgia" element={<AppProtected>{appSuspense(<MobileGeorgia />)}</AppProtected>} />
-      <Route path="/app/messages" element={<AppProtected>{appSuspense(<MobileMessages />)}</AppProtected>} />
-      <Route path="/app/profile" element={<AppProtected>{appSuspense(<MobileProfile />)}</AppProtected>} />
+      {/* Shared by both apps — MobileLayout swaps in the team tab bar by role */}
+      <Route path="/app/messages" element={<AppSignedIn>{appSuspense(<MobileMessages />)}</AppSignedIn>} />
+      <Route path="/app/profile" element={<AppSignedIn>{appSuspense(<MobileProfile />)}</AppSignedIn>} />
+
+      {/* ── Mobile team app ── */}
+      <Route path="/app/desk" element={<TeamProtected>{appSuspense(<TeamDesk />)}</TeamProtected>} />
+      <Route path="/app/queue" element={<TeamProtected>{appSuspense(<TeamQueue />)}</TeamProtected>} />
+      <Route path="/app/alerts" element={<TeamProtected>{appSuspense(<TeamAlerts />)}</TeamProtected>} />
       <Route path="/universities" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />
       <Route path="/universities/:id" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />
       <Route

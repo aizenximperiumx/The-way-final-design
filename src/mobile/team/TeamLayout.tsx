@@ -1,21 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, Route, MessageSquare, CircleUser, QrCode, WifiOff, Loader2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useAppStore } from '../store/appStore';
-import { useI18n } from '../lib/i18n';
-import { tap } from '../lib/native';
-import { AppLockGate, isAppLockEnabled, isUnlockedThisSession } from './AppLock';
-import { GOLD, NAVY, dim, goldA } from './ui';
-import TeamLayout from './team/TeamLayout';
-import { isTeamRole } from './team/roles';
+import {
+  Home, Users, MessageSquare, CircleUser, Bell, WifiOff, Loader2,
+  ClipboardList, ChartColumn, Inbox,
+} from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { useAppStore } from '../../store/appStore';
+import { tap } from '../../lib/native';
+import { AppLockGate, isAppLockEnabled, isUnlockedThisSession } from '../AppLock';
+import { GOLD, NAVY, dim, goldA } from '../ui';
+import { deskOf } from './roles';
 
 /**
- * The Way Student — companion-app shell (/app/*).
- * Dark navy, gold accents, 5-tab bar with the Member Card (QR) elevated in
- * the center. Native feel: page transitions, pull-to-refresh, offline banner,
- * haptic taps and an optional PIN App Lock.
+ * The Way Team — companion-app shell (/app/desk, /app/queue, /app/alerts).
+ * Same navy-and-gold identity as the student app; the tab bar changes with the
+ * signed-in role and the elevated centre button is Alerts, since notifications
+ * are what pull a team member into the app.
  */
 
 const TabLink: React.FC<{ to: string; label: string; icon: typeof Home; active: boolean }> = ({ to, label, icon: Icon, active }) => (
@@ -30,19 +31,22 @@ const TabLink: React.FC<{ to: string; label: string; icon: typeof Home; active: 
   </Link>
 );
 
-const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({ children, title }) => {
+const LIST_ICON = { cases: ClipboardList, queue: ClipboardList, analytics: ChartColumn, leads: Inbox } as const;
+
+const TeamLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { user } = useAuth();
-  const { t } = useI18n();
   const loadBackendState = useAppStore(s => s.loadBackendState);
+  const notifications = useAppStore(s => s.notifications);
 
-  // ── App Lock ──
+  const desk = deskOf(user?.role);
+  const unread = notifications.filter(n => n.userId === user?.id && !n.read).length;
+
   const [locked, setLocked] = useState(() => Boolean(user && isAppLockEnabled(user.id) && !isUnlockedThisSession(user.id)));
   useEffect(() => {
     setLocked(Boolean(user && isAppLockEnabled(user.id) && !isUnlockedThisSession(user.id)));
   }, [user]);
 
-  // ── Offline awareness (works on web + native) ──
   const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine);
   useEffect(() => {
     const on = () => setOffline(false);
@@ -52,7 +56,7 @@ const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 
-  // ── Pull-to-refresh ──
+  // Pull-to-refresh — same gesture as the student shell.
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const touchStartY = useRef<number | null>(null);
@@ -71,35 +75,19 @@ const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({
     if (pull > 60 && !refreshing) {
       setRefreshing(true);
       tap();
-      void loadBackendState()
-        .catch(() => {})
-        .finally(() => { setRefreshing(false); setPull(0); });
+      void loadBackendState().catch(() => {}).finally(() => { setRefreshing(false); setPull(0); });
     } else {
       setPull(0);
     }
     touchStartY.current = null;
   };
 
-  const leftTabs = [
-    { to: '/app/home', label: t('Home', 'الرئيسية'), icon: Home },
-    { to: '/app/journey', label: t('Journey', 'رحلتي'), icon: Route },
-  ];
-  const rightTabs = [
-    { to: '/app/messages', label: t('Advisor', 'مستشاري'), icon: MessageSquare },
-    { to: '/app/profile', label: t('Profile', 'حسابي'), icon: CircleUser },
-  ];
-
-  // Team accounts share Messages and Account with the student app but need
-  // their own tab bar, so hand the shell over to TeamLayout.
-  if (isTeamRole(user?.role)) {
-    return <TeamLayout>{children}</TeamLayout>;
-  }
-
   if (locked && user) {
     return <AppLockGate userId={user.id} userName={user.name} onUnlock={() => setLocked(false)} />;
   }
 
-  const cardActive = location.pathname.startsWith('/app/card');
+  const alertsActive = location.pathname.startsWith('/app/alerts');
+  const ListIcon = LIST_ICON[desk.listKind];
 
   return (
     <div
@@ -109,20 +97,16 @@ const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Offline banner */}
       {offline && (
         <div
           className="sticky top-0 z-50 flex items-center justify-center gap-2 px-4 py-2"
           style={{ background: 'rgba(255,99,99,0.16)', borderBottom: '1px solid rgba(255,99,99,0.3)', paddingTop: 'calc(env(safe-area-inset-top) + 8px)' }}
         >
           <WifiOff className="w-3.5 h-3.5" style={{ color: '#FF9B9B' }} />
-          <span className="text-[11px] font-bold" style={{ color: '#FF9B9B' }}>
-            {t('Offline — showing your saved data', 'غير متصل — تُعرض بياناتك المحفوظة')}
-          </span>
+          <span className="text-[11px] font-bold" style={{ color: '#FF9B9B' }}>Offline — showing your saved data</span>
         </div>
       )}
 
-      {/* Pull-to-refresh indicator */}
       {(pull > 0 || refreshing) && (
         <div className="flex items-center justify-center" style={{ height: refreshing ? 44 : pull, transition: refreshing ? 'height .2s' : undefined }}>
           <Loader2
@@ -137,22 +121,6 @@ const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({
         </div>
       )}
 
-      {title && (
-        <header
-          className="sticky top-0 z-30 px-5 flex items-center"
-          style={{
-            paddingTop: 'calc(env(safe-area-inset-top) + 14px)',
-            paddingBottom: 14,
-            background: 'rgba(10,22,40,0.85)',
-            backdropFilter: 'blur(14px)',
-            borderBottom: `1px solid ${goldA(0.10)}`,
-          }}
-        >
-          <h1 className="v3-serif text-xl font-bold" style={{ color: '#fff' }}>{title}</h1>
-        </header>
-      )}
-
-      {/* Content — enter-only transition per route (no exit = never blocks) */}
       <motion.main
         key={location.pathname}
         initial={{ opacity: 0, y: 10 }}
@@ -164,7 +132,7 @@ const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({
         {children}
       </motion.main>
 
-      {/* Bottom tab bar — Member Card elevated in the center */}
+      {/* Bottom tab bar — Alerts elevated in the centre */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-40 flex items-stretch"
         style={{
@@ -174,40 +142,46 @@ const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({
           borderTop: `1px solid ${goldA(0.12)}`,
         }}
       >
-        {leftTabs.map(tb => (
-          <TabLink key={tb.to} {...tb} active={location.pathname.startsWith(tb.to)} />
-        ))}
+        <TabLink to="/app/desk" label={desk.homeLabel} icon={Home} active={location.pathname.startsWith('/app/desk')} />
+        <TabLink to="/app/queue" label={desk.listLabel} icon={ListIcon} active={location.pathname.startsWith('/app/queue')} />
 
-        {/* Center: Member Card (QR) */}
         <div className="flex-1 relative flex flex-col items-center">
           <Link
-            to="/app/card"
+            to="/app/alerts"
             onClick={() => tap()}
-            aria-label="Member card"
+            aria-label="Alerts"
             className="absolute -top-6 flex items-center justify-center rounded-full transition-transform active:scale-95"
             style={{
               width: 58,
               height: 58,
-              background: cardActive
+              background: alertsActive
                 ? `linear-gradient(135deg, #FFD34D, ${GOLD})`
                 : `linear-gradient(135deg, ${GOLD}, #D89400)`,
               boxShadow: `0 6px 22px ${goldA(0.45)}`,
-              border: '3px solid #0A1628',
+              border: `3px solid ${NAVY}`,
             }}
           >
-            <QrCode className="w-6 h-6" style={{ color: NAVY }} />
+            <Bell className="w-6 h-6" style={{ color: NAVY }} />
+            {unread > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center text-[10px] font-black"
+                style={{ background: '#FF6B6B', color: '#fff', border: `2px solid ${NAVY}` }}
+              >
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
           </Link>
-          <span className="mt-[38px] pb-3 text-[9px] font-bold tracking-wide uppercase" style={{ color: cardActive ? GOLD : dim(0.5) }}>
-            {t('My Card', 'بطاقتي')}
+          <span className="mt-[38px] pb-3 text-[9px] font-bold tracking-wide uppercase" style={{ color: alertsActive ? GOLD : dim(0.5) }}>
+            Alerts
           </span>
         </div>
 
-        {rightTabs.map(tb => (
-          <TabLink key={tb.to} {...tb} active={location.pathname.startsWith(tb.to)} />
-        ))}
+        <TabLink to="/app/messages" label="Messages" icon={MessageSquare} active={location.pathname.startsWith('/app/messages')} />
+        <TabLink to="/app/profile" label="Account" icon={CircleUser} active={location.pathname.startsWith('/app/profile')} />
       </nav>
     </div>
   );
 };
 
-export default MobileLayout;
+export default TeamLayout;
+export { TabLink, Users };
