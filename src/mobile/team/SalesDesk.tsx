@@ -151,10 +151,10 @@ const SalesDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
               <Actions items={unclaimed
                 ? [
                     { label: <><Hand className="w-3.5 h-3.5" /> Claim</>, onClick: () => claim(a) },
-                    { label: 'View', ghost: true, onClick: () => navigate('/app/queue') },
+                    { label: 'View', ghost: true, onClick: () => navigate(`/app/case/${a.id}`) },
                   ]
                 : [
-                    { label: <><FileText className="w-3.5 h-3.5" /> Open</>, onClick: () => navigate('/app/queue') },
+                    { label: <><FileText className="w-3.5 h-3.5" /> Open</>, onClick: () => navigate(`/app/case/${a.id}`) },
                   ]}
               />
             </Row>

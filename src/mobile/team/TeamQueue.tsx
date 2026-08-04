@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Users as UsersIcon, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
@@ -17,6 +18,9 @@ import { useCases, fmtLeft, TOTAL_STAGES } from './useCases';
 
 const TeamQueue: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const onlyOverdue = params.get('filter') === 'overdue';
   const desk = deskOf(user?.role);
   const applications = useAppStore(s => s.applications);
   const leads = useAppStore(s => s.leads);
@@ -39,14 +43,15 @@ const TeamQueue: React.FC = () => {
   const rows = useCases(scoped);
 
   const caseList = useMemo(() => {
-    const list = desk.kind === 'sales' ? scoped : rows.map(r => r.app);
+    const source = onlyOverdue ? rows.filter(r => r.kind === 'overdue').map(r => r.app) : null;
+    const list = source ?? (desk.kind === 'sales' ? scoped : rows.map(r => r.app));
     if (!term) return list.slice(0, 60);
     return list.filter(a =>
       (a.name ?? '').toLowerCase().includes(term) ||
       getUniversityName(a.university).toLowerCase().includes(term) ||
       (a.studentEmail ?? '').toLowerCase().includes(term)
     ).slice(0, 60);
-  }, [desk.kind, scoped, rows, term]);
+  }, [desk.kind, scoped, rows, term, onlyOverdue]);
 
   const leadList = useMemo(() => {
     const list = [...leads].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -109,14 +114,14 @@ const TeamQueue: React.FC = () => {
       ) : (
         <>
           <SectionLabel right={`${caseList.length}`}>
-            {desk.kind === 'sales' ? 'Applications' : 'Cases'}
+            {onlyOverdue ? 'Past deadline' : desk.kind === 'sales' ? 'Applications' : 'Cases'}
           </SectionLabel>
           {caseList.length === 0 ? (
             <Empty icon={UsersIcon} title="Nothing here" sub="Nothing matches that search." />
           ) : caseList.map(a => {
             const row = stageOf(a.id);
             return (
-              <Row key={a.id} tone={row?.kind === 'overdue' ? 'red' : 'plain'}>
+              <Row key={a.id} tone={row?.kind === 'overdue' ? 'red' : 'plain'} onClick={() => navigate(`/app/case/${a.id}`)}>
                 <div className="flex items-center gap-3">
                   <Square tone={row?.kind === 'overdue' ? 'red' : 'plain'}>{initialsOf(a.name)}</Square>
                   <div className="flex-1 min-w-0">

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Phone, Mail, Inbox } from 'lucide-react';
+import { Phone, Mail, Inbox, UserPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore, type Lead, type LeadStatus } from '../../store/appStore';
-import { dim } from '../ui';
+import { GOLD, NAVY, dim } from '../ui';
+import NewLeadSheet from './NewLeadSheet';
 import {
   DeskHeader, Stats, SectionLabel, Chips, Row, Square, Tag, Actions, Empty, initialsOf,
 } from './parts';
@@ -35,6 +36,7 @@ const SupportDesk: React.FC = () => {
   const leads = useAppStore(s => s.leads);
   const updateLead = useAppStore(s => s.updateLead);
   const [filter, setFilter] = useState('mine');
+  const [adding, setAdding] = useState(false);
 
   const mine = useMemo(() => leads.filter(l => l.ownerId === user?.id), [leads, user?.id]);
 
@@ -68,6 +70,14 @@ const SupportDesk: React.FC = () => {
         { n: counts.team, k: 'Team' },
         { n: counts.qualified, k: 'Qualified' },
       ]} />
+
+      <button
+        onClick={() => setAdding(true)}
+        className="w-full mt-5 py-3.5 rounded-2xl flex items-center justify-center gap-2 text-[12px] font-black uppercase tracking-[1.5px]"
+        style={{ background: GOLD, color: NAVY }}
+      >
+        <UserPlus className="w-4 h-4" /> New lead
+      </button>
 
       <Chips
         value={filter}
@@ -123,6 +133,8 @@ const SupportDesk: React.FC = () => {
           );
         })
       )}
+
+      {adding && <NewLeadSheet onClose={() => setAdding(false)} />}
     </>
   );
 };

@@ -75,7 +75,7 @@ const CeoDesk: React.FC = () => {
                 </p>
               </div>
             </div>
-            <Actions items={[{ label: 'Review breaches', onClick: () => navigate('/app/queue') }]} />
+            <Actions items={[{ label: 'Review breaches', onClick: () => navigate('/app/queue?filter=overdue') }]} />
           </Row>
         </>
       ) : (

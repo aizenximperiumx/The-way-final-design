@@ -36,6 +36,7 @@ const MobileGeorgia = React.lazy(() => import('./mobile/MobileGeorgia'));
 const TeamDesk = React.lazy(() => import('./mobile/team/TeamDesk'));
 const TeamQueue = React.lazy(() => import('./mobile/team/TeamQueue'));
 const TeamAlerts = React.lazy(() => import('./mobile/team/TeamAlerts'));
+const CaseDetail = React.lazy(() => import('./mobile/team/CaseDetail'));
 
 // Context
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -240,6 +241,7 @@ function AppRoutes() {
       <Route path="/app/desk" element={<TeamProtected>{appSuspense(<TeamDesk />)}</TeamProtected>} />
       <Route path="/app/queue" element={<TeamProtected>{appSuspense(<TeamQueue />)}</TeamProtected>} />
       <Route path="/app/alerts" element={<TeamProtected>{appSuspense(<TeamAlerts />)}</TeamProtected>} />
+      <Route path="/app/case/:id" element={<TeamProtected>{appSuspense(<CaseDetail />)}</TeamProtected>} />
       <Route path="/universities" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />
       <Route path="/universities/:id" element={<React.Suspense fallback={<div className="p-8 text-center font-bold">Loading universities...</div>}><UniversitiesPage /></React.Suspense>} />
       <Route

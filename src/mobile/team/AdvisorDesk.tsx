@@ -124,7 +124,7 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
 
       {latestAssign && (
         <button
-          onClick={() => navigate('/app/queue')}
+          onClick={() => navigate(assignedApp ? `/app/case/${assignedApp.id}` : '/app/queue')}
           className="mt-5 w-full text-left rounded-3xl p-5 relative overflow-hidden"
           style={goldCard}
         >
@@ -166,7 +166,7 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
           <CaseCard
             key={r.app.id}
             row={r}
-            onOpen={() => navigate('/app/queue')}
+            onOpen={() => navigate(`/app/case/${r.app.id}`)}
             onUpload={() => setUploadFor(r.app)}
           />
         ))
@@ -187,7 +187,7 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
                 </div>
                 <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: GREEN }} />
               </div>
-              <Actions items={[{ label: 'Open in portal', onClick: () => navigate('/app/queue') }]} />
+              <Actions items={[{ label: 'Review', onClick: () => { const a = mine.find(x => x.studentId === r.studentId); if (a) navigate(`/app/case/${a.id}`); } }]} />
             </Row>
           ))}
         </>
