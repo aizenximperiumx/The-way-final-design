@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlarmClock, Clock, KeyRound, Sparkles, GraduationCap, Inbox, CheckCircle2, Sun,
+  AlarmClock, Clock, KeyRound, Sparkles, GraduationCap, Inbox, CheckCircle2, Sun, Camera,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
@@ -11,6 +11,8 @@ import {
   DeskHeader, Stats, SectionLabel, Row, Square, Actions, Empty, initialsOf, RED, GREEN,
 } from './parts';
 import { useCases, fmtLeft, TOTAL_STAGES, type CaseRow } from './useCases';
+import UploadSheet from './UploadSheet';
+import type { Application } from '../../store/appStore';
 
 /**
  * Advisor desk — the mobile face of the portal's Student Operations page.
@@ -30,7 +32,7 @@ const StageBar: React.FC<{ stageNo: number; tone: string }> = ({ stageNo, tone }
   </div>
 );
 
-const CaseCard: React.FC<{ row: CaseRow; onOpen: () => void }> = ({ row, onOpen }) => {
+const CaseCard: React.FC<{ row: CaseRow; onOpen: () => void; onUpload: () => void }> = ({ row, onOpen, onUpload }) => {
   const tone = row.kind === 'overdue' ? RED : row.kind === 'due' ? GOLD : dim(0.55);
   const chipBg = row.kind === 'overdue'
     ? 'rgba(255,107,107,0.15)'
@@ -65,6 +67,10 @@ const CaseCard: React.FC<{ row: CaseRow; onOpen: () => void }> = ({ row, onOpen 
         Stage {row.stageNo} of {TOTAL_STAGES} · {row.label}
         {row.kind === 'permission' && ' · permission needed'}
       </p>
+      <Actions items={[
+        { label: <><Camera className="w-3.5 h-3.5" /> Add document</>, onClick: onUpload },
+        { label: 'Open', ghost: true, onClick: onOpen },
+      ]} />
     </Row>
   );
 };
@@ -75,6 +81,7 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
   const applications = useAppStore(s => s.applications);
   const documentRequests = useAppStore(s => s.documentRequests);
   const notifications = useAppStore(s => s.notifications);
+  const [uploadFor, setUploadFor] = useState<Application | null>(null);
 
   // Only this advisor's approved cases (agency desks see agency-sourced work).
   const mine = useMemo(() => applications.filter(a => {
@@ -156,7 +163,12 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
         <Empty icon={Sun} title="Nothing waiting" sub="Every active case is inside its deadline." />
       ) : (
         rows.slice(0, 6).map(r => (
-          <CaseCard key={r.app.id} row={r} onOpen={() => navigate('/app/queue')} />
+          <CaseCard
+            key={r.app.id}
+            row={r}
+            onOpen={() => navigate('/app/queue')}
+            onUpload={() => setUploadFor(r.app)}
+          />
         ))
       )}
 
@@ -180,6 +192,8 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
           ))}
         </>
       )}
+
+      {uploadFor && <UploadSheet app={uploadFor} onClose={() => setUploadFor(null)} />}
     </>
   );
 };
