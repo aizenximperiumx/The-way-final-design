@@ -1259,12 +1259,47 @@ const handleApi = async (req, res, route) => {
   }
 };
 
+// The mobile app is served from inside its own binary, so its origin is
+// localhost rather than theway.ge and every /api call is cross-origin. Only
+// the app's own origins are allowed; the browser rejects anything else.
+const ALLOWED_ORIGINS = new Set([
+  'https://localhost',        // Capacitor on Android (androidScheme: https)
+  'capacitor://localhost',    // Capacitor on iOS
+  'ionic://localhost',        // older Capacitor/Ionic shells
+  'http://localhost',
+]);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  // Vite dev server on any port.
+  return /^http:\/\/localhost:\d+$/.test(origin);
+};
+
+const applyCors = (req, res) => {
+  const origin = req.headers.origin;
+  if (!isAllowedOrigin(origin)) return;
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+};
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const pathname = decodeURIComponent(url.pathname);
 
     if (pathname === '/api' || pathname.startsWith('/api/')) {
+      applyCors(req, res);
+      // Preflight: answer before the route runs, or the browser blocks the call.
+      if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-client-info');
+        res.setHeader('Access-Control-Max-Age', '86400');
+        res.statusCode = 204;
+        res.end();
+        return;
+      }
       const route = pathname.replace(/^\/api\/?/, '').trim();
       await handleApi(req, res, route || 'index');
       return;
