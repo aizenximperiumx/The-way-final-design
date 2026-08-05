@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft, Eye, EyeOff, Lock, User, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { isTeamRole } from './team/roles';
 import { useAuth } from '../context/AuthContext';
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 
@@ -16,11 +17,18 @@ const MobileLogin: React.FC = () => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const user = await login(username.trim(), password);
-    setLoading(false);
-    if (user) {
-      toast.success('Welcome back!');
-      navigate(user.role === 'student' ? '/app/home' : '/app/home');
+    try {
+      const user = await login(username.trim(), password);
+      if (user) {
+        toast.success('Welcome back!');
+        // Team accounts belong on their desk. Sending everyone to the student
+        // home meant a role bounce on every sign-in.
+        navigate(isTeamRole(user.role) ? '/app/desk' : '/app/home');
+      }
+    } finally {
+      // Always release the button, even if login threw, so a failure never
+      // leaves a spinner with no explanation.
+      setLoading(false);
     }
   };
 
@@ -68,7 +76,7 @@ const MobileLogin: React.FC = () => {
                 required
                 className="w-full pl-12 pr-12 py-4 text-[15px] rounded-2xl outline-none"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(245,168,0,0.15)', color: 'var(--v3-white)' }}
-                placeholder="••••••••"
+                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
               />
               <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-4 top-1/2 -translate-y-1/2" style={{ color: 'rgba(245,240,232,0.5)' }}>
                 {showPw ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
