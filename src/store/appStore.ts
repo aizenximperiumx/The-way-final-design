@@ -647,6 +647,33 @@ export const STAGE_TO_DOC_TYPES: Record<PipelineStageId, string[]> = {
   visa_residency: ['visa', 'residency'],
 };
 
+/**
+ * When the user last signed out. Signing out is asynchronous while navigation
+ * is not, so this stops an in-flight session being restored behind their back.
+ */
+let signedOutAt = 0;
+
+/**
+ * fetch that gives up rather than hanging. A phone on a weak connection would
+ * otherwise sit on a request for ever with nothing on screen to explain it.
+ * Returns null on timeout or network failure so callers can simply bail.
+ */
+const fetchWithTimeout = async (
+  url: string,
+  init: RequestInit = {},
+  ms = 25_000,
+): Promise<Response | null> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const useAppStore = create<AppStoreState>()(
   persist(
     (set, get) => {
@@ -886,16 +913,35 @@ const useAppStore = create<AppStoreState>()(
         };
         const authStatus: AuthStatus = 'signed_in';
         set({ currentUser: user, authStatus });
-        await get().refreshUsersFromBackend();
-        await get().loadBackendState();
-        get().checkExpiries();
-        get().checkChatReminders();
+        // Let them in now. The full snapshot is every application, document and
+        // message the account can see — for a CEO that is the whole company, and
+        // waiting for it over mobile data reads as a login that never finishes.
+        // It lands behind them, and the visibility/poll refresh retries on failure.
+        void (async () => {
+          try {
+            await get().refreshUsersFromBackend();
+            await get().loadBackendState();
+            get().checkExpiries();
+            get().checkChatReminders();
+          } catch { /* transient — the periodic refresh picks it up */ }
+        })();
         return user;
       },
 
       logout: () => {
         const supabase = tryGetSupabase();
-        if (supabase) void supabase.auth.signOut();
+        // Signing out is asynchronous, but every caller navigates immediately
+        // afterwards. That remount runs restoreSession, which used to find the
+        // session still alive and sign the user straight back in. So the stored
+        // session is dropped synchronously here, before anything can read it,
+        // and the network sign-out is left to finish on its own.
+        signedOutAt = Date.now();
+        try {
+          for (const key of Object.keys(localStorage)) {
+            if (/^sb-.*-auth-token/.test(key)) localStorage.removeItem(key);
+          }
+        } catch { /* storage unavailable — signOut below still clears the server side */ }
+        if (supabase) void supabase.auth.signOut().catch(() => {});
         localStorage.removeItem('the-way-storage');
         set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [], pointsLedger: [], universityConfig: null, purgedApplicationIds: [], unTrashedUserIds: [], announcements: [] });
       },
@@ -1019,9 +1065,13 @@ const useAppStore = create<AppStoreState>()(
       restoreSession: async () => {
         const supabase = tryGetSupabase();
         if (!supabase) return;
+        // Never resurrect a session the user just signed out of: the sign-out
+        // request can still be in flight when the next screen mounts.
+        if (Date.now() - signedOutAt < 10_000) return;
         const { data } = await supabase.auth.getSession();
         const session = data.session;
         if (!session?.user?.id) return;
+        if (Date.now() - signedOutAt < 10_000) return;
         const token = session.access_token;
         const meResp = await fetch('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
         if (!meResp || !meResp.ok) return;
@@ -1099,8 +1149,10 @@ const useAppStore = create<AppStoreState>()(
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData.session?.access_token;
         if (!token) return;
-        const resp = await fetch('/api/state-get', { headers: { Authorization: `Bearer ${token}` } });
-        const json = (await resp.json()) as { state?: unknown };
+        // A phone on mobile data must not wait for ever on a large snapshot.
+        const resp = await fetchWithTimeout('/api/state-get', { headers: { Authorization: `Bearer ${token}` } });
+        if (!resp) return;
+        const json = (await resp.json().catch(() => null)) as { state?: unknown } | null;
         if (!resp.ok || !json || !json.state || typeof json.state !== 'object') return;
         const s = json.state as Record<string, unknown>;
         set({
