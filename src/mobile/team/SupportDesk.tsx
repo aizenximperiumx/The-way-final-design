@@ -6,6 +6,7 @@ import { GOLD, NAVY, dim } from '../ui';
 import NewLeadSheet from './NewLeadSheet';
 import {
   DeskHeader, Stats, SectionLabel, Chips, Row, Square, Tag, Actions, Empty, initialsOf,
+  SearchBar, matches,
 } from './parts';
 
 /**
@@ -37,6 +38,7 @@ const SupportDesk: React.FC = () => {
   const updateLead = useAppStore(s => s.updateLead);
   const [filter, setFilter] = useState('mine');
   const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState('');
 
   const mine = useMemo(() => leads.filter(l => l.ownerId === user?.id), [leads, user?.id]);
 
@@ -53,8 +55,11 @@ const SupportDesk: React.FC = () => {
     const byStatus = ['new', 'contacted', 'qualified'].includes(filter)
       ? leads.filter(l => l.status === filter)
       : base;
-    return [...byStatus].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 15);
-  }, [leads, mine, filter]);
+    return [...byStatus]
+      .filter(l => matches(q, l.name, l.universityInterested, l.country, l.email, l.phone))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, q ? 40 : 15);
+  }, [leads, mine, filter, q]);
 
   const advance = (l: Lead) => {
     const next = NEXT[l.status];
@@ -78,6 +83,8 @@ const SupportDesk: React.FC = () => {
       >
         <UserPlus className="w-4 h-4" /> New lead
       </button>
+
+      <SearchBar value={q} onChange={setQ} placeholder="Search name, country or university" />
 
       <Chips
         value={filter}

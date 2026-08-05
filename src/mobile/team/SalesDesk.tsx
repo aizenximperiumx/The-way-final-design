@@ -8,6 +8,7 @@ import { getUniversityName } from '../../lib/universities';
 import { dim } from '../ui';
 import {
   DeskHeader, Stats, SectionLabel, Chips, Row, Square, Tag, Actions, Empty, initialsOf,
+  SearchBar, matches,
 } from './parts';
 
 /**
@@ -48,6 +49,7 @@ const SalesDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
   const applications = useAppStore(s => s.applications);
   const salesClaimLead = useAppStore(s => s.salesClaimLead);
   const [filter, setFilter] = useState('unclaimed');
+  const [q, setQ] = useState('');
 
   const pool = useMemo(() => applications.filter(a =>
     a.status === 'submitted' && (agencyMode ? a.source === 'agency' : a.source !== 'agency')
@@ -77,7 +79,8 @@ const SalesDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
       case 'mine': return ownerOf(a) === user?.id;
       default: return true;
     }
-  }).slice(0, 12), [pool, filter, startOfToday, user?.id]);
+  }).filter(a => matches(q, a.name, getUniversityName(a.university), a.studentEmail, a.phone, a.intakeDetails))
+    .slice(0, q ? 30 : 12), [pool, filter, startOfToday, user?.id, q]);
 
   const claim = (a: Application) => {
     try {
@@ -108,6 +111,8 @@ const SalesDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
         { n: counts.mine, k: 'Mine' },
         { n: counts.needs_info, k: 'On hold' },
       ]} />
+
+      <SearchBar value={q} onChange={setQ} placeholder="Search name, university or email" />
 
       <Chips
         value={filter}

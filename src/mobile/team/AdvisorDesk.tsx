@@ -9,6 +9,7 @@ import { getUniversityName } from '../../lib/universities';
 import { GOLD, dim, goldA, goldCard } from '../ui';
 import {
   DeskHeader, Stats, SectionLabel, Row, Square, Actions, Empty, initialsOf, RED, GREEN,
+  SearchBar, matches,
 } from './parts';
 import { useCases, fmtLeft, TOTAL_STAGES, type CaseRow } from './useCases';
 import UploadSheet from './UploadSheet';
@@ -82,6 +83,7 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
   const documentRequests = useAppStore(s => s.documentRequests);
   const notifications = useAppStore(s => s.notifications);
   const [uploadFor, setUploadFor] = useState<Application | null>(null);
+  const [q, setQ] = useState('');
 
   // Only this advisor's approved cases (agency desks see agency-sourced work).
   const mine = useMemo(() => applications.filter(a => {
@@ -91,6 +93,11 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
   }), [applications, user?.id, agencyMode]);
 
   const rows = useCases(mine);
+
+  // Search matches whatever the advisor remembers — name, university or email.
+  const shown = useMemo(() => rows.filter(r =>
+    matches(q, r.app.name, getUniversityName(r.app.university), r.app.studentEmail, r.app.phone)
+  ), [rows, q]);
 
   const enrolled = mine.filter(a => a.pipeline?.current === 'done' || a.pipeline?.status === 'closed').length;
   const closed = mine.filter(a => a.stage === 'enrolled' && a.arrived).length;
@@ -158,11 +165,17 @@ const AdvisorDesk: React.FC<{ agencyMode: boolean }> = ({ agencyMode }) => {
         { n: closed, k: 'Closed' },
       ]} />
 
-      <SectionLabel right={rows.length ? 'By deadline' : undefined}>My day</SectionLabel>
-      {rows.length === 0 ? (
+      <SearchBar value={q} onChange={setQ} placeholder="Search your students" />
+
+      <SectionLabel right={q ? `${shown.length} found` : rows.length ? 'By deadline' : undefined}>
+        {q ? 'Results' : 'My day'}
+      </SectionLabel>
+      {shown.length === 0 ? (
+        q ? <Empty icon={Sun} title="No match" sub="Nothing matches that search." /> : (
         <Empty icon={Sun} title="Nothing waiting" sub="Every active case is inside its deadline." />
+        )
       ) : (
-        rows.slice(0, 6).map(r => (
+        shown.slice(0, q ? 20 : 6).map(r => (
           <CaseCard
             key={r.app.id}
             row={r}

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CircleUser } from 'lucide-react';
+import { CircleUser, Search, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { GOLD, dim, goldA, card, sectionLabel } from '../ui';
 
@@ -81,6 +81,39 @@ export const Chips: React.FC<{
     })}
   </div>
 );
+
+/**
+ * Find a student without scrolling. Matches name, university, email, phone
+ * and username, so whatever the person on the phone remembers will hit.
+ */
+export const SearchBar: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}> = ({ value, onChange, placeholder = 'Search name or university' }) => (
+  <div className="flex items-center gap-2.5 mt-4 px-4 rounded-2xl" style={{ ...card, height: 46 }}>
+    <Search className="w-4 h-4 shrink-0" style={{ color: dim(0.45) }} />
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="flex-1 bg-transparent outline-none text-[14px] min-w-0"
+      style={{ color: '#fff' }}
+    />
+    {value && (
+      <button onClick={() => onChange('')} aria-label="Clear search" className="shrink-0">
+        <X className="w-4 h-4" style={{ color: dim(0.45) }} />
+      </button>
+    )}
+  </div>
+);
+
+/** True when the haystack contains the search term (empty term matches all). */
+export const matches = (term: string, ...fields: (string | undefined | null)[]): boolean => {
+  const t = term.trim().toLowerCase();
+  if (!t) return true;
+  return fields.some(f => (f ?? '').toLowerCase().includes(t));
+};
 
 export const Tag: React.FC<{ children: React.ReactNode; tone?: 'gold' | 'red' | 'green' | 'plain' }> = ({ children, tone = 'plain' }) => {
   const map = {
