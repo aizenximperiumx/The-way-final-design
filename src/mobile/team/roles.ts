@@ -8,7 +8,7 @@ import type { UserRole } from '../../store/appStore';
  * agency mode, so those pairs share a desk and differ only by which
  * applications they see.
  */
-export type DeskKind = 'advisor' | 'sales' | 'ceo' | 'support' | 'none';
+export type DeskKind = 'advisor' | 'sales' | 'ceo' | 'support' | 'agency' | 'none';
 
 export interface Desk {
   kind: DeskKind;
@@ -26,6 +26,9 @@ const DESKS: Record<DeskKind, Desk> = {
   sales:   { kind: 'sales',   homeLabel: 'Queue',  listLabel: 'Pipeline', listKind: 'queue', agencyMode: false },
   ceo:     { kind: 'ceo',     homeLabel: 'Overview', listLabel: 'Analytics', listKind: 'analytics', agencyMode: false },
   support: { kind: 'support', homeLabel: 'Leads',  listLabel: 'Team', listKind: 'leads', agencyMode: false },
+  // Partner agencies submit students and upload paperwork — desktop work. They
+  // get a signpost rather than the student app they would otherwise land in.
+  agency:  { kind: 'agency',  homeLabel: 'Agency', listLabel: 'Students', listKind: 'cases', agencyMode: true },
   none:    { kind: 'none',    homeLabel: 'Home',   listLabel: 'List', listKind: 'cases', agencyMode: false },
 };
 
@@ -37,6 +40,7 @@ export const deskOf = (role?: UserRole | string): Desk => {
     case 'ops':              return { ...DESKS.sales, agencyMode: true };
     case 'ceo':              return DESKS.ceo;
     case 'customer_support': return DESKS.support;
+    case 'agency':           return DESKS.agency;
     default:                 return DESKS.none;
   }
 };
