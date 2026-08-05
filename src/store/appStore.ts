@@ -856,11 +856,11 @@ const useAppStore = create<AppStoreState>()(
           throw new Error('Supabase is not configured or available');
         }
         if (!isEmail) {
-          const r = await fetch('/api/lookup-email', {
+          const r = await fetchWithTimeout('/api/lookup-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: input }),
-          }).catch(() => null);
+          }, 15_000);
           if (!r) throw new Error('Backend is not reachable. Please try again.');
           const text = await r.text().catch(() => '');
           const j = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { email?: unknown; error?: unknown } | null;
@@ -887,7 +887,7 @@ const useAppStore = create<AppStoreState>()(
         if (!data.user) throw new Error('Login failed');
         const token = (await supabase.auth.getSession()).data.session?.access_token;
         if (!token) throw new Error('Login failed');
-        const meResp = await fetch('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000);
         if (!meResp) throw new Error('Backend is not reachable. Please try again.');
         const meText = await meResp.text().catch(() => '');
         const meJson = (meText ? (() => { try { return JSON.parse(meText); } catch { return null; } })() : null) as { user?: unknown; error?: unknown; details?: unknown } | null;
@@ -1073,7 +1073,7 @@ const useAppStore = create<AppStoreState>()(
         if (!session?.user?.id) return;
         if (Date.now() - signedOutAt < 10_000) return;
         const token = session.access_token;
-        const meResp = await fetch('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000);
         if (!meResp || !meResp.ok) return;
         const meJson = (await meResp.json().catch(() => null)) as { user?: unknown } | null;
         if (!meJson || !meJson.user || typeof meJson.user !== 'object') return;
@@ -1113,7 +1113,7 @@ const useAppStore = create<AppStoreState>()(
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData.session?.access_token;
         if (!token) return;
-        const r = await fetch('/api/users-list', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+        const r = await fetchWithTimeout('/api/users-list', { headers: { Authorization: `Bearer ${token}` } }, 20_000);
         if (!r || !r.ok) return;
         const j = (await r.json().catch(() => null)) as { users?: unknown } | null;
         if (!j || !Array.isArray(j.users)) return;
