@@ -146,7 +146,7 @@ const ArrivalCard: React.FC<{ app: Application }> = ({ app }) => {
           {CHECKLIST.map(item => {
             const done = checked.has(item.id);
             return (
-              <button key={item.id} onClick={() => toggle(item.id)} className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left" style={{ background: done ? 'rgba(76,175,80,0.10)' : 'rgba(255,255,255,0.04)' }}>
+              <button key={item.id} onClick={() => toggle(item.id)} className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left" style={{ background: done ? 'rgba(76,175,80,0.10)' : 'rgba(255,255,255,0.07)' }}>
                 {done
                   ? <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: '#7BE08A' }} />
                   : <Circle className="w-5 h-5 shrink-0" style={{ color: dim(0.3) }} />}

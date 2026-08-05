@@ -59,7 +59,7 @@ const MobileMessages: React.FC = () => {
   return (
     <MobileLayout title="Advisor">
       {!advisorId ? (
-        <div className="rounded-2xl py-14 text-center mt-6" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(245,168,0,0.14)' }}>
+        <div className="rounded-2xl py-14 text-center mt-6" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(245,168,0,0.14)' }}>
           <MessageSquare className="w-9 h-9 mx-auto mb-3" style={{ color: 'rgba(245,240,232,0.25)' }} />
           <p className="text-[14px] font-semibold" style={{ color: 'var(--v3-white)' }}>No advisor assigned yet</p>
           <p className="text-[12px] mt-1 px-8" style={{ color: 'rgba(245,240,232,0.5)' }}>Your advisor will be assigned shortly — check back soon.</p>

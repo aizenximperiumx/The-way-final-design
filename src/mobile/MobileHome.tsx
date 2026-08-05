@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2, ArrowRight, Upload, GraduationCap, Sparkles, QrCode,
-  MessageSquare, CalendarClock, ShieldAlert, PartyPopper, Star, MapPin,
+  MessageSquare, CalendarClock, ShieldAlert, Star, MapPin,
   Megaphone, Compass,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,7 @@ import { BENEFIT_CATEGORIES } from './benefits';
 import { GOLD, NAVY, card, goldCard, dim, goldA, sectionLabel, daysUntil } from './ui';
 import MobileLayout from './MobileLayout';
 import ArrivalCard from './ArrivalCard';
+import HoloCard from './HoloCard';
 
 /**
  * Home — adapts to where the student is in their life with The Way:
@@ -78,25 +79,47 @@ const MobileHome: React.FC = () => {
         </button>
       </div>
 
+      {/* The card, on the home screen — an object rather than a banner. It is
+          unlit until it is earned, which is what makes arriving mean something. */}
+      <div className="mt-5">
+        <HoloCard inactive={!arrived} radius={22} onClick={() => navigate('/app/card')}>
+          <div className="absolute inset-0 p-5 flex flex-col justify-between">
+            <div className="flex items-start justify-between">
+              <p className="v3-serif text-[14px] font-black" style={{ color: '#fff' }}>
+                THE <span style={{ color: GOLD }}>WAY</span>
+              </p>
+              <span
+                className="text-[8.5px] font-black tracking-[2px] px-2 py-1 rounded-full"
+                style={{
+                  color: arrived ? GOLD : dim(0.45),
+                  border: `1px solid ${arrived ? goldA(0.4) : 'rgba(255,255,255,0.12)'}`,
+                }}
+              >
+                {arrived ? `MEMBER · ${new Date().getFullYear()}` : 'NOT YET ACTIVE'}
+              </span>
+            </div>
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="v3-serif text-[20px] font-black leading-tight truncate" style={{ color: '#fff' }}>
+                  {user?.name ?? 'Student'}
+                </p>
+                <p className="text-[9px] tracking-[1.5px] mt-1 uppercase" style={{ color: dim(0.5) }}>
+                  {arrived ? 'Tap to show your code' : 'Unlocks when you arrive'}
+                </p>
+              </div>
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: arrived ? '#fff' : 'rgba(255,255,255,0.06)' }}
+              >
+                <QrCode className="w-6 h-6" style={{ color: arrived ? NAVY : dim(0.3) }} />
+              </div>
+            </div>
+          </div>
+        </HoloCard>
+      </div>
+
       {arrived ? (
         <>
-          {/* ── ARRIVED MODE ── */}
-          <button onClick={() => navigate('/app/card')} className="mt-5 w-full text-left rounded-3xl p-6 relative overflow-hidden" style={goldCard}>
-            <div className="absolute -right-6 -top-8 w-36 h-36 rounded-full" style={{ background: goldA(0.12), filter: 'blur(28px)' }} />
-            <div className="flex items-center gap-2">
-              <PartyPopper className="w-4 h-4" style={{ color: GOLD }} />
-              <p style={sectionLabel}>The Way Member</p>
-            </div>
-            <p className="v3-serif text-[24px] font-black mt-2 leading-tight" style={{ color: '#fff' }}>
-              Your member card is active
-            </p>
-            <p className="text-[13px] mt-1" style={{ color: dim(0.65) }}>
-              Show your QR code for student discounts across Georgia.
-            </p>
-            <span className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[12px] font-black uppercase tracking-wider" style={{ background: GOLD, color: NAVY }}>
-              <QrCode className="w-4 h-4" /> Open my card
-            </span>
-          </button>
 
           {/* Expiry watch */}
           {expiries.length > 0 && (

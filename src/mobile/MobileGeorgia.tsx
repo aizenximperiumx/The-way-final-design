@@ -149,7 +149,7 @@ const MobileGeorgia: React.FC = () => {
                 </button>
               ))}
             </div>
-            <div className="w-full rounded-xl px-4 py-3 text-[20px] font-black" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: GOLD }}>
+            <div className="w-full rounded-xl px-4 py-3 text-[20px] font-black" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.08)', color: GOLD }}>
               {converted}
             </div>
           </div>
@@ -182,7 +182,7 @@ const MobileGeorgia: React.FC = () => {
               {isOpen && (
                 <div className="px-4 pb-4 space-y-2">
                   {s.rows.map((r, i) => (
-                    <div key={i} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <div key={i} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.07)' }}>
                       <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: dim(0.45) }}>{r.k}</p>
                       {'tel' in r && r.tel ? (
                         <a href={`tel:${r.v.replace(/\s/g, '')}`} className="text-[16px] font-black inline-flex items-center gap-2 mt-0.5" style={{ color: GOLD }}>
