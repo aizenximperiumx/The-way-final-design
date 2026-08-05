@@ -137,12 +137,19 @@ async function registerPushIfAvailable(userId: string) {
       })();
     });
 
-    // Tapping a push opens the deep link it carries.
+    // Tapping a push opens the deep link it carries. Notifications are written
+    // for the web dashboard, so a team link like `/staff?student=<id>` has to
+    // be translated to the app's own case route before we navigate.
     await Push.addListener('pushNotificationActionPerformed', (data) => {
       const notif = (data.notification && typeof data.notification === 'object') ? data.notification as Record<string, unknown> : null;
       const payload = (notif?.data && typeof notif.data === 'object') ? notif.data as Record<string, unknown> : null;
       const link = typeof payload?.link === 'string' ? payload.link : '';
-      if (link && link.startsWith('/')) window.location.assign(link);
+      if (!link.startsWith('/')) return;
+      const student = link.match(/[?&]student=([^&]+)/);
+      const target = link.startsWith('/app')
+        ? link
+        : student ? `/app/case/${decodeURIComponent(student[1])}` : link;
+      window.location.assign(target);
     });
 
     await Push.register();

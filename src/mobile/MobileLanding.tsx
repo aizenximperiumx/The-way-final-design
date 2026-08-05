@@ -4,9 +4,10 @@ import { ArrowRight, GraduationCap, ShieldCheck, FileCheck2, MessageCircle, Plan
 import logoUrl from '../../1776590293988-019da507-f581-77e9-8281-8d60b280ccd6-removebg-preview.png';
 import heroUrl from '../../IMG_2594-scaled-1.jpg';
 import MobileOnboarding, { hasOnboarded } from './MobileOnboarding';
+import { studentsEnrolledLabel } from '../lib/liveCount';
 
 const stats = [
-  { n: '5,000+', l: 'Students' },
+  { n: `${studentsEnrolledLabel()}+`, l: 'Students' },
   { n: '40+', l: 'Universities' },
   { n: '15+', l: 'Years' },
   { n: '98%', l: 'Success' },

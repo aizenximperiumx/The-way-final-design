@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ChevronLeft, AlarmClock, Clock, KeyRound, Camera, FileText, CheckCircle2,
-  X, MessageSquarePlus, Loader2, Mail, Phone, CircleCheck,
+  X, MessageSquarePlus, Loader2, Mail, Phone, CircleCheck, FileQuestion,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -34,12 +34,18 @@ const CaseDetail: React.FC = () => {
   const staffVerifyDocument = useAppStore(s => s.staffVerifyDocument);
   const reviewDocumentRequest = useAppStore(s => s.reviewDocumentRequest);
   const staffAddInternalNote = useAppStore(s => s.staffAddInternalNote);
+  const completePipelineStage = useAppStore(s => s.completePipelineStage);
+  const grantStagePermission = useAppStore(s => s.grantStagePermission);
+  const staffRequestDocument = useAppStore(s => s.staffRequestDocument);
 
   const [uploading, setUploading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askTitle, setAskTitle] = useState('');
+  const [askTarget, setAskTarget] = useState<'student' | 'agency'>('student');
 
   const app = useMemo(() => applications.find(a => a.id === id), [applications, id]);
   const rows = useCases(app ? [app] : []);
@@ -101,8 +107,41 @@ const CaseDetail: React.FC = () => {
     }
   };
 
+  const completeStage = () => {
+    if (!row) return;
+    try {
+      completePipelineStage(app.id, row.stage);
+      toast.success(`${row.label} completed`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not complete the stage');
+    }
+  };
+
+  const grantPermission = () => {
+    if (!row) return;
+    try {
+      grantStagePermission(app.id, row.stage);
+      toast.success('Permission recorded — the clock starts now');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not record permission');
+    }
+  };
+
+  const requestDoc = () => {
+    if (!askTitle.trim() || !app.studentId) return;
+    try {
+      staffRequestDocument(app.studentId, app.id, askTitle.trim(), undefined, askTarget);
+      toast.success(`Requested from the ${askTarget}`);
+      setAskTitle('');
+      setAskOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not send the request');
+    }
+  };
+
   const isAdvisor = desk.kind === 'advisor' || desk.kind === 'ceo';
   const isSales = desk.kind === 'sales' || desk.kind === 'ceo';
+  const isAgencySourced = app.source === 'agency';
 
   return (
     <TeamLayout>
@@ -178,6 +217,27 @@ const CaseDetail: React.FC = () => {
                 style={{ background: i < row.stageNo ? GOLD : 'rgba(255,255,255,0.12)' }} />
             ))}
           </div>
+
+          {isAdvisor && (
+            row.kind === 'permission' ? (
+              <button
+                onClick={grantPermission}
+                className="w-full mt-4 py-3 rounded-2xl flex items-center justify-center gap-2 text-[11.5px] font-black uppercase tracking-wider relative"
+                style={{ background: GOLD, color: NAVY }}
+              >
+                <KeyRound className="w-4 h-4" /> Record permission
+              </button>
+            ) : (
+              <button
+                onClick={completeStage}
+                className="w-full mt-4 py-3 rounded-2xl flex items-center justify-center gap-2 text-[11.5px] font-black uppercase tracking-wider relative"
+                style={{ background: GOLD, color: NAVY }}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {row.stageNo === TOTAL_STAGES ? 'Complete — finish admission' : 'Complete this stage'}
+              </button>
+            )
+          )}
         </div>
       ) : (
         <div className="rounded-[20px] p-4 mt-5" style={card}>
@@ -198,12 +258,54 @@ const CaseDetail: React.FC = () => {
             <Camera className="w-4 h-4" /> Add document
           </button>
           <button
-            onClick={() => setNoteOpen(v => !v)}
+            onClick={() => { setNoteOpen(v => !v); setAskOpen(false); }}
             className="flex-1 py-3 rounded-2xl flex items-center justify-center gap-2 text-[11.5px] font-black uppercase tracking-wider"
             style={{ background: 'rgba(255,255,255,0.05)', color: dim(0.65), border: `1px solid ${goldA(0.12)}` }}
           >
             <MessageSquarePlus className="w-4 h-4" /> Note
           </button>
+        </div>
+      )}
+
+      {isAdvisor && app.studentId && (
+        <button
+          onClick={() => { setAskOpen(v => !v); setNoteOpen(false); }}
+          className="w-full mt-2 py-3 rounded-2xl flex items-center justify-center gap-2 text-[11.5px] font-black uppercase tracking-wider"
+          style={{ background: 'rgba(255,255,255,0.05)', color: dim(0.65), border: `1px solid ${goldA(0.12)}` }}
+        >
+          <FileQuestion className="w-4 h-4" /> Ask for a document
+        </button>
+      )}
+
+      {askOpen && (
+        <div className="mt-3 rounded-[20px] p-4" style={card}>
+          <input
+            value={askTitle}
+            onChange={(e) => setAskTitle(e.target.value)}
+            placeholder="What do you need? e.g. Ministry order"
+            className="w-full bg-transparent outline-none text-[14px]"
+            style={{ color: '#fff' }}
+          />
+          {isAgencySourced && (
+            <div className="flex gap-2 mt-3">
+              {(['student', 'agency'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setAskTarget(t)}
+                  className="flex-1 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider"
+                  style={askTarget === t
+                    ? { background: GOLD, color: NAVY }
+                    : { background: 'rgba(255,255,255,0.05)', color: dim(0.6), border: `1px solid ${goldA(0.12)}` }}
+                >
+                  Ask the {t}
+                </button>
+              ))}
+            </div>
+          )}
+          <Actions items={[
+            { label: 'Send request', onClick: requestDoc, disabled: !askTitle.trim() },
+            { label: 'Cancel', ghost: true, onClick: () => { setAskTitle(''); setAskOpen(false); } },
+          ]} />
         </div>
       )}
 

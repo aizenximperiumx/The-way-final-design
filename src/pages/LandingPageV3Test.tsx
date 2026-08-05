@@ -33,6 +33,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../lib/i18n';
 import LanguageToggle from '../components/LanguageToggle';
+import { studentsEnrolled } from '../lib/liveCount';
 
 const applicationSchema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -320,7 +321,7 @@ export default function LandingPageV3Test() {
 
           <div className="relative md:absolute left-0 right-0 bottom-0 grid grid-cols-2 lg:grid-cols-4 border-t" style={{ borderColor: 'var(--v3-glass-border)', background: 'rgba(10,22,40,0.95)', backdropFilter: 'blur(16px)' }}>
             {[
-              { n: 5000, s: '+', l: tr('Students Enrolled', 'طالب مسجّل') },
+              { n: studentsEnrolled(), s: '+', l: tr('Students Enrolled', 'طالب مسجّل') },
               { n: 40, s: '+', l: tr('Partner Universities', 'جامعة شريكة') },
               { n: 15, s: '+', l: tr('Years Experience', 'سنة خبرة') },
               { n: 98, s: '%', l: tr('Success Rate', 'نسبة النجاح') },

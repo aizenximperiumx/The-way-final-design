@@ -37,6 +37,7 @@ const TeamDesk = React.lazy(() => import('./mobile/team/TeamDesk'));
 const TeamQueue = React.lazy(() => import('./mobile/team/TeamQueue'));
 const TeamAlerts = React.lazy(() => import('./mobile/team/TeamAlerts'));
 const CaseDetail = React.lazy(() => import('./mobile/team/CaseDetail'));
+const TeamMessages = React.lazy(() => import('./mobile/team/TeamMessages'));
 
 // Context
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -194,6 +195,12 @@ const AppSignedIn = ({ children }: { children: React.ReactNode }) => {
   if (!user) return <Navigate to="/app/login" replace />;
   return <>{children}</>;
 };
+/** Messages differs by side of the conversation: students talk to their
+ *  advisor, the team talks to their students. */
+const MessagesForRole = () => {
+  const { user } = useAuth();
+  return appSuspense(isTeamRole(user?.role) ? <TeamMessages /> : <MobileMessages />);
+};
 /** Team-only screens (/app/desk, /app/queue, /app/alerts). */
 const TeamProtected = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -234,7 +241,7 @@ function AppRoutes() {
       <Route path="/app/card" element={<AppProtected>{appSuspense(<MobileCard />)}</AppProtected>} />
       <Route path="/app/georgia" element={<AppProtected>{appSuspense(<MobileGeorgia />)}</AppProtected>} />
       {/* Shared by both apps — MobileLayout swaps in the team tab bar by role */}
-      <Route path="/app/messages" element={<AppSignedIn>{appSuspense(<MobileMessages />)}</AppSignedIn>} />
+      <Route path="/app/messages" element={<AppSignedIn><MessagesForRole /></AppSignedIn>} />
       <Route path="/app/profile" element={<AppSignedIn>{appSuspense(<MobileProfile />)}</AppSignedIn>} />
 
       {/* ── Mobile team app ── */}

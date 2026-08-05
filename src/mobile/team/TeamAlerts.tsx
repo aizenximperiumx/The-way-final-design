@@ -34,6 +34,19 @@ const ago = (iso: string): string => {
   return d === 1 ? 'yesterday' : `${d}d ago`;
 };
 
+/**
+ * Notifications carry portal links (`/staff?student=<id>`), because the same
+ * notification serves the web dashboard. Translate those to the app's own
+ * route so tapping one opens the case rather than dropping you on the desk.
+ */
+export const appPathFor = (link?: string): string => {
+  if (!link) return '/app/desk';
+  if (link.startsWith('/app')) return link;
+  const m = link.match(/[?&]student=([^&]+)/);
+  if (m) return `/app/case/${decodeURIComponent(m[1])}`;
+  return '/app/desk';
+};
+
 const TeamAlerts: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -76,7 +89,7 @@ const TeamAlerts: React.FC = () => {
             <Row
               key={n.id}
               tone={fresh ? 'gold' : 'plain'}
-              onClick={() => navigate(n.link && n.link.startsWith('/app') ? n.link : '/app/desk')}
+              onClick={() => navigate(appPathFor(n.link))}
             >
               <div className="flex items-start gap-3">
                 <Square tone={fresh ? 'gold' : 'plain'}><Icon className="w-5 h-5" /></Square>
