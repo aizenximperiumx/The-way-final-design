@@ -10,6 +10,7 @@ import { useI18n } from '../lib/i18n';
 import { BENEFIT_CATEGORIES } from './benefits';
 import { GOLD, NAVY, card, dim, goldA, sectionLabel } from './ui';
 import MobileLayout from './MobileLayout';
+import HoloCard from './HoloCard';
 
 /**
  * The Way Member Card — every student's personal QR identity.
@@ -143,19 +144,12 @@ const MobileCard: React.FC = () => {
 
   return (
     <MobileLayout title="Member Card">
-      {/* ── The card ── */}
-      <div
-        className="relative overflow-hidden rounded-3xl p-6"
-        style={{
-          background: unlocked
-            ? `linear-gradient(135deg, #16305a 0%, ${NAVY} 55%, #101f3a 100%)`
-            : 'rgba(255,255,255,0.03)',
-          border: `1px solid ${unlocked ? goldA(0.45) : 'rgba(255,255,255,0.08)'}`,
-          boxShadow: unlocked ? `0 18px 44px rgba(0,0,0,0.45), 0 0 0 1px ${goldA(0.1)}` : 'none',
-        }}
-      >
-        {/* Gold sheen */}
-        <div className="absolute -right-10 -top-14 w-48 h-48 rounded-full pointer-events-none" style={{ background: goldA(unlocked ? 0.14 : 0.05), filter: 'blur(30px)' }} />
+      {/* ── The card ──
+          A real object: it turns toward you, the foil travels, and the
+          highlight tracks the tilt. Sized to its content so the QR stays
+          large enough to scan. */}
+      <HoloCard aspect={null} radius={24} inactive={!unlocked}>
+        <div className="relative p-6">
 
         <div className="flex items-start justify-between relative">
           <div>
@@ -222,7 +216,8 @@ const MobileCard: React.FC = () => {
             )}
           </>
         )}
-      </div>
+        </div>
+      </HoloCard>
 
       {/* Fullscreen present mode — white and bright for the scanner */}
       {presenting && (

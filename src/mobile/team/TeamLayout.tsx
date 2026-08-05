@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { tap } from '../../lib/native';
 import { AppLockGate, isAppLockEnabled, isUnlockedThisSession } from '../AppLock';
-import { GOLD, NAVY, dim, goldA } from '../ui';
+import { GOLD, NAVY, dim, goldA, spatialBackground, glassChrome } from '../ui';
 import { deskOf } from './roles';
 
 /**
@@ -92,7 +92,7 @@ const TeamLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div
       className="v3 min-h-screen flex flex-col"
-      style={{ background: 'linear-gradient(180deg, #0A1628 0%, #0D1F3C 55%, #0A1628 100%)' }}
+      style={{ background: spatialBackground }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -137,9 +137,10 @@ const TeamLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         className="fixed bottom-0 left-0 right-0 z-40 flex items-stretch"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom)',
-          background: 'rgba(10,22,40,0.94)',
-          backdropFilter: 'blur(18px)',
-          borderTop: `1px solid ${goldA(0.12)}`,
+          ...glassChrome,
+          border: 'none',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 0,
         }}
       >
         <TabLink to="/app/desk" label={desk.homeLabel} icon={Home} active={location.pathname.startsWith('/app/desk')} />

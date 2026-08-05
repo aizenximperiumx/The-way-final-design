@@ -7,7 +7,7 @@ import { useAppStore } from '../store/appStore';
 import { useI18n } from '../lib/i18n';
 import { tap } from '../lib/native';
 import { AppLockGate, isAppLockEnabled, isUnlockedThisSession } from './AppLock';
-import { GOLD, NAVY, dim, goldA } from './ui';
+import { GOLD, NAVY, dim, goldA, spatialBackground, glassChrome } from './ui';
 import TeamLayout from './team/TeamLayout';
 import { isTeamRole } from './team/roles';
 
@@ -104,7 +104,7 @@ const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({
   return (
     <div
       className="v3 min-h-screen flex flex-col"
-      style={{ background: 'linear-gradient(180deg, #0A1628 0%, #0D1F3C 55%, #0A1628 100%)' }}
+      style={{ background: spatialBackground }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -169,9 +169,10 @@ const MobileLayout: React.FC<{ children: React.ReactNode; title?: string }> = ({
         className="fixed bottom-0 left-0 right-0 z-40 flex items-stretch"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom)',
-          background: 'rgba(10,22,40,0.94)',
-          backdropFilter: 'blur(18px)',
-          borderTop: `1px solid ${goldA(0.12)}`,
+          ...glassChrome,
+          border: 'none',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 0,
         }}
       >
         {leftTabs.map(tb => (
