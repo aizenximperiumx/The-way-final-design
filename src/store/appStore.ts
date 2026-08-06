@@ -672,9 +672,21 @@ const fetchWithTimeout = async (
   ms = 25_000,
 ): Promise<Response | null> => {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Raced rather than relying on the abort signal alone: native HTTP on the
+  // phone does not always honour it, and a request that ignores abort would
+  // hang for ever — which is the failure this exists to prevent.
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`timed out after ${Math.round(ms / 1000)}s`));
+    }, ms);
+  });
   try {
-    const resp = await fetch(apiUrl(url), { ...init, signal: controller.signal });
+    const resp = await Promise.race([
+      fetch(apiUrl(url), { ...init, signal: controller.signal }),
+      timeout,
+    ]);
     lastFetchFailure = '';
     return resp;
   } catch (e) {
@@ -685,7 +697,7 @@ const fetchWithTimeout = async (
       : detail || 'network request failed';
     return null;
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 };
 
