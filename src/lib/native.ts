@@ -20,29 +20,12 @@ export const isNative = () => Capacitor.isNativePlatform();
 /** Where the bundled app sends its data requests. */
 export const API_ORIGIN = 'https://theway.ge';
 
-// ── Bundled-mode plumbing (runs synchronously at import, before any fetch) ──
-// Inside the binary the origin is capacitor://localhost — relative /api/*
-// calls would go nowhere, so they are rewritten to the live server.
+// The /api rewrite now lives in lib/apiHost.ts and is installed from main.tsx
+// before anything else. It used to live here, but this module imports the
+// store and the store imports back, so the patch could not be relied on to be
+// in place before the first request — which is exactly what went wrong.
 const installBundledMode = () => {
   if (!Capacitor.isNativePlatform()) return;
-  const original = window.fetch.bind(window);
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    try {
-      if (typeof input === 'string' && input.startsWith('/api/')) {
-        return original(`${API_ORIGIN}${input}`, init);
-      }
-      if (input instanceof URL && input.origin === window.location.origin && input.pathname.startsWith('/api/')) {
-        return original(`${API_ORIGIN}${input.pathname}${input.search}`, init);
-      }
-      if (input instanceof Request) {
-        const u = new URL(input.url);
-        if (u.origin === window.location.origin && u.pathname.startsWith('/api/')) {
-          return original(new Request(`${API_ORIGIN}${u.pathname}${u.search}`, input), init);
-        }
-      }
-    } catch { /* fall through to the original call */ }
-    return original(input as RequestInfo, init);
-  };
   // Boot straight into the student app.
   if (window.location.pathname === '/') {
     window.history.replaceState(null, '', '/app');

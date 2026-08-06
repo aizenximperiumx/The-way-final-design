@@ -1,3 +1,8 @@
+// First, before anything can make a request: point /api at the live server
+// when we are running inside the packaged app.
+import { installApiHost } from './lib/apiHost'
+installApiHost()
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
