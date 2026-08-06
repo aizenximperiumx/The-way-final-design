@@ -1272,8 +1272,9 @@ const ALLOWED_ORIGINS = new Set([
 const isAllowedOrigin = (origin) => {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.has(origin)) return true;
-  // Vite dev server on any port.
-  return /^http:\/\/localhost:\d+$/.test(origin);
+  // Any localhost origin: the WebView's scheme and port vary by Capacitor
+  // version and platform, and every one of them is the app itself.
+  return /^(https?|capacitor|ionic):\/\/localhost(:\d+)?$/.test(origin);
 };
 
 const applyCors = (req, res) => {

@@ -654,6 +654,13 @@ export const STAGE_TO_DOC_TYPES: Record<PipelineStageId, string[]> = {
 let signedOutAt = 0;
 
 /**
+ * Why the last fetchWithTimeout failed. "Backend is not reachable" on its own
+ * is impossible to act on — this records whether the request timed out, was
+ * refused, or never left the device, so the message can say which.
+ */
+let lastFetchFailure = '';
+
+/**
  * fetch that gives up rather than hanging. A phone on a weak connection would
  * otherwise sit on a request for ever with nothing on screen to explain it.
  * Returns null on timeout or network failure so callers can simply bail.
@@ -666,13 +673,37 @@ const fetchWithTimeout = async (
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } catch {
+    const resp = await fetch(url, { ...init, signal: controller.signal });
+    lastFetchFailure = '';
+    return resp;
+  } catch (e) {
+    const aborted = e instanceof DOMException && e.name === 'AbortError';
+    const detail = e instanceof Error ? e.message : String(e);
+    lastFetchFailure = aborted
+      ? `timed out after ${Math.round(ms / 1000)}s`
+      : detail || 'network request failed';
     return null;
   } finally {
     clearTimeout(timer);
   }
 };
+
+/** Where a request was actually sent — the app rewrites /api to the live host. */
+const attempted = (path: string) => {
+  try {
+    return new URL(path, window.location.origin).href;
+  } catch {
+    return path;
+  }
+};
+
+/** A reachability error a person can act on, rather than a dead end. */
+const unreachable = (path: string) =>
+  new Error(
+    `Could not reach ${attempted(path)}`
+    + (lastFetchFailure ? ` — ${lastFetchFailure}` : '')
+    + '. Check the connection and try again.',
+  );
 
 const useAppStore = create<AppStoreState>()(
   persist(
@@ -861,7 +892,7 @@ const useAppStore = create<AppStoreState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: input }),
           }, 15_000);
-          if (!r) throw new Error('Backend is not reachable. Please try again.');
+          if (!r) throw unreachable('/api/lookup-email');
           const text = await r.text().catch(() => '');
           const j = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { email?: unknown; error?: unknown } | null;
           if (!r.ok) {
@@ -888,7 +919,7 @@ const useAppStore = create<AppStoreState>()(
         const token = (await supabase.auth.getSession()).data.session?.access_token;
         if (!token) throw new Error('Login failed');
         const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000);
-        if (!meResp) throw new Error('Backend is not reachable. Please try again.');
+        if (!meResp) throw unreachable('/api/me-profile');
         const meText = await meResp.text().catch(() => '');
         const meJson = (meText ? (() => { try { return JSON.parse(meText); } catch { return null; } })() : null) as { user?: unknown; error?: unknown; details?: unknown } | null;
         if (!meResp.ok || !meJson || !meJson.user || typeof meJson.user !== 'object') {
