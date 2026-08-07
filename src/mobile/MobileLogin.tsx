@@ -76,7 +76,7 @@ const MobileLogin: React.FC = () => {
                 required
                 className="w-full pl-12 pr-12 py-4 text-[15px] rounded-2xl outline-none"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(245,168,0,0.15)', color: 'var(--v3-white)' }}
-                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                placeholder="••••••••"
               />
               <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-4 top-1/2 -translate-y-1/2" style={{ color: 'rgba(245,240,232,0.5)' }}>
                 {showPw ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}

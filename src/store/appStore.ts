@@ -29,7 +29,7 @@ export const sourceChannel = (raw?: string): 'public' | 'agency' => raw === 'age
 export type UserRole = 'ceo' | 'sales' | 'ops' | 'staff' | 'agency_staff' | 'student' | 'agency' | 'customer_support';
 
 // Manually-tracked WhatsApp / direct leads owned by a sales (or customer-support)
-// rep. Separate from public Applications â€” these are early prospects a rep is
+// rep. Separate from public Applications - these are early prospects a rep is
 // nurturing before a formal application exists.
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'won' | 'lost';
 
@@ -44,7 +44,7 @@ export interface Lead {
   universityInterested: string;
   notes: string;
   status: LeadStatus;
-  followUpDate?: string;     // YYYY-MM-DD â€” drives the "follow-ups due" queue
+  followUpDate?: string;     // YYYY-MM-DD - drives the "follow-ups due" queue
   convertedApplicationId?: string;
   createdAt: string;
   updatedAt: string;
@@ -168,7 +168,7 @@ export interface Application {
   arrivalDate?: string;
   arrivalChecklist?: string[];
   // Login identity for the created student account. The PASSWORD is never
-  // stored â€” it is shown once at creation and delivered by email; agencies
+  // stored - it is shown once at creation and delivered by email; agencies
   // request a reset (CEO-approved) when access is lost.
   studentCredentials?: { username: string; password?: string; updatedAt: string };
 }
@@ -230,7 +230,7 @@ export interface Notification {
   type: NotificationType;
   time: string;
   read: boolean;
-  /** Deep link â€” clicking the notification opens this in-app path. */
+  /** Deep link - clicking the notification opens this in-app path. */
   link?: string;
 }
 
@@ -251,9 +251,9 @@ export interface Appointment {
 export type AuthStatus = 'signed_out' | 'signed_in';
 
 /**
- * A requested document. Target 'student' â†’ the student uploads it in their
- * portal; target 'agency' â†’ the owning agency (agent) uploads it.
- * Lifecycle: pending â†’ uploaded â†’ approved | rejected (rejected â†’ re-upload
+ * A requested document. Target 'student' → the student uploads it in their
+ * portal; target 'agency' → the owning agency (agent) uploads it.
+ * Lifecycle: pending → uploaded → approved | rejected (rejected → re-upload
  * puts it back to pending with the reviewer's note attached).
  * Legacy status 'fulfilled' (pre-2026) is treated as 'uploaded'.
  */
@@ -312,7 +312,7 @@ export interface AppStoreState {
   credentialRequests: CredentialRequest[];
   /** Persistent staff-performance points ledger (single source of truth for points). */
   pointsLedger: PointsEntry[];
-  /** CEO-editable university â†’ staff assignment + SLA groups (null â†’ defaults). */
+  /** CEO-editable university → staff assignment + SLA groups (null → defaults). */
   universityConfig: UniversityConfig | null;
   /** Tombstones so purged applications / restored users never resurrect on merge. */
   purgedApplicationIds: string[];
@@ -437,7 +437,7 @@ export interface AppStoreState {
   ceoSetUniversityStaff: (universityId: string, staffUsername: string | null) => void;
   ceoSetUniversitySlaGroup: (universityId: string, group: UniversitySlaGroup) => void;
 
-  // â”€â”€ App announcements (CEO â†’ student app) â”€â”€
+  // â”€â”€ App announcements (CEO → student app) â”€â”€
   ceoAddAnnouncement: (title: string, body: string) => void;
   ceoHideAnnouncement: (id: string) => void;
 }
@@ -453,7 +453,7 @@ const requireRole = (user: User, roles: UserRole[]) => {
 
 // â”€â”€ Points / assignment helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** Merged university â†’ staff-username assignments (CEO config wins over defaults). */
+/** Merged university → staff-username assignments (CEO config wins over defaults). */
 const effectiveAssignments = (config: UniversityConfig | null): Record<string, string> => ({
   ...DEFAULT_STAFF_ASSIGNMENTS,
   ...(config?.assignments ?? {}),
@@ -481,7 +481,7 @@ const withLedgerPoints = (users: User[], ledger: PointsEntry[]): User[] => {
 
 /**
  * State patch that applies ledger totals to BOTH the users list and the
- * signed-in user object (they are separate store fields â€” updating only
+ * signed-in user object (they are separate store fields - updating only
  * `users` left the header/profile points chip stuck at 0).
  */
 const ledgerPatch = (
@@ -528,8 +528,8 @@ const generateStudentCredentials = () => {
 };
 
 // Debounced backend save with a flushable pending flag. loadBackendState MUST
-// flush any pending save first â€” otherwise a background refresh could pull the
-// server's older snapshot over fresh local mutations (approve, intake, â€¦) and
+// flush any pending save first - otherwise a background refresh could pull the
+// server's older snapshot over fresh local mutations (approve, intake, …) and
 // the debounced save would then persist the reverted data. That exact race
 // silently reverted a sales approval during end-to-end testing.
 const pendingSave = { timer: null as number | null };
@@ -567,7 +567,7 @@ type NotifyEmail = {
   intro: string;
   preheader?: string;
   ctaLabel?: string;
-  ctaPath?: string;   // e.g. '/dashboard' â€” appended to SITE_URL
+  ctaPath?: string;   // e.g. '/dashboard' - appended to SITE_URL
   note?: string;
   outro?: string;
 };
@@ -656,7 +656,7 @@ let signedOutAt = 0;
 
 /**
  * Why the last fetchWithTimeout failed. "Backend is not reachable" on its own
- * is impossible to act on â€” this records whether the request timed out, was
+ * is impossible to act on - this records whether the request timed out, was
  * refused, or never left the device, so the message can say which.
  */
 let lastFetchFailure = '';
@@ -710,13 +710,30 @@ const attempted = (path: string) => {
   }
 };
 
-/** A reachability error a person can act on, rather than a dead end. */
-const unreachable = (path: string) =>
-  new Error(
-    `Could not reach ${attempted(path)}`
-    + (lastFetchFailure ? ` â€” ${lastFetchFailure}` : '')
-    + '. Check the connection and try again.',
+/**
+ * A reachability error that says which layer failed.
+ *
+ * /healthz is a plain GET with no custom headers, so a browser sends it
+ * without a preflight. If that succeeds while the real call did not, the
+ * connection is fine and the problem is the cross-origin request itself. If
+ * it fails too, nothing is leaving the device. Knowing which halves the
+ * search instead of leaving "not reachable" to cover both.
+ */
+const unreachable = async (path: string): Promise<Error> => {
+  const reason = lastFetchFailure;
+  let probe: string;
+  try {
+    const r = await fetch(apiUrl('/healthz'), { method: 'GET' });
+    probe = r.ok
+      ? 'A plain request to the server did work, so the connection is fine and it is this call that is failing'
+      : `A plain request to the server returned ${r.status}`;
+  } catch {
+    probe = 'A plain request to the server failed as well, so nothing is reaching it from this device';
+  }
+  return new Error(
+    `Could not reach ${attempted(path)}${reason ? ` - ${reason}` : ''}. ${probe}.`,
   );
+};
 
 const useAppStore = create<AppStoreState>()(
   persist(
@@ -724,10 +741,10 @@ const useAppStore = create<AppStoreState>()(
 
       // â”€â”€ Pipeline core â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // Completes `stage` on an application: stamps completedAt, awards SLA
-      // points to the assigned staff member (deterministic ledger id â€” can
+      // points to the assigned staff member (deterministic ledger id - can
       // never double-score), advances to the next stage (starting its timer
       // unless it waits for permission), and closes the case after
-      // visa+residency (+2, Processing â†’ Closed, student rating prompt).
+      // visa+residency (+2, Processing → Closed, student rating prompt).
       const completeStageCore = (applicationId: string, stage: PipelineStageId, byId: string, byName: string): boolean => {
         const app = get().applications.find(a => a.id === applicationId);
         const pipeline = app?.pipeline;
@@ -756,7 +773,7 @@ const useAppStore = create<AppStoreState>()(
               id: slaLedgerId(applicationId, stage),
               userId: app.assignedStaffId,
               delta: VISA_RESIDENCY_POINTS,
-              reason: `Visa & residency completed â€” ${app.name}`,
+              reason: `Visa & residency completed - ${app.name}`,
               kind: 'sla', at: now, applicationId, applicationName: app.name, stage,
             });
           } else if (window && startedAt) {
@@ -765,7 +782,7 @@ const useAppStore = create<AppStoreState>()(
               id: slaLedgerId(applicationId, stage),
               userId: app.assignedStaffId,
               delta,
-              reason: `${meta.label} ${delta > 0 ? 'completed on time' : 'completed late'} â€” ${app.name}`,
+              reason: `${meta.label} ${delta > 0 ? 'completed on time' : 'completed late'} - ${app.name}`,
               kind: 'sla', at: now, applicationId, applicationName: app.name, stage,
             });
           }
@@ -792,7 +809,7 @@ const useAppStore = create<AppStoreState>()(
                 ...(isFinal ? { stage: 'enrolled' as const } : {}),
                 events: [
                   ...(a.events ?? []),
-                  { id: `${a.id}-pipeline-${stage}-${Date.now()}`, type: 'document_verified' as const, byId, byName, time: now, details: `${meta.label} completed${isFinal ? ' â€” case closed' : ''}` },
+                  { id: `${a.id}-pipeline-${stage}-${Date.now()}`, type: 'document_verified' as const, byId, byName, time: now, details: `${meta.label} completed${isFinal ? ' - case closed' : ''}` },
                 ],
               };
             }),
@@ -802,7 +819,7 @@ const useAppStore = create<AppStoreState>()(
               ...(app.studentId ? [{
                 id: `${applicationId}-stage-${stage}-done`,
                 userId: app.studentId,
-                title: isFinal ? 'Congratulations â€” your case is complete!' : 'Application progress',
+                title: isFinal ? 'Congratulations - your case is complete!' : 'Application progress',
                 message: isFinal
                   ? 'Your visa & residency are ready. We would love to hear your feedback!'
                   : `${meta.label} has been completed. Next: ${nextMeta?.label ?? ''}`,
@@ -814,7 +831,7 @@ const useAppStore = create<AppStoreState>()(
                 id: `${applicationId}-stage-${stage}-pts`,
                 userId: app.assignedStaffId,
                 title: entries[0].delta >= 0 ? `+${entries[0].delta} performance points` : `${entries[0].delta} performance points`,
-                message: `${meta.label} â€” ${app.name}`,
+                message: `${meta.label} - ${app.name}`,
                 type: (entries[0].delta >= 0 ? 'success' : 'alert') as NotificationType,
                 time: now, read: false,
                 link: '/profile',
@@ -825,12 +842,12 @@ const useAppStore = create<AppStoreState>()(
 
         if (isFinal && app.studentId) {
           emailNotifyUser(get, app.studentId, {
-            subject: 'Your case is complete â€” The Way',
+            subject: 'Your case is complete - The Way',
             title: 'Congratulations!',
             intro: 'Your visa and residency documents are ready and your case is now complete.',
             ctaLabel: 'Open your dashboard',
             ctaPath: '/dashboard',
-            outro: 'We would love to hear about your experience â€” please leave us a rating in your portal.',
+            outro: 'We would love to hear about your experience - please leave us a rating in your portal.',
           }, { dedupeKey: `${applicationId}-closed` });
         }
         queueBackendSave(get);
@@ -905,7 +922,7 @@ const useAppStore = create<AppStoreState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: input }),
           }, 15_000);
-          if (!r) throw unreachable('/api/lookup-email');
+          if (!r) throw await unreachable('/api/lookup-email');
           const text = await r.text().catch(() => '');
           const j = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { email?: unknown; error?: unknown } | null;
           if (!r.ok) {
@@ -932,7 +949,7 @@ const useAppStore = create<AppStoreState>()(
         const token = (await supabase.auth.getSession()).data.session?.access_token;
         if (!token) throw new Error('Login failed');
         const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000);
-        if (!meResp) throw unreachable('/api/me-profile');
+        if (!meResp) throw await unreachable('/api/me-profile');
         const meText = await meResp.text().catch(() => '');
         const meJson = (meText ? (() => { try { return JSON.parse(meText); } catch { return null; } })() : null) as { user?: unknown; error?: unknown; details?: unknown } | null;
         if (!meResp.ok || !meJson || !meJson.user || typeof meJson.user !== 'object') {
@@ -958,7 +975,7 @@ const useAppStore = create<AppStoreState>()(
         const authStatus: AuthStatus = 'signed_in';
         set({ currentUser: user, authStatus });
         // Let them in now. The full snapshot is every application, document and
-        // message the account can see â€” for a CEO that is the whole company, and
+        // message the account can see - for a CEO that is the whole company, and
         // waiting for it over mobile data reads as a login that never finishes.
         // It lands behind them, and the visibility/poll refresh retries on failure.
         void (async () => {
@@ -967,7 +984,7 @@ const useAppStore = create<AppStoreState>()(
             await get().loadBackendState();
             get().checkExpiries();
             get().checkChatReminders();
-          } catch { /* transient â€” the periodic refresh picks it up */ }
+          } catch { /* transient - the periodic refresh picks it up */ }
         })();
         return user;
       },
@@ -984,7 +1001,7 @@ const useAppStore = create<AppStoreState>()(
           for (const key of Object.keys(localStorage)) {
             if (/^sb-.*-auth-token/.test(key)) localStorage.removeItem(key);
           }
-        } catch { /* storage unavailable â€” signOut below still clears the server side */ }
+        } catch { /* storage unavailable - signOut below still clears the server side */ }
         if (supabase) void supabase.auth.signOut().catch(() => {});
         localStorage.removeItem('the-way-storage');
         set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [], pointsLedger: [], universityConfig: null, purgedApplicationIds: [], unTrashedUserIds: [], announcements: [] });
@@ -1135,7 +1152,7 @@ const useAppStore = create<AppStoreState>()(
         const existing = get().currentUser;
         const existingStatus = get().authStatus;
         if (existing?.id === user.id && existingStatus !== 'signed_out') {
-          // Session already restored from localStorage â€” but a page refresh
+          // Session already restored from localStorage - but a page refresh
           // must still pull FRESH backend data (PRD Â§7), otherwise the user
           // keeps seeing the persisted snapshot until the next poll.
           await get().loadBackendState();
@@ -1174,7 +1191,7 @@ const useAppStore = create<AppStoreState>()(
             points: 0,
           };
         });
-        // Points live in the persistent ledger, not in profiles â€” reapply totals.
+        // Points live in the persistent ledger, not in profiles - reapply totals.
         set((state) => ({
           users: withLedgerPoints(users, state.pointsLedger),
           currentUser: state.currentUser
@@ -1224,7 +1241,7 @@ const useAppStore = create<AppStoreState>()(
 
         // Internal roles keep the shared state healthy: migrate legacy-stage
         // applications onto the new pipeline and apply any overdue SLA
-        // penalties (idempotent â€” deterministic ledger ids).
+        // penalties (idempotent - deterministic ledger ids).
         const me = get().currentUser;
         if (me && ['ceo', 'sales', 'ops', 'staff', 'agency_staff', 'customer_support'].includes(me.role)) {
           const nowIso = new Date().toISOString();
@@ -1237,7 +1254,7 @@ const useAppStore = create<AppStoreState>()(
                 next = { ...next, pipeline: legacyStageToPipeline(a.stage, nowIso) };
               }
               // Security migration: scrub any password persisted by the old
-              // "store credentials" design â€” passwords are email-only now.
+              // "store credentials" design - passwords are email-only now.
               if (next.studentCredentials?.password) {
                 migrated = true;
                 next = { ...next, studentCredentials: { username: next.studentCredentials.username, updatedAt: next.studentCredentials.updatedAt } };
@@ -1386,7 +1403,7 @@ const useAppStore = create<AppStoreState>()(
         const studentEmail = app.studentEmail ?? app.email;
         const autoAssignedStaffId = (() => {
           if (!app.university) return undefined;
-          // Primary: the configurable university â†’ staff mapping (PRD Â§9).
+          // Primary: the configurable university → staff mapping (PRD Â§9).
           const configured = resolveAutoStaff(get().users, get().universityConfig, app.university);
           if (configured) return configured.id;
           // Fallback: legacy per-staff university lists (load-balanced).
@@ -1473,9 +1490,9 @@ const useAppStore = create<AppStoreState>()(
         set((state) => {
           const at = new Date().toISOString();
           const entries: PointsEntry[] = [
-            { id: `act-${applicationId}-approved`, userId: actor.id, delta: 1, reason: `Approved application â€” ${app.name}`, kind: 'activity', at, applicationId, applicationName: app.name },
+            { id: `act-${applicationId}-approved`, userId: actor.id, delta: 1, reason: `Approved application - ${app.name}`, kind: 'activity', at, applicationId, applicationName: app.name },
             ...(source === 'agency' && app.agencyId
-              ? [{ id: `act-${applicationId}-agency-approved`, userId: app.agencyId, delta: 1, reason: `Student approved â€” ${app.name}`, kind: 'activity' as const, at, applicationId, applicationName: app.name }]
+              ? [{ id: `act-${applicationId}-agency-approved`, userId: app.agencyId, delta: 1, reason: `Student approved - ${app.name}`, kind: 'activity' as const, at, applicationId, applicationName: app.name }]
               : []),
           ];
           const pointsLedger = appendLedger(state.pointsLedger, entries);
@@ -1484,7 +1501,7 @@ const useAppStore = create<AppStoreState>()(
 
         if (autoAssignedStaffId) {
           emailNotifyUser(get, autoAssignedStaffId, {
-            subject: 'New student assigned â€” The Way',
+            subject: 'New student assigned - The Way',
             title: 'A new student was assigned to you',
             intro: `You have been assigned a new student: ${app.name}.`,
             ctaLabel: 'Open your dashboard',
@@ -1589,20 +1606,20 @@ const useAppStore = create<AppStoreState>()(
             ],
           };
           set((state) => {
-            const pointsLedger = appendLedger(state.pointsLedger, [{ id: `act-${appId}-created`, userId: actor.id, delta: 1, reason: `Created student â€” ${name}`, kind: 'activity', at: nowIso, applicationId: appId, applicationName: name }]);
+            const pointsLedger = appendLedger(state.pointsLedger, [{ id: `act-${appId}-created`, userId: actor.id, delta: 1, reason: `Created student - ${name}`, kind: 'activity', at: nowIso, applicationId: appId, applicationName: name }]);
             return {
               applications: [application, ...state.applications],
               ...ledgerPatch(state, pointsLedger),
               notifications: [
                 ...state.notifications,
                 { id: `${studentId}-welcome`, userId: studentId, title: 'Welcome to The Way', message: 'Your student account has been created', type: 'success' as const, time: nowIso, read: false, link: '/dashboard' },
-                ...(autoStaff ? [{ id: `${appId}-assign-${autoStaff.id}`, userId: autoStaff.id, title: 'New Student Assigned', message: `${name}${university ? ` â€” ${getUniversityName(university)}` : ''}`, type: 'info' as const, time: nowIso, read: false, link: `/staff?student=${appId}` }] : []),
+                ...(autoStaff ? [{ id: `${appId}-assign-${autoStaff.id}`, userId: autoStaff.id, title: 'New Student Assigned', message: `${name}${university ? ` - ${getUniversityName(university)}` : ''}`, type: 'info' as const, time: nowIso, read: false, link: `/staff?student=${appId}` }] : []),
               ],
             };
           });
           if (autoStaff) {
             emailNotifyUser(get, autoStaff.id, {
-              subject: 'New student assigned â€” The Way',
+              subject: 'New student assigned - The Way',
               title: 'A new student was assigned to you',
               intro: `You have been assigned a new student: ${name}${university ? ` (${getUniversityName(university)})` : ''}.`,
               ctaLabel: 'Open your dashboard',
@@ -1664,7 +1681,7 @@ const useAppStore = create<AppStoreState>()(
               id: `act-${applicationId}-rejected-nonotes`,
               userId: actor.id,
               delta: -1,
-              reason: `Rejected without internal notes â€” ${app.name}`,
+              reason: `Rejected without internal notes - ${app.name}`,
               kind: 'activity',
               at: nowIso,
               applicationId,
@@ -1679,10 +1696,10 @@ const useAppStore = create<AppStoreState>()(
             title: 'Application Update',
             greeting: `Dear ${app.name},`,
             intro: 'Thank you for your interest in studying in Georgia with The Way. After careful review, we are unable to approve your application at this time.',
-            outro: 'Eligibility rules can change, and we may reach out again if your situation or the requirements change in the future. If you have any questions, please reply to this email â€” we are happy to help.',
+            outro: 'Eligibility rules can change, and we may reach out again if your situation or the requirements change in the future. If you have any questions, please reply to this email - we are happy to help.',
           });
           const text = `Dear ${app.name},\n\nThank you for your interest in studying in Georgia with The Way. After careful review, we are unable to approve your application at this time.\n\nEligibility rules can change, and we may reach out again in the future. If you have any questions, please reply to this email.\n\nWarm regards,\nThe Way Team`;
-          sendMail({ to: applicantEmail, subject: 'Application Update â€” The Way', text, html });
+          sendMail({ to: applicantEmail, subject: 'Application Update - The Way', text, html });
         }
         queueBackendSave(get);
       },
@@ -1710,7 +1727,7 @@ const useAppStore = create<AppStoreState>()(
               id: `act-${applicationId}-intake`,
               userId: actor.id,
               delta: 1,
-              reason: `Filled intake â€” ${app.name}`,
+              reason: `Filled intake - ${app.name}`,
               kind: 'activity',
               at: new Date().toISOString(),
               applicationId,
@@ -1725,7 +1742,7 @@ const useAppStore = create<AppStoreState>()(
               id: `act-${applicationId}-intake-sla`,
               userId: actor.id,
               delta: 1,
-              reason: `Intake completed within 24h â€” ${app.name}`,
+              reason: `Intake completed within 24h - ${app.name}`,
               kind: 'activity',
               at: new Date().toISOString(),
               applicationId,
@@ -1775,7 +1792,7 @@ const useAppStore = create<AppStoreState>()(
             id: `act-${applicationId}-claimed`,
             userId: actor.id,
             delta: 1,
-            reason: `Claimed lead â€” ${app.name}`,
+            reason: `Claimed lead - ${app.name}`,
             kind: 'activity',
             at: new Date().toISOString(),
             applicationId,
@@ -1837,7 +1854,7 @@ const useAppStore = create<AppStoreState>()(
 
         if (app.studentId) {
           emailNotifyUser(get, app.studentId, {
-            subject: `Application Update: ${stageLabel} â€” The Way`,
+            subject: `Application Update: ${stageLabel} - The Way`,
             title: 'Your application was updated',
             intro: `Your application has moved to a new stage: ${stageLabel}.`,
             ctaLabel: 'View your application',
@@ -1884,7 +1901,7 @@ const useAppStore = create<AppStoreState>()(
 
         const newDoc: Omit<Document, 'id'> = {
           ...doc,
-          // Staff upload their own work product â€” no self-verification click
+          // Staff upload their own work product - no self-verification click
           // needed. (Student/agent uploads go through the review workflow.)
           status: 'verified',
           uploadedAt: new Date().toISOString(),
@@ -1907,15 +1924,15 @@ const useAppStore = create<AppStoreState>()(
           } : a),
         }));
         emailNotifyUser(get, doc.studentId, {
-          subject: `New document added: ${doc.title} â€” The Way`,
+          subject: `New document added: ${doc.title} - The Way`,
           title: 'A new document was added',
-          intro: `A new document â€” "${doc.title}" â€” has been added to your account.`,
+          intro: `A new document - "${doc.title}" - has been added to your account.`,
           ctaLabel: 'Open your dashboard',
           ctaPath: '/dashboard',
           outro: 'Log in to your dashboard to view and download it.',
         }, { dedupeKey: `${docId}-upload` });
         // Uploading a stage document (translation, approval letter, visa,
-        // residency, â€¦) completes the matching pipeline stage automatically.
+        // residency, …) completes the matching pipeline stage automatically.
         if (a) autoCompleteFromDocuments(a.id, actor.id, actor.name);
         queueBackendSave(get);
       },
@@ -1948,9 +1965,9 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, doc.studentId, {
-          subject: `Document ready: ${doc.title} â€” The Way`,
+          subject: `Document ready: ${doc.title} - The Way`,
           title: 'Your document is ready',
-          intro: `Good news â€” your document "${doc.title}" has been verified and is ready.`,
+          intro: `Good news - your document "${doc.title}" has been verified and is ready.`,
           ctaLabel: 'Download from your dashboard',
           ctaPath: '/dashboard',
           outro: 'Log in to your dashboard to download your document.',
@@ -1983,7 +2000,7 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, studentUserId, {
-          subject: 'University Assigned â€” The Way',
+          subject: 'University Assigned - The Way',
           title: 'Your university has been assigned',
           intro: `Your university has been set to ${getUniversityName(universityId)}.`,
           ctaLabel: 'View your application',
@@ -1996,7 +2013,7 @@ const useAppStore = create<AppStoreState>()(
               id: `act-uni-${studentUserId}`,
               userId: actor.id,
               delta: 1,
-              reason: `Assigned university â€” ${getUniversityName(universityId)}`,
+              reason: `Assigned university - ${getUniversityName(universityId)}`,
               kind: 'activity',
               at: new Date().toISOString(),
             }]);
@@ -2019,11 +2036,11 @@ const useAppStore = create<AppStoreState>()(
               } : a),
               notifications: [
                 ...state.notifications,
-                { id: `${studentUserId}-auto-assign-${autoStaff.id}`, userId: autoStaff.id, title: 'New Student Assigned', message: `${targetApp.name} â€” ${getUniversityName(universityId)}`, type: 'info', time: new Date().toISOString(), read: false, link: `/staff?student=${targetApp.id}` },
+                { id: `${studentUserId}-auto-assign-${autoStaff.id}`, userId: autoStaff.id, title: 'New Student Assigned', message: `${targetApp.name} - ${getUniversityName(universityId)}`, type: 'info', time: new Date().toISOString(), read: false, link: `/staff?student=${targetApp.id}` },
               ],
             }));
             emailNotifyUser(get, autoStaff.id, {
-              subject: 'New student assigned â€” The Way',
+              subject: 'New student assigned - The Way',
               title: 'A new student was assigned to you',
               intro: `You have been assigned a new student: ${targetApp.name} (${getUniversityName(universityId)}).`,
               ctaLabel: 'Open your dashboard',
@@ -2055,9 +2072,9 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, staffUserId, {
-          subject: 'New student assigned â€” The Way',
+          subject: 'New student assigned - The Way',
           title: 'A new student was assigned to you',
-          intro: `You have been assigned a new student: ${a?.name ?? 'New student'}${a?.university ? ` â€” ${getUniversityName(a.university)}` : ''}.`,
+          intro: `You have been assigned a new student: ${a?.name ?? 'New student'}${a?.university ? ` - ${getUniversityName(a.university)}` : ''}.`,
           ctaLabel: 'Open your dashboard',
           ctaPath: '/staff',
           outro: 'Log in to review their application and documents.',
@@ -2088,9 +2105,9 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, staffUserId, {
-          subject: 'New student assigned â€” The Way',
+          subject: 'New student assigned - The Way',
           title: 'A new student was assigned to you',
-          intro: `You have been assigned a new student: ${app.name ?? 'New student'}${app.university ? ` â€” ${getUniversityName(app.university)}` : ''}.`,
+          intro: `You have been assigned a new student: ${app.name ?? 'New student'}${app.university ? ` - ${getUniversityName(app.university)}` : ''}.`,
           ctaLabel: 'Open your dashboard',
           ctaPath: '/staff',
           outro: 'Log in to review their application and documents.',
@@ -2426,7 +2443,7 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         ceoUsers.forEach(u => emailNotifyUser(get, u.id, {
-          subject: 'Credential change requested â€” The Way',
+          subject: 'Credential change requested - The Way',
           title: 'An agency requested a credential change',
           intro: `${actor.name} requested new login credentials for their student "${app.name}". Reason: ${trimmed}`,
           ctaLabel: 'Review in admin',
@@ -2475,7 +2492,7 @@ const useAppStore = create<AppStoreState>()(
             note: 'Please share these with your student securely. The previous password no longer works.',
           });
           const text = `Updated credentials for ${req.studentName}\nUsername: ${username}\nPassword: ${newPassword}`;
-          void sendMail({ to: agency.email, subject: 'Updated student credentials â€” The Way', text, html });
+          void sendMail({ to: agency.email, subject: 'Updated student credentials - The Way', text, html });
         }
         queueBackendSave(get);
       },
@@ -2497,7 +2514,7 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, req.agencyId, {
-          subject: 'Credential request declined â€” The Way',
+          subject: 'Credential request declined - The Way',
           title: 'Your credential request was declined',
           intro: `Your request to change the login credentials for "${req.studentName}" was declined${note?.trim() ? `: ${note.trim()}` : '.'}`,
           ctaLabel: 'Open your portal',
@@ -2515,7 +2532,7 @@ const useAppStore = create<AppStoreState>()(
         if (appt.userId && appt.userId !== actor.id) {
           const whenLabel = [appt.date, appt.time].filter(Boolean).join(' at ');
           emailNotifyUser(get, appt.userId, {
-            subject: 'Your appointment is confirmed â€” The Way',
+            subject: 'Your appointment is confirmed - The Way',
             title: 'Your appointment is confirmed',
             intro: `Your appointment${appt.title ? ` "${appt.title}"` : ''} has been scheduled${whenLabel ? ` for ${whenLabel}` : ''}.`,
             ctaLabel: 'View your appointments',
@@ -2571,7 +2588,7 @@ const useAppStore = create<AppStoreState>()(
             const recipient = state.users.find(u => u.id === recipientId);
             if (recipient) {
               emailNotifyUser(get, recipientId, {
-                subject: 'Reminder: you have an unread message â€” The Way',
+                subject: 'Reminder: you have an unread message - The Way',
                 title: 'You still have an unread message',
                 intro: 'You have a message on The Way platform that you haven\'t read yet.',
                 ctaLabel: 'Open your messages',
@@ -2619,7 +2636,7 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, app.agencyId, {
-          subject: 'Action required: more info needed â€” The Way',
+          subject: 'Action required: more info needed - The Way',
           title: 'More information is required',
           intro: `Additional information is required for the application of ${app.name}: ${message}`,
           ctaLabel: 'Respond in your portal',
@@ -2656,7 +2673,7 @@ const useAppStore = create<AppStoreState>()(
               id: `${applicationId}-extra-docs-notify-${u.id}-${Date.now()}`,
               userId: u.id,
               title: 'Agency added documents',
-              message: `${app.name} â€¢ ${files.length} new file(s)`,
+              message: `${app.name} • ${files.length} new file(s)`,
               type: 'info' as const,
               time: now,
               read: false,
@@ -2727,7 +2744,7 @@ const useAppStore = create<AppStoreState>()(
         if (!get().chatEmailNotify[notifyKey]) {
           const ctaPath = chatPathForRole(toUser.role);
           emailNotifyUser(get, toUserId, {
-            subject: 'You have a new message â€” The Way',
+            subject: 'You have a new message - The Way',
             title: 'You have a new message',
             intro: `${actor.name} sent you a new message on The Way platform.`,
             ctaLabel: 'Open your messages',
@@ -2781,7 +2798,7 @@ const useAppStore = create<AppStoreState>()(
               ctaUrl: `${SITE_URL}/dashboard`,
               note: 'If you need help with your renewal, reply to this email and our team will assist you.',
             });
-            void sendMail({ to: current.email, subject: 'Visa Expiry Reminder â€” The Way', text: msg, html });
+            void sendMail({ to: current.email, subject: 'Visa Expiry Reminder - The Way', text: msg, html });
           }
         }
 
@@ -2798,7 +2815,7 @@ const useAppStore = create<AppStoreState>()(
               ctaUrl: `${SITE_URL}/dashboard`,
               note: 'If you need help with your renewal, reply to this email and our team will assist you.',
             });
-            void sendMail({ to: current.email, subject: 'Residence Permit Reminder â€” The Way', text: msg, html });
+            void sendMail({ to: current.email, subject: 'Residence Permit Reminder - The Way', text: msg, html });
           }
         }
       },
@@ -2846,11 +2863,11 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, recipientId, {
-          subject: 'Action needed: document required â€” The Way',
+          subject: 'Action needed: document required - The Way',
           title: 'A document was requested',
           intro: effectiveTarget === 'agency'
-            ? `The following document was requested for your student ${app?.name ?? ''}: "${title}"${description ? ` â€” ${description}` : ''}.`
-            : `Your advisor has requested the following document: "${title}"${description ? ` â€” ${description}` : ''}.`,
+            ? `The following document was requested for your student ${app?.name ?? ''}: "${title}"${description ? ` - ${description}` : ''}.`
+            : `Your advisor has requested the following document: "${title}"${description ? ` - ${description}` : ''}.`,
           ctaLabel: 'Upload in your portal',
           ctaPath: effectiveTarget === 'agency' ? '/agencies' : '/dashboard',
           note: 'Please upload this document as soon as possible so we can continue processing the application.',
@@ -2902,7 +2919,7 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, req.requestedBy, {
-          subject: 'Requested document uploaded â€” The Way',
+          subject: 'Requested document uploaded - The Way',
           title: 'A requested document was uploaded',
           intro: `${actor.name} uploaded the document you requested: "${req.title}".`,
           ctaLabel: 'Review in your dashboard',
@@ -2938,7 +2955,7 @@ const useAppStore = create<AppStoreState>()(
           ],
         }));
         emailNotifyUser(get, req.requestedBy, {
-          subject: 'Requested document uploaded â€” The Way',
+          subject: 'Requested document uploaded - The Way',
           title: 'A requested document was uploaded',
           intro: `${actor.name} uploaded the document you requested: "${req.title}".`,
           ctaLabel: 'Review in your dashboard',
@@ -2953,7 +2970,7 @@ const useAppStore = create<AppStoreState>()(
         requireRole(actor, ['staff', 'agency_staff', 'ops', 'ceo']);
         const req = get().documentRequests.find(r => r.id === requestId);
         if (!req) throw new Error('Request not found');
-        if (req.status !== 'uploaded' && req.status !== 'fulfilled') throw new Error('Nothing to review â€” no upload yet');
+        if (req.status !== 'uploaded' && req.status !== 'fulfilled') throw new Error('Nothing to review - no upload yet');
         const now = new Date().toISOString();
         const uploaderId = req.target === 'agency' ? req.agencyId : req.studentId;
         const file = req.fulfilledFile;
@@ -3008,7 +3025,7 @@ const useAppStore = create<AppStoreState>()(
                 id: `docreq-${decision}-${requestId}-${Date.now()}`,
                 userId: uploaderId,
                 title: backToPending ? 'Re-upload Requested' : 'Document Rejected',
-                message: `"${req.title}"${note?.trim() ? ` â€” ${note.trim()}` : ''}`,
+                message: `"${req.title}"${note?.trim() ? ` - ${note.trim()}` : ''}`,
                 type: 'alert' as const,
                 time: now,
                 read: false,
@@ -3018,9 +3035,9 @@ const useAppStore = create<AppStoreState>()(
         }
         if (uploaderId) {
           emailNotifyUser(get, uploaderId, {
-            subject: `Document ${decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 're-upload requested'} â€” The Way`,
+            subject: `Document ${decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 're-upload requested'} - The Way`,
             title: decision === 'approved' ? 'Your document was approved' : decision === 'rejected' ? 'Your document was rejected' : 'Please re-upload a document',
-            intro: `"${req.title}"${note?.trim() ? ` â€” ${note.trim()}` : ''}`,
+            intro: `"${req.title}"${note?.trim() ? ` - ${note.trim()}` : ''}`,
             ctaLabel: 'Open your portal',
             ctaPath: req.target === 'agency' ? '/agencies' : '/dashboard',
           }, { dedupeKey: `${requestId}-${decision}-${Date.now()}` });
@@ -3059,24 +3076,24 @@ const useAppStore = create<AppStoreState>()(
             },
             events: [
               ...(a.events ?? []),
-              { id: `${a.id}-permission-${stage}-${Date.now()}`, type: 'needs_info' as const, byId: actor.id, byName: actor.name, time: now, details: `Permission granted: ${meta.label} â€” timer started` },
+              { id: `${a.id}-permission-${stage}-${Date.now()}`, type: 'needs_info' as const, byId: actor.id, byName: actor.name, time: now, details: `Permission granted: ${meta.label} - timer started` },
             ],
           } : a),
           notifications: app.assignedStaffId ? [
             ...state.notifications,
-            { id: `${applicationId}-perm-${stage}`, userId: app.assignedStaffId, title: `${meta.label}: permission granted`, message: `${app.name} â€” the SLA timer is now running.`, type: 'info' as const, time: now, read: false },
+            { id: `${applicationId}-perm-${stage}`, userId: app.assignedStaffId, title: `${meta.label}: permission granted`, message: `${app.name} - the SLA timer is now running.`, type: 'info' as const, time: now, read: false },
           ] : state.notifications,
         }));
         if (app.assignedStaffId) {
           emailNotifyUser(get, app.assignedStaffId, {
-            subject: `${meta.label}: permission granted â€” The Way`,
+            subject: `${meta.label}: permission granted - The Way`,
             title: 'A stage timer has started',
             intro: `${actor.name} granted permission for "${meta.label}" on ${app.name}'s case. The SLA timer is now running.`,
             ctaLabel: 'Open your dashboard',
             ctaPath: '/staff',
           }, { dedupeKey: `${applicationId}-perm-${stage}` });
         }
-        // The document may already be uploaded â€” complete instantly if so.
+        // The document may already be uploaded - complete instantly if so.
         autoCompleteFromDocuments(applicationId, actor.id, actor.name);
         queueBackendSave(get);
       },
@@ -3129,7 +3146,7 @@ const useAppStore = create<AppStoreState>()(
           } : a),
           notifications: [
             ...state.notifications,
-            ...(app.assignedStaffId ? [{ id: `${applicationId}-cancelled-staff`, userId: app.assignedStaffId, title: 'Case Cancelled', message: `${app.name} â€” cancelled by CEO`, type: 'alert' as const, time: now, read: false }] : []),
+            ...(app.assignedStaffId ? [{ id: `${applicationId}-cancelled-staff`, userId: app.assignedStaffId, title: 'Case Cancelled', message: `${app.name} - cancelled by CEO`, type: 'alert' as const, time: now, read: false }] : []),
             ...(app.studentId ? [{ id: `${applicationId}-cancelled-student`, userId: app.studentId, title: 'Application Update', message: 'Your case has been cancelled. Please contact us for details.', type: 'alert' as const, time: now, read: false }] : []),
           ],
         }));
@@ -3145,7 +3162,7 @@ const useAppStore = create<AppStoreState>()(
         if (!residencyDone) throw new Error('Rating opens after your residency is uploaded');
         const s = Math.round(stars);
         if (s < 1 || s > 5) throw new Error('Rating must be between 1 and 5 stars');
-        if (app.rating) throw new Error('You have already rated our service â€” thank you!');
+        if (app.rating) throw new Error('You have already rated our service - thank you!');
         const now = new Date().toISOString();
         const ceoUsers = get().users.filter(u => u.role === 'ceo');
         set((state) => ({
@@ -3159,7 +3176,7 @@ const useAppStore = create<AppStoreState>()(
               id: `${applicationId}-rating-${u.id}`,
               userId: u.id,
               title: `New ${s}-star rating`,
-              message: `${app.name} rated the service ${s}/5${comment?.trim() ? ` â€” "${comment.trim().slice(0, 120)}"` : ''}`,
+              message: `${app.name} rated the service ${s}/5${comment?.trim() ? ` - "${comment.trim().slice(0, 120)}"` : ''}`,
               type: 'success' as const,
               time: now,
               read: false,
@@ -3242,7 +3259,7 @@ const useAppStore = create<AppStoreState>()(
             id,
             userId: app.assignedStaffId,
             delta: window.latePoints,
-            reason: `${meta.label} deadline passed â€” ${app.name}`,
+            reason: `${meta.label} deadline passed - ${app.name}`,
             kind: 'sla',
             at: nowIso,
             applicationId: app.id,
@@ -3252,7 +3269,7 @@ const useAppStore = create<AppStoreState>()(
           lateNotifs.push({
             id: `sla-late-${app.id}-${stage}-staff`,
             userId: app.assignedStaffId,
-            title: `${window.latePoints} points â€” deadline passed`,
+            title: `${window.latePoints} points - deadline passed`,
             message: `${meta.label} for ${app.name} is overdue.`,
             type: 'alert',
             time: nowIso,
@@ -3323,7 +3340,7 @@ const useAppStore = create<AppStoreState>()(
         queueBackendSave(get);
       },
 
-      // â”€â”€ App announcements (CEO â†’ student app home feed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â”€â”€ App announcements (CEO → student app home feed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
       ceoAddAnnouncement: (title: string, body: string) => {
         const actor = ensureSignedIn(get().currentUser, get().authStatus);
