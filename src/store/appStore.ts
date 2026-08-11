@@ -666,39 +666,98 @@ let lastFetchFailure = '';
  * otherwise sit on a request for ever with nothing on screen to explain it.
  * Returns null on timeout or network failure so callers can simply bail.
  */
-const fetchWithTimeout = async (
+/**
+ * The plain browser fetch, before Capacitor replaced it.
+ *
+ * In the packaged app, Capacitor swaps window.fetch for one that sends GET
+ * through a local proxy but hands POST to the native bridge. The native side
+ * has been answering GET and leaving POST open until it times out, so we keep
+ * a way back to the browser's own fetch.
+ */
+const browserFetch = (): typeof fetch | null => {
+  const w = window as unknown as { CapacitorWebFetch?: typeof fetch };
+  return typeof w.CapacitorWebFetch === 'function' ? w.CapacitorWebFetch : null;
+};
+
+/**
+ * Which transport has been shown to work here, remembered after the first
+ * success. Nothing that changes data is ever sent twice: only a read-only
+ * call may try both, and sign-in starts with one, so the choice is settled
+ * before anything is written.
+ */
+let transport: 'native' | 'browser' | null = null;
+
+/** One attempt, abandoned if it does not answer in time. */
+const attempt = (
+  impl: typeof fetch,
   url: string,
-  init: RequestInit = {},
-  ms = 25_000,
-): Promise<Response | null> => {
+  init: RequestInit,
+  ms: number,
+): Promise<Response> => {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  // Raced rather than relying on the abort signal alone: native HTTP on the
-  // phone does not always honour it, and a request that ignores abort would
-  // hang for ever — which is the failure this exists to prevent.
+  // Raced rather than relying on the abort signal alone: the native layer
+  // ignores it, and a request that ignores abort would hang for ever, which
+  // is the failure this exists to prevent.
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       controller.abort();
       reject(new Error(`timed out after ${Math.round(ms / 1000)}s`));
     }, ms);
   });
-  try {
-    const resp = await Promise.race([
-      fetch(apiUrl(url), { ...init, signal: controller.signal }),
-      timeout,
-    ]);
-    lastFetchFailure = '';
-    return resp;
-  } catch (e) {
-    const aborted = e instanceof DOMException && e.name === 'AbortError';
-    const detail = e instanceof Error ? e.message : String(e);
-    lastFetchFailure = aborted
-      ? `timed out after ${Math.round(ms / 1000)}s`
-      : detail || 'network request failed';
-    return null;
-  } finally {
+  return Promise.race([
+    impl(url, { ...init, signal: controller.signal }),
+    timeout,
+  ]).finally(() => {
     if (timer) clearTimeout(timer);
+  });
+};
+
+/**
+ * fetch that gives up rather than hanging. A phone on a weak connection would
+ * otherwise sit on a request for ever with nothing on screen to explain it.
+ * Returns null on timeout or network failure so callers can simply bail.
+ *
+ * Pass `readOnly` for a request that can be repeated harmlessly. Those may
+ * fall back to the browser's fetch if the native one does not answer, which
+ * is what settles the transport for the rest of the session.
+ */
+const fetchWithTimeout = async (
+  url: string,
+  init: RequestInit = {},
+  ms = 25_000,
+  { readOnly = false }: { readOnly?: boolean } = {},
+): Promise<Response | null> => {
+  const plain = browserFetch();
+  const order: Array<['native' | 'browser', typeof fetch]> =
+    transport === 'browser' && plain ? [['browser', plain]]
+    : transport === 'native' ? [['native', fetch]]
+    : plain && readOnly ? [['native', fetch], ['browser', plain]]
+    : [['native', fetch]];
+
+  // With a second transport waiting there is no reason to spend the whole
+  // budget on the first: a healthy answer arrives well inside a second.
+  const budget = order.length > 1 ? Math.min(ms, 8_000) : ms;
+  let failure = '';
+
+  for (const [name, impl] of order) {
+    try {
+      const resp = await attempt(impl, apiUrl(url), init, budget);
+      transport = name;
+      lastFetchFailure = '';
+      return resp;
+    } catch (e) {
+      const aborted = e instanceof DOMException && e.name === 'AbortError';
+      const detail = e instanceof Error ? e.message : String(e);
+      failure = aborted
+        ? `timed out after ${Math.round(budget / 1000)}s`
+        : detail || 'network request failed';
+    }
   }
+  lastFetchFailure = order.length > 1
+    ? `${failure} over both the native and the browser connection`
+    : failure;
+  return null;
 };
 
 /** Where the request genuinely went, after the host is resolved. */
@@ -713,25 +772,27 @@ const attempted = (path: string) => {
 /**
  * A reachability error that says which layer failed.
  *
- * /healthz is a plain GET with no custom headers, so a browser sends it
- * without a preflight. If that succeeds while the real call did not, the
- * connection is fine and the problem is the cross-origin request itself. If
- * it fails too, nothing is leaving the device. Knowing which halves the
- * search instead of leaving "not reachable" to cover both.
+ * An earlier version probed /healthz with a GET and reported that the
+ * connection was fine. It was, but it proved less than it looked: in the
+ * packaged app a GET is proxied locally while a POST goes to the native
+ * bridge, so the probe was testing a path the failing call never took. The
+ * probe now uses the same method as the request that failed, and names the
+ * transport, so the answer is about the call that actually broke.
  */
-const unreachable = async (path: string): Promise<Error> => {
+const unreachable = async (path: string, method = 'GET'): Promise<Error> => {
   const reason = lastFetchFailure;
+  const via = transport ? ` over the ${transport} connection` : '';
   let probe: string;
   try {
-    const r = await fetch(apiUrl('/healthz'), { method: 'GET' });
+    const r = await attempt(fetch, apiUrl('/healthz'), { method: 'GET' }, 8_000);
     probe = r.ok
-      ? 'A plain request to the server did work, so the connection is fine and it is this call that is failing'
-      : `A plain request to the server returned ${r.status}`;
+      ? `The server answers a GET, so the connection is fine and it is this ${method} that is failing`
+      : `The server answered a GET with ${r.status}`;
   } catch {
-    probe = 'A plain request to the server failed as well, so nothing is reaching it from this device';
+    probe = 'A GET to the server failed as well, so nothing is reaching it from this device';
   }
   return new Error(
-    `Could not reach ${attempted(path)}${reason ? ` - ${reason}` : ''}. ${probe}.`,
+    `Could not reach ${attempted(path)}${via}${reason ? ` - ${reason}` : ''}. ${probe}.`,
   );
 };
 
@@ -921,8 +982,11 @@ const useAppStore = create<AppStoreState>()(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: input }),
-          }, 15_000);
-          if (!r) throw await unreachable('/api/lookup-email');
+            // A lookup changes nothing, so it may try both transports. Being
+            // the first call of every sign-in, it is also what settles which
+            // one the rest of the session uses.
+          }, 15_000, { readOnly: true });
+          if (!r) throw await unreachable('/api/lookup-email', 'POST');
           const text = await r.text().catch(() => '');
           const j = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { email?: unknown; error?: unknown } | null;
           if (!r.ok) {
@@ -948,7 +1012,7 @@ const useAppStore = create<AppStoreState>()(
         if (!data.user) throw new Error('Login failed');
         const token = (await supabase.auth.getSession()).data.session?.access_token;
         if (!token) throw new Error('Login failed');
-        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000);
+        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000, { readOnly: true });
         if (!meResp) throw await unreachable('/api/me-profile');
         const meText = await meResp.text().catch(() => '');
         const meJson = (meText ? (() => { try { return JSON.parse(meText); } catch { return null; } })() : null) as { user?: unknown; error?: unknown; details?: unknown } | null;
@@ -1134,7 +1198,7 @@ const useAppStore = create<AppStoreState>()(
         if (!session?.user?.id) return;
         if (Date.now() - signedOutAt < 10_000) return;
         const token = session.access_token;
-        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000);
+        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000, { readOnly: true });
         if (!meResp || !meResp.ok) return;
         const meJson = (await meResp.json().catch(() => null)) as { user?: unknown } | null;
         if (!meJson || !meJson.user || typeof meJson.user !== 'object') return;
