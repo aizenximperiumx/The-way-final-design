@@ -1,7 +1,8 @@
 // First, before anything can make a request: point /api at the live server
-// when we are running inside the packaged app.
-import { installApiHost } from './lib/apiHost'
-installApiHost()
+// and send it through Android rather than the WebView, when we are running
+// inside the packaged app.
+import { installNet } from './lib/net'
+installNet()
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'

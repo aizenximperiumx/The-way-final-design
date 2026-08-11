@@ -20,7 +20,8 @@ import {
   type UniversityConfig,
 } from '../lib/pipeline';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
-import { API_HOST, apiUrl, isBundledApp } from '../lib/apiHost';
+import { API_HOST, apiUrl } from '../lib/apiHost';
+import { appFetch } from '../lib/net';
 
 export type { ApplicationPipeline, PipelineStageId, PointsEntry, UniversityConfig } from '../lib/pipeline';
 
@@ -666,27 +667,6 @@ let lastFetchFailure = '';
  * otherwise sit on a request for ever with nothing on screen to explain it.
  * Returns null on timeout or network failure so callers can simply bail.
  */
-/**
- * The plain browser fetch, before Capacitor replaced it.
- *
- * In the packaged app, Capacitor swaps window.fetch for one that sends GET
- * through a local proxy but hands POST to the native bridge. The native side
- * has been answering GET and leaving POST open until it times out, so we keep
- * a way back to the browser's own fetch.
- */
-const browserFetch = (): typeof fetch | null => {
-  const w = window as unknown as { CapacitorWebFetch?: typeof fetch };
-  return typeof w.CapacitorWebFetch === 'function' ? w.CapacitorWebFetch : null;
-};
-
-/**
- * Which transport has been shown to work here, remembered after the first
- * success. Nothing that changes data is ever sent twice: only a read-only
- * call may try both, and sign-in starts with one, so the choice is settled
- * before anything is written.
- */
-let transport: 'native' | 'browser' | null = null;
-
 /** One attempt, abandoned if it does not answer in time. */
 const attempt = (
   impl: typeof fetch,
@@ -718,46 +698,27 @@ const attempt = (
  * otherwise sit on a request for ever with nothing on screen to explain it.
  * Returns null on timeout or network failure so callers can simply bail.
  *
- * Pass `readOnly` for a request that can be repeated harmlessly. Those may
- * fall back to the browser's fetch if the native one does not answer, which
- * is what settles the transport for the rest of the session.
+ * There is one transport now. Racing a native attempt against a browser one
+ * only ever produced two ways to hang, because both ended up in the WebView;
+ * appFetch goes through Android directly, which is the thing that was missing.
  */
 const fetchWithTimeout = async (
   url: string,
   init: RequestInit = {},
   ms = 25_000,
-  { readOnly = false }: { readOnly?: boolean } = {},
 ): Promise<Response | null> => {
-  const plain = browserFetch();
-  const order: Array<['native' | 'browser', typeof fetch]> =
-    transport === 'browser' && plain ? [['browser', plain]]
-    : transport === 'native' ? [['native', fetch]]
-    : plain && readOnly ? [['native', fetch], ['browser', plain]]
-    : [['native', fetch]];
-
-  // With a second transport waiting there is no reason to spend the whole
-  // budget on the first: a healthy answer arrives well inside a second.
-  const budget = order.length > 1 ? Math.min(ms, 8_000) : ms;
-  let failure = '';
-
-  for (const [name, impl] of order) {
-    try {
-      const resp = await attempt(impl, apiUrl(url), init, budget);
-      transport = name;
-      lastFetchFailure = '';
-      return resp;
-    } catch (e) {
-      const aborted = e instanceof DOMException && e.name === 'AbortError';
-      const detail = e instanceof Error ? e.message : String(e);
-      failure = aborted
-        ? `timed out after ${Math.round(budget / 1000)}s`
-        : detail || 'network request failed';
-    }
+  try {
+    const resp = await attempt(appFetch, apiUrl(url), init, ms);
+    lastFetchFailure = '';
+    return resp;
+  } catch (e) {
+    const aborted = e instanceof DOMException && e.name === 'AbortError';
+    const detail = e instanceof Error ? e.message : String(e);
+    lastFetchFailure = aborted
+      ? `timed out after ${Math.round(ms / 1000)}s`
+      : detail || 'network request failed';
+    return null;
   }
-  lastFetchFailure = order.length > 1
-    ? `${failure} over both the native and the browser connection`
-    : failure;
-  return null;
 };
 
 /** Where the request genuinely went, after the host is resolved. */
@@ -781,15 +742,15 @@ const attempted = (path: string) => {
  */
 const unreachable = async (path: string, method = 'GET'): Promise<Error> => {
   const reason = lastFetchFailure;
-  const via = transport ? ` over the ${transport} connection` : '';
-
   // Absolute, because apiUrl only redirects paths under /api and /healthz is
   // not one. Asking for it relatively fetched the app's own bundle, which
   // answers 200 with index.html, so the probe reported the server healthy
   // without ever having contacted it. Three rounds were spent on that.
-  const plain = browserFetch();
-  const label = async (impl: typeof fetch | null): Promise<string> => {
-    if (!impl) return 'unavailable';
+  //
+  // Both routes are reported because they fail for different reasons: the
+  // native one means Android could not reach the host, the browser one means
+  // the WebView could not, and knowing which is the whole diagnosis.
+  const label = async (impl: typeof fetch): Promise<string> => {
     try {
       const r = await attempt(impl, `${API_HOST}/healthz`, { method: 'GET' }, 6_000);
       return r.ok ? 'answered' : `answered ${r.status}`;
@@ -797,12 +758,10 @@ const unreachable = async (path: string, method = 'GET'): Promise<Error> => {
       return e instanceof Error ? e.message : 'failed';
     }
   };
-  const [nativeSays, browserSays] = await Promise.all([label(fetch), label(plain)]);
-  const probe =
-    `A bare GET to the server, with no headers and so no preflight, was `
-    + `${nativeSays} natively and ${browserSays} through the browser`;
+  const [nativeSays, webSays] = await Promise.all([label(appFetch), label(fetch)]);
+  const probe = `A bare GET to the server was ${nativeSays} through Android and ${webSays} through the WebView`;
   return new Error(
-    `${method} to ${attempted(path)} failed${via}${reason ? ` - ${reason}` : ''}. ${probe}.`
+    `${method} to ${attempted(path)} failed${reason ? ` - ${reason}` : ''}. ${probe}.`
     + ` (build ${__BUILD_ID__})`,
   );
 };
@@ -989,43 +948,16 @@ const useAppStore = create<AppStoreState>()(
           throw new Error('Supabase is not configured or available');
         }
         if (!isEmail) {
-          // The packaged app sends this without a body. Android's WebView
-          // cannot carry a POST body through its intercept layer, so the
-          // request reached the server as headers with no content and the
-          // server sat waiting for the rest of it. A header has nothing to
-          // lose. The website keeps the POST, where none of this applies.
-          //
-          // A lookup changes nothing, so it may also try both transports.
-          // Being the first call of every sign-in, it is what settles which
-          // transport the rest of the session uses.
-          // In the packaged app this goes as a bare GET with the username in
-          // the query. That is the one shape a browser sends without asking
-          // permission first: no body, and no header a simple request does not
-          // already have. Everything tried before needed a preflight - the
-          // JSON POST for its content type, the GET for its custom header -
-          // and every one of them hung, so the preflight is what has to go.
-          //
-          // The cost is that the username reaches the access log. It is not a
-          // credential, and a working sign-in is worth more, but the header
-          // form is kept below for when the preflight can be trusted again.
-          const lookupInit: RequestInit = isBundledApp()
-            ? { method: 'GET' }
-            : {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: input }),
-              };
-          const lookupPath = isBundledApp()
-            ? `/api/lookup-email?username=${encodeURIComponent(input)}`
-            : '/api/lookup-email';
-          let r = await fetchWithTimeout(lookupPath, lookupInit, 15_000, { readOnly: true });
-          if (!r && isBundledApp()) {
-            // Preflighted form, in case the query is what the host objects to.
-            r = await fetchWithTimeout('/api/lookup-email', {
-              method: 'GET',
-              headers: { 'x-lookup-username': input },
-            }, 15_000, { readOnly: true });
-          }
+          // One shape everywhere again. The app briefly put the username in
+          // the query to dodge the browser's permission step; going through
+          // Android means there is no permission step to dodge, so the body
+          // comes back and the username stays out of the access log.
+          const lookupInit: RequestInit = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: input }),
+          };
+          const r = await fetchWithTimeout('/api/lookup-email', lookupInit, 15_000);
           // Taken from the request rather than written out again: the previous
           // version said POST whatever was sent, and a GET build reported
           // itself as the failure that had already been fixed.
@@ -1055,7 +987,7 @@ const useAppStore = create<AppStoreState>()(
         if (!data.user) throw new Error('Login failed');
         const token = (await supabase.auth.getSession()).data.session?.access_token;
         if (!token) throw new Error('Login failed');
-        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000, { readOnly: true });
+        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000);
         if (!meResp) throw await unreachable('/api/me-profile');
         const meText = await meResp.text().catch(() => '');
         const meJson = (meText ? (() => { try { return JSON.parse(meText); } catch { return null; } })() : null) as { user?: unknown; error?: unknown; details?: unknown } | null;
@@ -1241,7 +1173,7 @@ const useAppStore = create<AppStoreState>()(
         if (!session?.user?.id) return;
         if (Date.now() - signedOutAt < 10_000) return;
         const token = session.access_token;
-        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000, { readOnly: true });
+        const meResp = await fetchWithTimeout('/api/me-profile', { headers: { Authorization: `Bearer ${token}` } }, 15_000);
         if (!meResp || !meResp.ok) return;
         const meJson = (await meResp.json().catch(() => null)) as { user?: unknown } | null;
         if (!meJson || !meJson.user || typeof meJson.user !== 'object') return;

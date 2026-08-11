@@ -28,28 +28,6 @@ export const isBundledApp = (): boolean => {
 export const apiUrl = (path: string): string =>
   path.startsWith('/api/') && isBundledApp() ? `${API_HOST}${path}` : path;
 
-/**
- * Rewrite every relative /api call, whatever shape it arrives in. Callers keep
- * using plain relative paths and the same code runs unchanged on the website.
- */
-export const installApiHost = (): void => {
-  if (typeof window === 'undefined' || !isBundledApp()) return;
-  const original = window.fetch.bind(window);
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    try {
-      if (typeof input === 'string' && input.startsWith('/api/')) {
-        return original(`${API_HOST}${input}`, init);
-      }
-      if (input instanceof URL && input.origin === window.location.origin && input.pathname.startsWith('/api/')) {
-        return original(`${API_HOST}${input.pathname}${input.search}`, init);
-      }
-      if (input instanceof Request) {
-        const u = new URL(input.url);
-        if (u.origin === window.location.origin && u.pathname.startsWith('/api/')) {
-          return original(new Request(`${API_HOST}${u.pathname}${u.search}`, input), init);
-        }
-      }
-    } catch { /* fall through to the untouched call */ }
-    return original(input as RequestInfo, init);
-  };
-};
+// The fetch patch that used to live here now lives in net.ts, which can also
+// send the request through Android instead of the WebView. This module stays
+// free of imports so it remains safe to load before anything else.

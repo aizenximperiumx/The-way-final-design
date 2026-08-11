@@ -17,14 +17,15 @@ const config: CapacitorConfig = {
   },
   backgroundColor: '#0A1628',
   plugins: {
-    // Send network calls through Android's own HTTP stack instead of the
-    // WebView's. The page is served from https://localhost, so every call to
-    // theway.ge is cross-origin to the WebView, and those requests were
-    // hanging until they timed out. A native request is not a browser
-    // request, so it is not subject to CORS and does not preflight.
-    // Requests to the app's own local server still use the web fetch.
+    // Deliberately off. This flag does not decide whether native HTTP is
+    // available - the plugin is always there and src/lib/net.ts calls it
+    // directly. All it does is replace window.fetch with a version that
+    // routes GET through a local proxy URL and POST through the message
+    // bridge, which made every request behave differently depending on its
+    // method and hid where calls were actually going. With it off, fetch is
+    // the WebView's own again, so the two paths stay distinguishable.
     CapacitorHttp: {
-      enabled: true,
+      enabled: false,
     },
     SplashScreen: {
       launchShowDuration: 1500,

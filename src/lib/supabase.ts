@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { appFetch } from './net';
 
 let cached: SupabaseClient | null = null;
 
@@ -30,6 +31,11 @@ export function getSupabase(): SupabaseClient {
       autoRefreshToken: true,
       detectSessionInUrl: true,
     },
+    // Sign-in is a cross-origin POST carrying an apikey header, so inside the
+    // packaged app it needs permission from the browser before it is sent -
+    // the same permission step that hung every call to our own server. Going
+    // through the native layer skips it. Untouched on the website.
+    global: { fetch: appFetch },
   });
   return cached;
 }
