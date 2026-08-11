@@ -20,7 +20,7 @@ import {
   type UniversityConfig,
 } from '../lib/pipeline';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
-import { apiUrl } from '../lib/apiHost';
+import { apiUrl, isBundledApp } from '../lib/apiHost';
 
 export type { ApplicationPipeline, PipelineStageId, PointsEntry, UniversityConfig } from '../lib/pipeline';
 
@@ -978,14 +978,22 @@ const useAppStore = create<AppStoreState>()(
           throw new Error('Supabase is not configured or available');
         }
         if (!isEmail) {
-          const r = await fetchWithTimeout('/api/lookup-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: input }),
-            // A lookup changes nothing, so it may try both transports. Being
-            // the first call of every sign-in, it is also what settles which
-            // one the rest of the session uses.
-          }, 15_000, { readOnly: true });
+          // The packaged app sends this without a body. Android's WebView
+          // cannot carry a POST body through its intercept layer, so the
+          // request reached the server as headers with no content and the
+          // server sat waiting for the rest of it. A header has nothing to
+          // lose. The website keeps the POST, where none of this applies.
+          //
+          // A lookup changes nothing, so it may also try both transports.
+          // Being the first call of every sign-in, it is what settles which
+          // transport the rest of the session uses.
+          const r = await fetchWithTimeout('/api/lookup-email', isBundledApp()
+            ? { method: 'GET', headers: { 'x-lookup-username': input } }
+            : {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: input }),
+              }, 15_000, { readOnly: true });
           if (!r) throw await unreachable('/api/lookup-email', 'POST');
           const text = await r.text().catch(() => '');
           const j = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { email?: unknown; error?: unknown } | null;

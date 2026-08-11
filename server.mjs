@@ -42,12 +42,40 @@ const mimeByExt = {
   '.woff2': 'font/woff2',
 };
 
-const readBody = (req) =>
+/**
+ * Read a request body, giving up if it stops arriving.
+ *
+ * A client can announce a Content-Length and then send nothing. Without a
+ * limit the handler waits on 'end' for ever: the caller sees a request that
+ * hangs rather than fails, and the connection is held open, which is enough
+ * for anyone to exhaust the server by opening requests it will never finish.
+ * Android does this by accident - the WebView's intercept layer cannot see a
+ * POST body, so an intercepted request arrives with its headers and no
+ * content - which is why sign-in from the phone hung instead of erroring.
+ *
+ * The limit is on silence, not on total time, so a slow upload that is still
+ * making progress is left alone. Whatever arrived is handed back, and the
+ * route then rejects it the same way it rejects any incomplete request.
+ */
+const readBody = (req, idleMs = 5_000) =>
   new Promise((resolve) => {
     const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', () => resolve(Buffer.from('')));
+    let settled = false;
+    let timer;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(Buffer.concat(chunks));
+    };
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(finish, idleMs);
+    };
+    arm();
+    req.on('data', (c) => { chunks.push(c); arm(); });
+    req.on('end', finish);
+    req.on('error', () => { chunks.length = 0; finish(); });
   });
 
 const toHeadersRecord = (headers) => {
@@ -565,7 +593,11 @@ const inlineApply = async (apiReq, apiRes) => {
 };
 
 const inlineLookupEmail = async (apiReq, apiRes) => {
-  if (apiReq.method !== 'POST') {
+  // GET is allowed as well as POST. The packaged Android app cannot rely on a
+  // POST body surviving the WebView's intercept layer, and this lookup needs
+  // one short string, so it can travel in a header instead. A header rather
+  // than the query string keeps the username out of access logs.
+  if (apiReq.method !== 'POST' && apiReq.method !== 'GET') {
     apiRes.status(405).json({ error: 'Method not allowed' });
     return;
   }
@@ -584,7 +616,12 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
 
   const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
   const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
-  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  const fromHeader = apiReq.headers?.['x-lookup-username'];
+  const username = (
+    typeof body.username === 'string' ? body.username
+    : typeof fromHeader === 'string' ? fromHeader
+    : ''
+  ).trim();
   if (!username) {
     apiRes.status(400).json({ error: 'Missing username' });
     return;
@@ -1295,7 +1332,7 @@ const server = http.createServer(async (req, res) => {
       // Preflight: answer before the route runs, or the browser blocks the call.
       if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-client-info');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-client-info, x-lookup-username');
         res.setHeader('Access-Control-Max-Age', '86400');
         res.statusCode = 204;
         res.end();
