@@ -792,7 +792,8 @@ const unreachable = async (path: string, method = 'GET'): Promise<Error> => {
     probe = 'A GET to the server failed as well, so nothing is reaching it from this device';
   }
   return new Error(
-    `Could not reach ${attempted(path)}${via}${reason ? ` - ${reason}` : ''}. ${probe}.`,
+    `Could not reach ${attempted(path)}${via}${reason ? ` - ${reason}` : ''}. ${probe}.`
+    + ` (build ${__BUILD_ID__})`,
   );
 };
 
@@ -987,14 +988,18 @@ const useAppStore = create<AppStoreState>()(
           // A lookup changes nothing, so it may also try both transports.
           // Being the first call of every sign-in, it is what settles which
           // transport the rest of the session uses.
-          const r = await fetchWithTimeout('/api/lookup-email', isBundledApp()
+          const lookupInit: RequestInit = isBundledApp()
             ? { method: 'GET', headers: { 'x-lookup-username': input } }
             : {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: input }),
-              }, 15_000, { readOnly: true });
-          if (!r) throw await unreachable('/api/lookup-email', 'POST');
+              };
+          const r = await fetchWithTimeout('/api/lookup-email', lookupInit, 15_000, { readOnly: true });
+          // Taken from the request rather than written out again: the previous
+          // version said POST whatever was sent, and a GET build reported
+          // itself as the failure that had already been fixed.
+          if (!r) throw await unreachable('/api/lookup-email', lookupInit.method);
           const text = await r.text().catch(() => '');
           const j = (text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null) as { email?: unknown; error?: unknown } | null;
           if (!r.ok) {

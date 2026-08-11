@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import fs from 'node:fs'
+import { execSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -73,11 +74,31 @@ function vercelApiPlugin(): Plugin {
   };
 }
 
+/**
+ * The commit this bundle was built from, stamped into error messages.
+ *
+ * An installed app gives no sign of which build it is, and a phone reporting
+ * a fault that was already fixed is indistinguishable from one that was not.
+ * A round trip was already spent on that. Falls back to the build time when
+ * git is unavailable, as it is on a clean CI checkout without history.
+ */
+function buildId(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { cwd: projectRoot })
+      .toString().trim();
+  } catch {
+    return new Date().toISOString().slice(0, 16).replace('T', ' ');
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   Object.assign(process.env, env);
   return {
     plugins: [react(), tailwindcss(), vercelApiPlugin()],
+    define: {
+      __BUILD_ID__: JSON.stringify(buildId()),
+    },
   };
 })
