@@ -617,10 +617,21 @@ const inlineLookupEmail = async (apiReq, apiRes) => {
   const { base, adminKey, postgrestHeaderCandidates: pgHeaderCandidates, authAdminHeaders: authHeaders } = env;
   const body = (apiReq.body && typeof apiReq.body === 'object') ? apiReq.body : {};
   const fromHeader = apiReq.headers?.['x-lookup-username'];
+  // Also from the query, which is the only form the packaged app can send
+  // that a browser will not preflight: no body, and no header beyond the ones
+  // a plain GET already carries. Every request the app made that needed a
+  // preflight hung, so this route has to be reachable without one.
+  const fromQuery = (() => {
+    try {
+      return new URL(apiReq.rawUrl ?? '', 'http://x').searchParams.get('username') ?? '';
+    } catch {
+      return '';
+    }
+  })();
   const username = (
     typeof body.username === 'string' ? body.username
-    : typeof fromHeader === 'string' ? fromHeader
-    : ''
+    : typeof fromHeader === 'string' && fromHeader ? fromHeader
+    : fromQuery
   ).trim();
   if (!username) {
     apiRes.status(400).json({ error: 'Missing username' });

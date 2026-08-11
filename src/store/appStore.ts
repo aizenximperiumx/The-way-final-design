@@ -20,7 +20,7 @@ import {
   type UniversityConfig,
 } from '../lib/pipeline';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
-import { apiUrl, isBundledApp } from '../lib/apiHost';
+import { API_HOST, apiUrl, isBundledApp } from '../lib/apiHost';
 
 export type { ApplicationPipeline, PipelineStageId, PointsEntry, UniversityConfig } from '../lib/pipeline';
 
@@ -782,17 +782,27 @@ const attempted = (path: string) => {
 const unreachable = async (path: string, method = 'GET'): Promise<Error> => {
   const reason = lastFetchFailure;
   const via = transport ? ` over the ${transport} connection` : '';
-  let probe: string;
-  try {
-    const r = await attempt(fetch, apiUrl('/healthz'), { method: 'GET' }, 8_000);
-    probe = r.ok
-      ? `The server answers a GET, so the connection is fine and it is this ${method} that is failing`
-      : `The server answered a GET with ${r.status}`;
-  } catch {
-    probe = 'A GET to the server failed as well, so nothing is reaching it from this device';
-  }
+
+  // Absolute, because apiUrl only redirects paths under /api and /healthz is
+  // not one. Asking for it relatively fetched the app's own bundle, which
+  // answers 200 with index.html, so the probe reported the server healthy
+  // without ever having contacted it. Three rounds were spent on that.
+  const plain = browserFetch();
+  const label = async (impl: typeof fetch | null): Promise<string> => {
+    if (!impl) return 'unavailable';
+    try {
+      const r = await attempt(impl, `${API_HOST}/healthz`, { method: 'GET' }, 6_000);
+      return r.ok ? 'answered' : `answered ${r.status}`;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'failed';
+    }
+  };
+  const [nativeSays, browserSays] = await Promise.all([label(fetch), label(plain)]);
+  const probe =
+    `A bare GET to the server, with no headers and so no preflight, was `
+    + `${nativeSays} natively and ${browserSays} through the browser`;
   return new Error(
-    `Could not reach ${attempted(path)}${via}${reason ? ` - ${reason}` : ''}. ${probe}.`
+    `${method} to ${attempted(path)} failed${via}${reason ? ` - ${reason}` : ''}. ${probe}.`
     + ` (build ${__BUILD_ID__})`,
   );
 };
@@ -988,14 +998,34 @@ const useAppStore = create<AppStoreState>()(
           // A lookup changes nothing, so it may also try both transports.
           // Being the first call of every sign-in, it is what settles which
           // transport the rest of the session uses.
+          // In the packaged app this goes as a bare GET with the username in
+          // the query. That is the one shape a browser sends without asking
+          // permission first: no body, and no header a simple request does not
+          // already have. Everything tried before needed a preflight - the
+          // JSON POST for its content type, the GET for its custom header -
+          // and every one of them hung, so the preflight is what has to go.
+          //
+          // The cost is that the username reaches the access log. It is not a
+          // credential, and a working sign-in is worth more, but the header
+          // form is kept below for when the preflight can be trusted again.
           const lookupInit: RequestInit = isBundledApp()
-            ? { method: 'GET', headers: { 'x-lookup-username': input } }
+            ? { method: 'GET' }
             : {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: input }),
               };
-          const r = await fetchWithTimeout('/api/lookup-email', lookupInit, 15_000, { readOnly: true });
+          const lookupPath = isBundledApp()
+            ? `/api/lookup-email?username=${encodeURIComponent(input)}`
+            : '/api/lookup-email';
+          let r = await fetchWithTimeout(lookupPath, lookupInit, 15_000, { readOnly: true });
+          if (!r && isBundledApp()) {
+            // Preflighted form, in case the query is what the host objects to.
+            r = await fetchWithTimeout('/api/lookup-email', {
+              method: 'GET',
+              headers: { 'x-lookup-username': input },
+            }, 15_000, { readOnly: true });
+          }
           // Taken from the request rather than written out again: the previous
           // version said POST whatever was sent, and a GET build reported
           // itself as the failure that had already been fixed.
