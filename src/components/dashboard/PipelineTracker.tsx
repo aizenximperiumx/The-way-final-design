@@ -284,6 +284,8 @@ export const PipelineTracker: React.FC<{
 
 const upcomingHint = (stage: PipelineStageId): string => {
   switch (stage) {
+    case 'payment_1': return 'Waiting on the first instalment - the CEO confirms it to release the case';
+    case 'payment_2': return 'Waiting on the second instalment - the CEO confirms it to continue to visa and arrival';
     case 'translated_documents': return 'Uploading a "Translation" document completes this automatically';
     case 'university_approval': return 'Uploading the approval letter completes this automatically';
     case 'recognition_letter': return 'Uploading the recognition letter completes this automatically';

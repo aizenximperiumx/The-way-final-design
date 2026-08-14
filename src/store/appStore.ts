@@ -13,6 +13,7 @@ import {
   slaLedgerId,
   ledgerTotals,
   legacyStageToPipeline,
+  PARTIAL_CLOSE_AFTER,
   VISA_RESIDENCY_POINTS,
   type ApplicationPipeline,
   type PipelineStageId,
@@ -426,6 +427,10 @@ export interface AppStoreState {
 
   // â”€â”€ Case pipeline (Processing/Closed/Cancelled + document stages) â”€â”€
   grantStagePermission: (applicationId: string, stage: PipelineStageId) => void;
+  /** Confirm an instalment arrived, releasing the case. CEO only. */
+  confirmStagePayment: (applicationId: string, stage: PipelineStageId, note?: string) => void;
+  /** Reopen a case that closed at Ministry Order on one instalment. CEO only. */
+  ceoResumePartialCase: (applicationId: string) => void;
   completePipelineStage: (applicationId: string, stage: PipelineStageId) => void;
   ceoCancelApplication: (applicationId: string, reason?: string) => void;
   studentRateService: (applicationId: string, stars: number, comment?: string) => void;
@@ -641,6 +646,11 @@ const emailNotifyUser = (
 
 // Document types (as used by the staff upload UI) that complete pipeline stages.
 export const STAGE_TO_DOC_TYPES: Record<PipelineStageId, string[]> = {
+  // Payments complete when someone confirms the money arrived, not when a
+  // document lands, so no upload advances them. Staff who take a receipt can
+  // still attach it; it just is not what moves the stage on.
+  payment_1: [],
+  payment_2: [],
   translated_documents: ['translation'],
   university_approval: ['university-approval'],
   recognition_letter: ['recognition-letter'],
@@ -790,7 +800,15 @@ const useAppStore = create<AppStoreState>()(
 
         const now = new Date().toISOString();
         const isFinal = stage === 'visa_residency';
-        const next = isFinal ? null : nextStageOf(stage);
+        /**
+         * Ministry Order is where a student who paid only the first instalment
+         * stops, so completing it closes the case as partial rather than
+         * parking it on the second payment for ever. Everything they paid for
+         * is finished; the account keeps its basic card, and the CEO can resume
+         * the case at the second payment if they decide to continue.
+         */
+        const isPartialClose = stage === PARTIAL_CLOSE_AFTER;
+        const next = (isFinal || isPartialClose) ? null : nextStageOf(stage);
         const nextMeta = next ? getStageMeta(next) : null;
 
         // SLA scoring for the assigned staff member.
@@ -829,10 +847,13 @@ const useAppStore = create<AppStoreState>()(
                 stages: {
                   ...a.pipeline.stages,
                   [stage]: { ...track, completedAt: now, completedById: byId, completedByName: byName },
-                  ...(next ? { [next]: { ...(a.pipeline.stages[next] ?? {}), ...(nextMeta?.permissionGated ? {} : { startedAt: (a.pipeline.stages[next]?.startedAt) ?? now }) } } : {}),
+                  // A stage that waits on the student gets no timer: the clock
+                  // must not run against staff while a payment is outstanding.
+                  ...(next ? { [next]: { ...(a.pipeline.stages[next] ?? {}), ...(nextMeta?.permissionGated || nextMeta?.awaitsStudent ? {} : { startedAt: (a.pipeline.stages[next]?.startedAt) ?? now }) } } : {}),
                 },
-                current: isFinal ? 'done' : (next as PipelineStageId),
+                current: (isFinal || isPartialClose) ? 'done' : (next as PipelineStageId),
                 ...(isFinal ? { status: 'closed' as const, closedAt: now } : {}),
+                ...(isPartialClose ? { status: 'closed' as const, closedAt: now, partial: true } : {}),
               };
               return {
                 ...a,
@@ -1508,11 +1529,13 @@ const useAppStore = create<AppStoreState>()(
             assignedStaffId: autoAssignedStaffId ?? a.assignedStaffId,
             studentCredentials: { username: creds.username, updatedAt: new Date().toISOString() },
             hold: undefined,
-            // Approval opens the case: Processing, first stage timer running.
+            // Approval opens the case at the first payment. No work is done
+            // until that is confirmed, so no SLA timer starts here: the stage
+            // waits on the student and must not cost an advisor points.
             pipeline: a.pipeline ?? {
               status: 'processing' as const,
-              current: 'translated_documents' as const,
-              stages: { translated_documents: { startedAt: new Date().toISOString() } },
+              current: 'payment_1' as const,
+              stages: { payment_1: {} },
             },
             events: [
               ...(a.events ?? []),
@@ -1638,7 +1661,9 @@ const useAppStore = create<AppStoreState>()(
             studentEmail: email,
             studentCredentials: { username: creds.username, updatedAt: nowIso },
             intakeDetails: `Student created directly by ${actor.name}.`,
-            pipeline: { status: 'processing', current: 'translated_documents', stages: { translated_documents: { startedAt: nowIso } } },
+            // Opens at the first payment, like any other case: nothing is
+            // translated before the money is confirmed.
+            pipeline: { status: 'processing', current: 'payment_1', stages: { payment_1: {} } },
             events: [
               { id: `${appId}-created`, type: 'approved' as const, byId: actor.id, byName: actor.name, time: nowIso, details: 'Student created directly' },
               ...(autoStaff ? [{ id: `${appId}-assigned`, type: 'assigned_staff' as const, byId: actor.id, byName: actor.name, time: nowIso, details: autoStaff.id }] : []),
@@ -3146,6 +3171,12 @@ const useAppStore = create<AppStoreState>()(
         if (app.pipeline.current !== stage) throw new Error('Only the current stage can be completed');
         const meta = getStageMeta(stage);
         const track = app.pipeline.stages[stage] ?? {};
+        // Nobody moves a payment stage from here, whatever their role. Money is
+        // confirmed by the CEO through confirmStagePayment, which records who
+        // released the case and what was received.
+        if (meta.awaitsStudent) {
+          throw new Error(`${meta.label} is confirmed by the CEO, not from here`);
+        }
         if (meta.permissionGated && !track.permissionAt) throw new Error(`${meta.label} needs permission from Agency/Sales/CEO first`);
         if (stage === 'recognition_letter' && !app.intakeHighSchoolCertificate) {
           throw new Error('Recognition is blocked: the high school certificate has not been uploaded yet');
@@ -3158,6 +3189,106 @@ const useAppStore = create<AppStoreState>()(
         if (!completeStageCore(applicationId, stage, actor.id, actor.name)) {
           throw new Error('Could not complete this stage');
         }
+      },
+
+      /**
+       * Record that an instalment arrived, releasing the case to move on.
+       *
+       * Separate from completePipelineStage on purpose. This is a money
+       * decision, not document work: it reads as "confirm payment" in the audit
+       * trail rather than "stage completed", and it carries a note so there is a
+       * record of what was actually received.
+       *
+       * CEO only, by owner's decision. Every case therefore waits on one person
+       * twice, which is why the CEO desk needs a payments queue rather than
+       * these being buried in each case.
+       */
+      confirmStagePayment: (applicationId: string, stage: PipelineStageId, note?: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app?.pipeline) throw new Error('Application has no active case');
+        const meta = getStageMeta(stage);
+        if (!meta.awaitsStudent) throw new Error(`${meta.label} is not a payment stage`);
+        if (app.pipeline.status !== 'processing') throw new Error('Case is not in processing');
+        if (app.pipeline.current !== stage) throw new Error(`The case is not waiting on ${meta.label}`);
+        if (app.pipeline.stages[stage]?.completedAt) throw new Error(`${meta.label} is already confirmed`);
+
+        const now = new Date().toISOString();
+        if (!completeStageCore(applicationId, stage, actor.id, actor.name)) {
+          throw new Error(`Could not confirm ${meta.label}`);
+        }
+        set((state) => ({
+          applications: state.applications.map(a => a.id === applicationId ? {
+            ...a,
+            events: [
+              ...(a.events ?? []),
+              {
+                id: `${applicationId}-paid-${stage}-${Date.now()}`,
+                type: 'needs_info' as const,
+                byId: actor.id, byName: actor.name, time: now,
+                details: `${meta.label} confirmed received${note ? ` - ${note}` : ''}`,
+              },
+            ],
+          } : a),
+          notifications: app.assignedStaffId ? [
+            {
+              id: `${applicationId}-paid-${stage}`,
+              userId: app.assignedStaffId,
+              title: `${meta.label} received`,
+              message: `${app.name} - the case is released and the clock is running.`,
+              type: 'info' as const, time: now, read: false,
+            },
+            ...state.notifications,
+          ] : state.notifications,
+        }));
+        queueBackendSave(get);
+      },
+
+      /**
+       * Reopen a case that closed after Ministry Order because only the first
+       * instalment was paid. It comes back at the second payment, which is
+       * where it stopped, so the student pays and continues from there rather
+       * than repeating work that is already done.
+       */
+      ceoResumePartialCase: (applicationId: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const app = get().applications.find(a => a.id === applicationId);
+        if (!app?.pipeline) throw new Error('Application has no case');
+        if (!app.pipeline.partial) throw new Error('Only a partially closed case can be resumed');
+        const resumeAt = nextStageOf(PARTIAL_CLOSE_AFTER);
+        if (!resumeAt) throw new Error('Nothing to resume');
+
+        const now = new Date().toISOString();
+        set((state) => ({
+          applications: state.applications.map(a => (a.id === applicationId && a.pipeline) ? {
+            ...a,
+            pipeline: {
+              ...a.pipeline,
+              status: 'processing' as const,
+              current: resumeAt,
+              // The partial close is history now, but resumedAt keeps the fact
+              // that this case stopped once and was picked back up.
+              partial: false,
+              closedAt: undefined,
+              resumedAt: now,
+              resumedById: actor.id,
+              resumedByName: actor.name,
+              stages: { ...a.pipeline.stages, [resumeAt]: { ...(a.pipeline.stages[resumeAt] ?? {}) } },
+            },
+            events: [
+              ...(a.events ?? []),
+              {
+                id: `${applicationId}-resumed-${Date.now()}`,
+                type: 'needs_info' as const,
+                byId: actor.id, byName: actor.name, time: now,
+                details: `Case resumed at ${getStageMeta(resumeAt).label}`,
+              },
+            ],
+          } : a),
+        }));
+        queueBackendSave(get);
       },
 
       ceoCancelApplication: (applicationId: string, reason?: string) => {

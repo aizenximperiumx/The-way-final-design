@@ -82,6 +82,8 @@ const APPROVAL_WINDOWS: Record<Exclude<SlaGroup, 'none'>, SlaWindow> = {
 };
 
 export const STAGE_LABELS: Record<string, string> = {
+  payment_1: 'First Payment',
+  payment_2: 'Second Payment',
   translated_documents: 'Translated Documents',
   university_approval: 'University Initial Approval',
   recognition_letter: 'Recognition Letter',
@@ -92,6 +94,12 @@ export const STAGE_LABELS: Record<string, string> = {
 
 export const getSlaWindow = (stage: string, group: SlaGroup): SlaWindow | null => {
   switch (stage) {
+    // Waiting on the student's money. Stated rather than left to the default
+    // below, because this sweep applies penalties automatically and an advisor
+    // must never lose points for a case parked on a payment.
+    case 'payment_1':
+    case 'payment_2':
+      return null;
     case 'translated_documents':
       return { fullHours: 36, halfHours: 72, fullPoints: 2, halfPoints: 1, latePoints: -2 };
     case 'university_approval':

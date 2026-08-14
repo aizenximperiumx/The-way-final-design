@@ -34,10 +34,12 @@ import type { UniversitySlaGroup } from './universities';
 export type CaseStatus = 'processing' | 'closed' | 'cancelled';
 
 export type PipelineStageId =
+  | 'payment_1'
   | 'translated_documents'
   | 'university_approval'
   | 'recognition_letter'
   | 'ministry_order'
+  | 'payment_2'
   | 'visa_documents'
   | 'visa_residency';
 
@@ -48,15 +50,44 @@ export interface PipelineStageMeta {
   description: string;
   /** Timer starts only after Agency/Sales/CEO grants permission. */
   permissionGated: boolean;
+  /**
+   * The case is waiting on the student, not on us: a payment to arrive.
+   *
+   * These stages carry no SLA window and no points. Staff cannot be late for
+   * something they are not doing, and the clock must not run while a student
+   * decides. Recognition and Ministry Order used to be permission-gated for
+   * exactly this reason - someone senior clicked to release them once money
+   * had arrived - but nothing said so, so the student saw an unexplained
+   * block and staff saw a step that would not move. The wait is now a stage
+   * of its own, which is what it always was.
+   */
+  awaitsStudent: boolean;
+  /** What the student gets for paying, shown on the payment step. */
+  unlocks?: string[];
 }
 
 export const PIPELINE_STAGES: PipelineStageMeta[] = [
+  {
+    id: 'payment_1',
+    label: 'First Payment',
+    shortLabel: 'Payment 1',
+    description: 'The first instalment. No work begins until this is confirmed received.',
+    permissionGated: false,
+    awaitsStudent: true,
+    unlocks: [
+      'Document translation and notarisation',
+      'Your university application and acceptance letter',
+      'Recognition letter and ministry order',
+      'A dedicated advisor for your whole application',
+    ],
+  },
   {
     id: 'translated_documents',
     label: 'Translated Documents',
     shortLabel: 'Translation',
     description: 'Translate and notarize the student documents.',
     permissionGated: false,
+    awaitsStudent: false,
   },
   {
     id: 'university_approval',
@@ -64,20 +95,38 @@ export const PIPELINE_STAGES: PipelineStageMeta[] = [
     shortLabel: 'Uni Approval',
     description: 'Obtain the initial approval / acceptance letter from the university.',
     permissionGated: false,
+    awaitsStudent: false,
   },
   {
     id: 'recognition_letter',
     label: 'Recognition Letter',
     shortLabel: 'Recognition',
-    description: 'Obtain the recognition letter. Timer starts when Agency/Sales/CEO grants permission.',
-    permissionGated: true,
+    description: 'Obtain the recognition letter from the ministry.',
+    permissionGated: false,
+    awaitsStudent: false,
   },
   {
     id: 'ministry_order',
     label: 'Ministry Order',
     shortLabel: 'Ministry',
-    description: 'Obtain the ministry order. Timer starts when permission is granted.',
-    permissionGated: true,
+    description: 'Obtain the ministry order. The student may stop here if they paid only the first instalment.',
+    permissionGated: false,
+    awaitsStudent: false,
+  },
+  {
+    id: 'payment_2',
+    label: 'Second Payment',
+    shortLabel: 'Payment 2',
+    description: 'Optional. Continues the case through visa and arrival, or the case closes here.',
+    permissionGated: false,
+    awaitsStudent: true,
+    unlocks: [
+      'Your visa documents, prepared and checked',
+      'Visa and residency permit',
+      'Airport pickup when you land in Georgia',
+      'Help settling in: housing, bank account, SIM card',
+      'Ongoing support for as long as you study',
+    ],
   },
   {
     id: 'visa_documents',
@@ -85,6 +134,7 @@ export const PIPELINE_STAGES: PipelineStageMeta[] = [
     shortLabel: 'Visa Docs',
     description: 'Collect and prepare all documents required for the visa. No performance points.',
     permissionGated: false,
+    awaitsStudent: false,
   },
   {
     id: 'visa_residency',
@@ -92,8 +142,22 @@ export const PIPELINE_STAGES: PipelineStageMeta[] = [
     shortLabel: 'Visa+Residency',
     description: 'Upload the visa and residency. Completing this closes the case (+2 points).',
     permissionGated: false,
+    awaitsStudent: false,
   },
 ];
+
+/**
+ * The last stage a student who paid only the first instalment reaches.
+ *
+ * Completing it with no second payment closes the case as partial: the work
+ * they paid for is finished. The account keeps its basic card, and the CEO can
+ * resume the case if they later decide to continue.
+ */
+export const PARTIAL_CLOSE_AFTER: PipelineStageId = 'ministry_order';
+
+/** Stages that wait on the student rather than on us. */
+export const isAwaitingStudent = (id: PipelineStageId): boolean =>
+  getStageMeta(id).awaitsStudent;
 
 export const PIPELINE_ORDER: PipelineStageId[] = PIPELINE_STAGES.map(s => s.id);
 
@@ -122,6 +186,18 @@ export interface ApplicationPipeline {
   current: PipelineStageId | 'done';
   stages: Partial<Record<PipelineStageId, StageTrack>>;
   closedAt?: string;
+  /**
+   * Closed at Ministry Order because only the first instalment was paid.
+   *
+   * Deliberately a flag on a normally closed case rather than a fourth case
+   * status: everything that already asks whether a case is closed stays
+   * correct, because it is closed. This only adds that it can be continued.
+   */
+  partial?: boolean;
+  /** Set when the CEO reopens a partially closed case at the second payment. */
+  resumedAt?: string;
+  resumedById?: string;
+  resumedByName?: string;
   cancelledAt?: string;
   cancelledById?: string;
   cancelledByName?: string;
@@ -153,6 +229,11 @@ const APPROVAL_WINDOWS: Record<Exclude<UniversitySlaGroup, 'none'>, SlaWindow> =
  */
 export function getSlaWindow(stage: PipelineStageId, slaGroup: UniversitySlaGroup): SlaWindow | null {
   switch (stage) {
+    // Waiting on the student's money. No window, so no deadline and no
+    // penalty: a case parked here must never cost an advisor points.
+    case 'payment_1':
+    case 'payment_2':
+      return null;
     case 'translated_documents':
       return { fullHours: 36, halfHours: 72, fullPoints: 2, halfPoints: 1, latePoints: -2 };
     case 'university_approval':
