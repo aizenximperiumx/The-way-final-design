@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppStore, missingStageDocs, docTypeLabel } from '../../store/appStore';
 import { getUniversityName } from '../../lib/universities';
 import { getStageMeta } from '../../lib/pipeline';
+import { buildJourney } from '../../lib/journey';
 import { GOLD, NAVY, dim, goldA, card, goldCard } from '../ui';
 import TeamLayout from './TeamLayout';
 import { SectionLabel, Row, Square, Tag, Actions, Empty, initialsOf, RED } from './parts';
@@ -157,6 +158,8 @@ const CaseDetail: React.FC = () => {
   // Asked of the same helper the store guards with, so the button cannot offer
   // something the store will then refuse.
   const missingDocs = row ? missingStageDocs(documents, app, row.stage) : [];
+  // The same journey the student sees, so the two can never disagree.
+  const journey = buildJourney(app.pipeline);
   const isSales = desk.kind === 'sales' || desk.kind === 'ceo';
   const isAgencySourced = app.source === 'agency';
 
@@ -312,6 +315,52 @@ const CaseDetail: React.FC = () => {
             {app.status === 'submitted' ? 'Awaiting approval — not yet in the pipeline.' : 'This case is not currently processing.'}
           </p>
         </div>
+      )}
+
+      {/* ── The whole journey ──
+          Built from the same model the student's own screen uses, so a member
+          of staff on the phone sees exactly what the student sees, with the
+          staff name for each stage alongside. Sales, support and the CEO can
+          open any case and answer "where are we" without asking the advisor. */}
+      {journey.steps.length > 0 && (
+        <>
+          <SectionLabel right={`${journey.doneCount}/${journey.total}`}>Journey</SectionLabel>
+          <div className="rounded-[20px] p-4" style={card}>
+            {journey.steps.map((s, i) => {
+              const isLast = i === journey.steps.length - 1;
+              return (
+                <div key={s.stage} className="flex gap-3.5">
+                  <div className="flex flex-col items-center">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{
+                      background: s.state === 'done' ? GOLD : s.state === 'current' ? goldA(0.18) : 'rgba(255,255,255,0.06)',
+                      border: s.state === 'done' ? 'none' : `1px solid ${s.state === 'current' ? goldA(0.5) : 'rgba(255,255,255,0.1)'}`,
+                    }}>
+                      {s.state === 'done'
+                        ? <CircleCheck className="w-3.5 h-3.5" style={{ color: NAVY }} />
+                        : s.isPayment
+                          ? <Wallet className="w-3.5 h-3.5" style={{ color: s.state === 'current' ? GOLD : dim(0.35) }} />
+                          : <span className="text-[10px] font-black" style={{ color: s.state === 'current' ? GOLD : dim(0.35) }}>{s.number}</span>}
+                    </div>
+                    {!isLast && <div className="w-px flex-1 min-h-[16px] my-1"
+                      style={{ background: s.state === 'done' ? goldA(0.45) : 'rgba(255,255,255,0.08)' }} />}
+                  </div>
+                  <div className={isLast ? 'pt-1 pb-0.5' : 'pb-3.5 pt-1'}>
+                    <p className="text-[13px] font-bold" style={{ color: s.state === 'upcoming' ? dim(0.45) : '#fff' }}>
+                      {s.staffLabel}
+                    </p>
+                    <p className="text-[11px] mt-0.5" style={{ color: dim(0.45) }}>
+                      {s.state === 'done'
+                        ? `Done${s.completedAt ? ` · ${new Date(s.completedAt).toLocaleDateString()}` : ''}`
+                        : s.state === 'current'
+                          ? (s.isPayment ? 'Waiting on the student' : 'In progress')
+                          : s.isStopPoint ? 'The student may stop here' : 'Upcoming'}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Role actions */}

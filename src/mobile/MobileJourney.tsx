@@ -1,12 +1,12 @@
 import React, { useRef, useState } from 'react';
 import {
-  CheckCircle2, Circle, Clock, Download, FileText, Loader2, Star, Upload, Inbox, ScanLine,
+  CheckCircle2, Circle, Clock, Download, FileText, Loader2, Star, Upload, Inbox, ScanLine, Wallet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { useAppStore, type DocumentRequest } from '../store/appStore';
-import { PIPELINE_STAGES } from '../lib/pipeline';
+import { buildJourney } from '../lib/journey';
 import { uploadFileToStorage } from '../lib/upload';
 import { openStorageUrl } from '../lib/storage';
 import { GOLD, NAVY, card, goldCard, dim, goldA, sectionLabel } from './ui';
@@ -31,10 +31,10 @@ const MobileJourney: React.FC = () => {
     .sort((a, b) => (a.status === 'pending' || a.status === 'rejected' ? -1 : 1) - (b.status === 'pending' || b.status === 'rejected' ? -1 : 1));
 
   const pipeline = myApp?.pipeline;
-  const closed = pipeline?.status === 'closed';
-  const currentIdx = !pipeline ? 0
-    : pipeline.current === 'done' ? PIPELINE_STAGES.length
-    : PIPELINE_STAGES.findIndex(s => s.id === pipeline.current);
+  // Rating only for a fully finished journey: a case that stopped at the
+  // ministry order is not over, so asking how it went would be wrong.
+  const journey = buildJourney(pipeline);
+  const closed = journey.finished;
 
   const handleFile = async (req: DocumentRequest, file?: File) => {
     if (!file) return;
@@ -106,8 +106,90 @@ const MobileJourney: React.FC = () => {
         </div>
       )}
 
-      {/* ── Stages ── */}
-      <p className="mb-3" style={sectionLabel}>Your stages</p>
+      {/* ── Where you are ──
+          The first thing on the screen answers the only questions a student
+          actually has: what is happening, and is anyone waiting on me. The
+          list of steps comes after that, as reference. */}
+      <div className="rounded-3xl p-5 mb-4 relative overflow-hidden" style={goldCard}>
+        <div className="absolute -right-10 -top-12 w-44 h-44 rounded-full"
+          style={{ background: goldA(0.16), filter: 'blur(38px)' }} />
+        <div className="relative">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[9.5px] tracking-[2.4px] uppercase font-black" style={{ color: GOLD }}>
+              {journey.current ? `Step ${journey.current.number} of ${journey.total}` : 'Your journey'}
+            </p>
+            {journey.waitingOn !== 'nobody' && (
+              <span className="px-2.5 py-1 rounded-full text-[9.5px] font-black uppercase tracking-wider"
+                style={journey.waitingOn === 'you'
+                  ? { background: GOLD, color: NAVY }
+                  : { background: 'rgba(255,255,255,0.1)', color: dim(0.7) }}>
+                {journey.waitingOn === 'you' ? 'Over to you' : 'We are on it'}
+              </span>
+            )}
+          </div>
+
+          <p className="v3-serif text-[23px] font-black mt-2 leading-tight" style={{ color: '#fff' }}>
+            {journey.headline}
+          </p>
+          <p className="text-[13px] mt-2 leading-relaxed" style={{ color: dim(0.72) }}>
+            {journey.detail}
+          </p>
+          {journey.current?.typical && (
+            <p className="text-[11.5px] mt-1.5" style={{ color: dim(0.5) }}>
+              This step {journey.current.typical}.
+            </p>
+          )}
+
+          {/* Progress, as a bar of the real steps rather than a number. */}
+          <div className="flex gap-[3px] mt-4">
+            {journey.steps.map(s => (
+              <span key={s.stage} className="flex-1 h-1.5 rounded-full" style={{
+                background: s.state === 'done' ? GOLD
+                  : s.state === 'current' ? goldA(0.55)
+                  : 'rgba(255,255,255,0.12)',
+              }} />
+            ))}
+          </div>
+          <p className="text-[11px] mt-2" style={{ color: dim(0.5) }}>
+            {journey.doneCount} of {journey.total} steps complete
+          </p>
+        </div>
+      </div>
+
+      {/* ── The decision, when there is one ──
+          A payment is a choice, not a wall. It says what it buys, and at the
+          stop point it says plainly that stopping is allowed. */}
+      {journey.current?.isPayment && journey.current.unlocks && (
+        <div className="rounded-3xl p-5 mb-4" style={card}>
+          <p className="text-[9.5px] tracking-[2.4px] uppercase font-black" style={{ color: GOLD }}>
+            What this covers
+          </p>
+          <ul className="mt-3 space-y-2">
+            {journey.current.unlocks.map(u => (
+              <li key={u} className="flex items-start gap-2.5 text-[13px]" style={{ color: dim(0.78) }}>
+                <CheckCircle2 className="w-3.5 h-3.5 mt-[3px] shrink-0" style={{ color: GOLD }} /> {u}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[12px] mt-4 leading-relaxed" style={{ color: dim(0.55) }}>
+            Your advisor will arrange this with you. Nothing is paid through the app.
+          </p>
+        </div>
+      )}
+
+      {/* Partially closed: the door is open, and it says so. */}
+      {journey.partial && (
+        <div className="rounded-3xl p-5 mb-4" style={{ background: goldA(0.1), border: `1px solid ${goldA(0.24)}` }}>
+          <p className="v3-serif text-[17px] font-black" style={{ color: '#fff' }}>Want to carry on?</p>
+          <p className="text-[12.5px] mt-1.5 leading-relaxed" style={{ color: dim(0.72) }}>
+            The second payment takes you through your visa, your residency, and someone meeting you
+            at the airport. Talk to your advisor whenever you are ready.
+          </p>
+        </div>
+      )}
+
+      {/* ── Every step ── */}
+      <p className="mb-3" style={sectionLabel}>Every step</p>
       {!pipeline ? (
         <div className="rounded-2xl p-5" style={card}>
           <p className="text-[13px]" style={{ color: dim(0.65) }}>
@@ -116,31 +198,50 @@ const MobileJourney: React.FC = () => {
         </div>
       ) : (
         <div className="rounded-2xl p-5" style={card}>
-          {PIPELINE_STAGES.map((s, i) => {
-            const done = closed || Boolean(pipeline.stages[s.id]?.completedAt) || i < currentIdx;
-            const active = !closed && pipeline.status === 'processing' && pipeline.current === s.id;
-            const isLast = i === PIPELINE_STAGES.length - 1;
+          {journey.steps.map((s, i) => {
+            const done = s.state === 'done';
+            const active = s.state === 'current';
+            const isLast = i === journey.steps.length - 1;
             return (
-              <div key={s.id} className="flex gap-4">
+              <div key={s.stage} className="flex gap-4">
                 <div className="flex flex-col items-center">
                   <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{
                     background: done ? GOLD : active ? goldA(0.18) : 'rgba(255,255,255,0.06)',
                     border: done ? 'none' : `1px solid ${active ? goldA(0.5) : 'rgba(255,255,255,0.1)'}`,
                   }}>
                     {done ? <CheckCircle2 className="w-4 h-4" style={{ color: NAVY }} />
+                      : s.isPayment ? <Wallet className="w-4 h-4" style={{ color: active ? GOLD : dim(0.4) }} />
                       : active ? <Clock className="w-4 h-4" style={{ color: GOLD }} />
                       : <Circle className="w-3 h-3" style={{ color: dim(0.4) }} />}
                   </div>
                   {!isLast && <div className="w-px flex-1 min-h-[22px] my-1" style={{ background: done ? goldA(0.5) : 'rgba(255,255,255,0.08)' }} />}
                 </div>
                 <div className={isLast ? 'pt-1.5' : 'pb-5 pt-1.5'}>
-                  <p className="text-[14px] font-bold" style={{ color: done || active ? '#fff' : dim(0.5) }}>{s.label}</p>
-                  <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{
-                    background: done ? 'rgba(76,175,80,0.15)' : active ? goldA(0.15) : 'rgba(255,255,255,0.05)',
-                    color: done ? '#7BE08A' : active ? GOLD : dim(0.45),
-                  }}>
-                    {done ? 'Done' : active ? 'In progress' : 'Upcoming'}
-                  </span>
+                  <p className="text-[14px] font-bold" style={{ color: done || active ? '#fff' : dim(0.5) }}>{s.title}</p>
+                  {/* The explanation only where it is useful: on the step being
+                      worked on, and on the one where a student may stop. */}
+                  {(active || (s.isStopPoint && !done)) && (
+                    <p className="text-[12px] mt-1 leading-relaxed" style={{ color: dim(0.6) }}>{s.blurb}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    <span className="inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{
+                      background: done ? 'rgba(76,175,80,0.15)' : active ? goldA(0.15) : 'rgba(255,255,255,0.05)',
+                      color: done ? '#7BE08A' : active ? GOLD : dim(0.45),
+                    }}>
+                      {done ? 'Done' : active ? (s.isPayment ? 'Over to you' : 'In progress') : 'Upcoming'}
+                    </span>
+                    {s.isStopPoint && !done && (
+                      <span className="inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                        style={{ background: 'rgba(255,255,255,0.06)', color: dim(0.5) }}>
+                        You may stop here
+                      </span>
+                    )}
+                    {done && s.completedAt && (
+                      <span className="text-[10.5px]" style={{ color: dim(0.4) }}>
+                        {new Date(s.completedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
