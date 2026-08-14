@@ -881,8 +881,16 @@ const useAppStore = create<AppStoreState>()(
          * parking it on the second payment for ever. Everything they paid for
          * is finished; the account keeps its basic card, and the CEO can resume
          * the case at the second payment if they decide to continue.
+         *
+         * Only for cases that actually went through the new payment flow. Every
+         * student already in the pipeline when this shipped was placed straight
+         * onto a document stage and never passed a first payment, because they
+         * paid in full under the old arrangement. Closing their case here would
+         * strand a paid-up student one stage from their visa and leave the CEO
+         * to notice and resume each one by hand.
          */
-        const isPartialClose = stage === PARTIAL_CLOSE_AFTER;
+        const paidFirstInstalment = Boolean(pipeline.stages.payment_1?.completedAt);
+        const isPartialClose = stage === PARTIAL_CLOSE_AFTER && paidFirstInstalment;
         const next = (isFinal || isPartialClose) ? null : nextStageOf(stage);
         const nextMeta = next ? getStageMeta(next) : null;
 
