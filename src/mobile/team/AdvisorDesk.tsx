@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlarmClock, Clock, KeyRound, Sparkles, GraduationCap, Inbox, CheckCircle2, Sun, Camera,
+  AlarmClock, Clock, KeyRound, Sparkles, GraduationCap, Inbox, CheckCircle2, Sun, Camera, Wallet,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
@@ -38,9 +38,10 @@ const CaseCard: React.FC<{ row: CaseRow; onOpen: () => void; onUpload: () => voi
   const chipBg = row.kind === 'overdue'
     ? 'rgba(255,107,107,0.15)'
     : row.kind === 'due' ? goldA(0.15) : 'rgba(255,255,255,0.06)';
-  const Icon = row.kind === 'overdue' ? AlarmClock : row.kind === 'permission' ? KeyRound : Clock;
+  const Icon = row.kind === 'overdue' ? AlarmClock : row.kind === 'payment' ? Wallet : row.kind === 'permission' ? KeyRound : Clock;
   const time = row.kind === 'overdue' && row.msLeft !== null ? `${fmtLeft(row.msLeft)} over`
     : row.kind === 'due' && row.msLeft !== null ? fmtLeft(row.msLeft)
+    : row.kind === 'payment' ? 'On payment'
     : row.kind === 'permission' ? 'Awaiting'
     : 'No timer';
 
@@ -66,6 +67,7 @@ const CaseCard: React.FC<{ row: CaseRow; onOpen: () => void; onUpload: () => voi
       <StageBar stageNo={row.stageNo} tone={tone} />
       <p className="text-[11.5px] font-semibold mt-2.5" style={{ color: dim(0.5) }}>
         Stage {row.stageNo} of {TOTAL_STAGES} · {row.label}
+        {row.kind === 'payment' && ' · waiting on the student'}
         {row.kind === 'permission' && ' · permission needed'}
       </p>
       <Actions items={[

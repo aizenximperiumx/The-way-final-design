@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore, type Application } from '../../store/appStore';
 import {
-  getSlaWindow, slaDeadline, getStageMeta, type PipelineStageId,
+  getSlaWindow, slaDeadline, getStageMeta, PIPELINE_ORDER, type PipelineStageId,
 } from '../../lib/pipeline';
 import { DEFAULT_SLA_GROUPS, type UniversitySlaGroup } from '../../lib/universities';
 
@@ -11,7 +11,7 @@ import { DEFAULT_SLA_GROUPS, type UniversitySlaGroup } from '../../lib/universit
  * Overdue first, then most urgent, then stages still waiting on permission.
  */
 
-export type CaseKind = 'overdue' | 'due' | 'permission' | 'notimer';
+export type CaseKind = 'overdue' | 'due' | 'payment' | 'permission' | 'notimer';
 
 export interface CaseRow {
   app: Application;
@@ -20,7 +20,7 @@ export interface CaseRow {
   kind: CaseKind;
   /** ms until the penalty deadline; negative once overdue. */
   msLeft: number | null;
-  /** 1-based position of the current stage in the six-stage pipeline. */
+  /** 1-based position of the current stage; compare against TOTAL_STAGES. */
   stageNo: number;
 }
 
@@ -35,7 +35,9 @@ export const fmtLeft = (ms: number): string => {
   return `${m}m`;
 };
 
-const ORDER: Record<CaseKind, number> = { overdue: 0, due: 1, permission: 2, notimer: 3 };
+// Payments rank above permission and idle stages: a case held on money is the
+// one thing that stops all work, and only the CEO can clear it.
+const ORDER: Record<CaseKind, number> = { overdue: 0, due: 1, payment: 2, permission: 3, notimer: 4 };
 
 export const useCases = (applications: Application[]): CaseRow[] => {
   const universityConfig = useAppStore(s => s.universityConfig);
@@ -61,6 +63,13 @@ export const useCases = (applications: Application[]): CaseRow[] => {
         ?? DEFAULT_SLA_GROUPS[app.university ?? ''] ?? 'none';
       const window_ = getSlaWindow(stage, group);
 
+      // Waiting on the student's money, not on us. Its own kind so the CEO can
+      // see every case held up on a payment in one place, and so it never
+      // appears in a staff queue as though someone were sitting on it.
+      if (meta.awaitsStudent) {
+        rows.push({ app, stage, label: meta.label, kind: 'payment', msLeft: null, stageNo });
+        continue;
+      }
       if (meta.permissionGated && !track.permissionAt) {
         rows.push({ app, stage, label: meta.label, kind: 'permission', msLeft: null, stageNo });
         continue;
@@ -77,10 +86,13 @@ export const useCases = (applications: Application[]): CaseRow[] => {
   }, [applications, universityConfig, now]);
 };
 
-// Local copy so this hook does not depend on PIPELINE_ORDER's export shape.
-const STAGE_SEQUENCE: PipelineStageId[] = [
-  'translated_documents', 'university_approval', 'recognition_letter',
-  'ministry_order', 'visa_documents', 'visa_residency',
-];
-export const TOTAL_STAGES = STAGE_SEQUENCE.length;
-export const getStageIndex = (id: PipelineStageId): number => STAGE_SEQUENCE.indexOf(id);
+/**
+ * Taken from the pipeline itself rather than copied.
+ *
+ * This was a local list "so the hook does not depend on PIPELINE_ORDER's export
+ * shape", and it silently fell out of date the moment the two payment stages
+ * were added: every case waiting on a payment reported itself as stage 1 of 6.
+ * One list, so it cannot happen again.
+ */
+export const TOTAL_STAGES = PIPELINE_ORDER.length;
+export const getStageIndex = (id: PipelineStageId): number => PIPELINE_ORDER.indexOf(id);

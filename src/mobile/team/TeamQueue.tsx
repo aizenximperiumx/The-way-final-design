@@ -134,6 +134,7 @@ const TeamQueue: React.FC = () => {
                     ? <Tag tone={row.kind === 'overdue' ? 'red' : row.kind === 'due' ? 'gold' : 'plain'}>
                         {row.kind === 'overdue' && row.msLeft !== null ? `${fmtLeft(row.msLeft)} over`
                           : row.kind === 'due' && row.msLeft !== null ? fmtLeft(row.msLeft)
+                          : row.kind === 'payment' ? 'On payment'
                           : row.kind === 'permission' ? 'Awaiting' : '—'}
                       </Tag>
                     : <Tag tone={a.hold ? 'red' : 'plain'}>{a.hold ? 'On hold' : a.stage ?? 'New'}</Tag>}

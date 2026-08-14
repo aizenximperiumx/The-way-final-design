@@ -2,12 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ChevronLeft, AlarmClock, Clock, KeyRound, Camera, FileText, CheckCircle2,
-  X, MessageSquarePlus, Loader2, Mail, Phone, CircleCheck, FileQuestion,
+  X, MessageSquarePlus, Loader2, Mail, Phone, CircleCheck, FileQuestion, Wallet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { getUniversityName } from '../../lib/universities';
+import { getStageMeta } from '../../lib/pipeline';
 import { GOLD, NAVY, dim, goldA, card, goldCard } from '../ui';
 import TeamLayout from './TeamLayout';
 import { SectionLabel, Row, Square, Tag, Actions, Empty, initialsOf, RED } from './parts';
@@ -36,6 +37,7 @@ const CaseDetail: React.FC = () => {
   const staffAddInternalNote = useAppStore(s => s.staffAddInternalNote);
   const completePipelineStage = useAppStore(s => s.completePipelineStage);
   const grantStagePermission = useAppStore(s => s.grantStagePermission);
+  const confirmStagePayment = useAppStore(s => s.confirmStagePayment);
   const staffRequestDocument = useAppStore(s => s.staffRequestDocument);
 
   const [uploading, setUploading] = useState(false);
@@ -68,9 +70,10 @@ const CaseDetail: React.FC = () => {
     r.studentId === app.studentId && r.status === 'pending');
 
   const tone = row?.kind === 'overdue' ? RED : row?.kind === 'due' ? GOLD : dim(0.55);
-  const TimeIcon = row?.kind === 'overdue' ? AlarmClock : row?.kind === 'permission' ? KeyRound : Clock;
+  const TimeIcon = row?.kind === 'overdue' ? AlarmClock : row?.kind === 'payment' ? Wallet : row?.kind === 'permission' ? KeyRound : Clock;
   const timeText = row?.kind === 'overdue' && row.msLeft !== null ? `${fmtLeft(row.msLeft)} over`
     : row?.kind === 'due' && row.msLeft !== null ? `${fmtLeft(row.msLeft)} left`
+    : row?.kind === 'payment' ? 'Awaiting payment'
     : row?.kind === 'permission' ? 'Awaiting permission'
     : row ? 'No timer' : 'Not in progress';
 
@@ -117,6 +120,16 @@ const CaseDetail: React.FC = () => {
     }
   };
 
+  const confirmPayment = () => {
+    if (!row) return;
+    try {
+      confirmStagePayment(app.id, row.stage);
+      toast.success(`${row.label} confirmed — the case has moved on`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not confirm the payment');
+    }
+  };
+
   const grantPermission = () => {
     if (!row) return;
     try {
@@ -140,6 +153,7 @@ const CaseDetail: React.FC = () => {
   };
 
   const isAdvisor = desk.kind === 'advisor' || desk.kind === 'ceo';
+  const isCeo = desk.kind === 'ceo';
   const isSales = desk.kind === 'sales' || desk.kind === 'ceo';
   const isAgencySourced = app.source === 'agency';
 
@@ -218,7 +232,38 @@ const CaseDetail: React.FC = () => {
             ))}
           </div>
 
-          {isAdvisor && (
+          {/* Held on money. Only the CEO can release it, and being able to do
+              that from a phone is the point of this app - otherwise every case
+              in the company waits for someone to reach a desk. */}
+          {row.kind === 'payment' ? (
+            <div className="mt-4 rounded-2xl p-3.5 relative" style={{ background: goldA(0.1), border: `1px solid ${goldA(0.22)}` }}>
+              {getStageMeta(row.stage).unlocks?.length ? (
+                <>
+                  <p className="text-[9.5px] font-black uppercase tracking-wider" style={{ color: GOLD }}>This payment covers</p>
+                  <ul className="mt-1.5 space-y-1">
+                    {getStageMeta(row.stage).unlocks!.map(u => (
+                      <li key={u} className="flex items-start gap-1.5 text-[12px]" style={{ color: dim(0.75) }}>
+                        <CircleCheck className="w-3 h-3 mt-[3px] shrink-0" style={{ color: GOLD }} /> {u}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              {isCeo ? (
+                <button
+                  onClick={confirmPayment}
+                  className="w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 text-[11.5px] font-black uppercase tracking-wider"
+                  style={{ background: GOLD, color: NAVY }}
+                >
+                  <Wallet className="w-4 h-4" /> Confirm payment received
+                </button>
+              ) : (
+                <p className="mt-2.5 text-[11.5px] font-bold" style={{ color: GOLD }}>
+                  Waiting on the student. The CEO confirms the payment.
+                </p>
+              )}
+            </div>
+          ) : isAdvisor && (
             row.kind === 'permission' ? (
               <button
                 onClick={grantPermission}

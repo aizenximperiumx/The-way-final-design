@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlarmClock, AlertTriangle, ChevronRight, KeyRound, Sun } from 'lucide-react';
+import { AlarmClock, AlertTriangle, ChevronRight, KeyRound, Sun, Wallet } from 'lucide-react';
 import type { Application } from '../../store/appStore';
 import { useAppStore } from '../../store/appStore';
 import { getSlaWindow, slaDeadline, getStageMeta, type PipelineStageId } from '../../lib/pipeline';
@@ -8,8 +8,12 @@ import { DashboardSection, EmptyState } from './ui';
 
 /**
  * "My Day" — the staff member's priority queue: every active case ordered by
- * how close its current stage is to the penalty deadline. Overdue first,
- * then most-urgent, then stages waiting on permission.
+ * how close its current stage is to the penalty deadline. Overdue first, then
+ * most-urgent, then cases held on a payment, then stages awaiting permission.
+ *
+ * A case waiting on a payment still appears, because the advisor needs to know
+ * where it stands, but it carries no timer and is never counted against them:
+ * it is not their work until the money is confirmed.
  */
 
 const fmtLeft = (ms: number): string => {
@@ -26,7 +30,7 @@ type Row = {
   app: Application;
   stage: PipelineStageId;
   label: string;
-  kind: 'overdue' | 'due' | 'permission' | 'notimer';
+  kind: 'overdue' | 'due' | 'payment' | 'permission' | 'notimer';
   /** ms until the penalty deadline (negative = overdue). */
   msLeft: number | null;
 };
@@ -54,6 +58,12 @@ export const MyDay: React.FC<{
       ?? DEFAULT_SLA_GROUPS[app.university ?? ''] ?? 'none';
     const window_ = getSlaWindow(stage, group);
 
+    // Held on a payment: shown so the advisor knows where the case stands, but
+    // marked as not theirs to act on and never counted as work they are late on.
+    if (meta.awaitsStudent) {
+      rows.push({ app, stage, label: meta.label, kind: 'payment', msLeft: null });
+      continue;
+    }
     if (meta.permissionGated && !track.permissionAt) {
       rows.push({ app, stage, label: meta.label, kind: 'permission', msLeft: null });
       continue;
@@ -66,7 +76,7 @@ export const MyDay: React.FC<{
     rows.push({ app, stage, label: meta.label, kind: msLeft < 0 ? 'overdue' : 'due', msLeft });
   }
 
-  const order = { overdue: 0, due: 1, permission: 2, notimer: 3 } as const;
+  const order = { overdue: 0, due: 1, payment: 2, permission: 3, notimer: 4 } as const;
   rows.sort((a, b) => order[a.kind] - order[b.kind] || (a.msLeft ?? Infinity) - (b.msLeft ?? Infinity));
 
   return (
@@ -86,10 +96,12 @@ export const MyDay: React.FC<{
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                     r.kind === 'overdue' ? 'bg-red-50 text-red-500'
                       : urgent ? 'bg-amber-50 text-amber-600'
+                      : r.kind === 'payment' ? 'bg-amber-50 text-amber-500'
                       : r.kind === 'permission' ? 'bg-blue-50 text-blue-500'
                       : 'bg-gray-50 text-gray-400'
                   }`}>
                     {r.kind === 'overdue' ? <AlertTriangle className="h-4 w-4" />
+                      : r.kind === 'payment' ? <Wallet className="h-4 w-4" />
                       : r.kind === 'permission' ? <KeyRound className="h-4 w-4" />
                       : <AlarmClock className="h-4 w-4" />}
                   </div>
@@ -101,11 +113,13 @@ export const MyDay: React.FC<{
                     r.kind === 'overdue' ? 'bg-red-50 text-red-600'
                       : urgent ? 'bg-amber-50 text-amber-700'
                       : r.kind === 'due' ? 'bg-emerald-50 text-emerald-600'
+                      : r.kind === 'payment' ? 'bg-amber-50 text-amber-600'
                       : r.kind === 'permission' ? 'bg-blue-50 text-blue-600'
                       : 'bg-gray-100 text-gray-500'
                   }`}>
                     {r.kind === 'overdue' ? `Overdue ${fmtLeft(r.msLeft ?? 0)}`
                       : r.kind === 'due' ? `${fmtLeft(r.msLeft ?? 0)} left`
+                      : r.kind === 'payment' ? 'Awaiting payment'
                       : r.kind === 'permission' ? 'Awaiting permission'
                       : 'No timer'}
                   </span>

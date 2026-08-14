@@ -83,9 +83,10 @@ export const PipelineTracker: React.FC<{
   /** Compact horizontal strip (student dashboard hero). */
   compact?: boolean;
 }> = ({ application, compact = false }) => {
-  const { currentUser, universityConfig, documents, grantStagePermission, completePipelineStage, ceoCancelApplication } = useAppStore();
+  const { currentUser, universityConfig, documents, grantStagePermission, completePipelineStage, ceoCancelApplication, confirmStagePayment, ceoResumePartialCase } = useAppStore();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [payNote, setPayNote] = useState('');
   const p = application.pipeline;
   if (!p) return null;
 
@@ -172,6 +173,45 @@ export const PipelineTracker: React.FC<{
         </div>
       )}
 
+      {/* Closed on one instalment. Not a failed case - the student had
+          everything they paid for - so it reads as an open door rather than an
+          ending, and the CEO can take them the rest of the way. */}
+      {p.partial && (
+        <div className="border-b border-amber-100 bg-amber-50/60 px-4 sm:px-5 py-3">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-amber-800">
+                Complete on the first payment
+                {p.closedAt ? ` · ${new Date(p.closedAt).toLocaleDateString()}` : ''}
+              </p>
+              <p className="mt-0.5 text-[11px] text-amber-700">
+                Everything covered by the first instalment is done, up to the ministry order. The student
+                keeps their card and basic partner discounts. Resuming reopens the case at the second
+                payment, so nothing already finished is repeated.
+              </p>
+              {isCeo && (
+                <button
+                  onClick={() => doAction(() => ceoResumePartialCase(application.id), 'Case resumed at the second payment')}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#0A1628] px-3 py-1.5 text-xs font-bold text-amber-400 transition-colors hover:bg-[#132c50]"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" /> Resume for the second payment
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {p.resumedAt && p.status === 'processing' && (
+        <div className="flex items-start gap-2 border-b border-emerald-100 bg-emerald-50/50 px-4 sm:px-5 py-2">
+          <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <p className="text-[11px] text-emerald-700">
+            Resumed by {p.resumedByName ?? 'CEO'} on {new Date(p.resumedAt).toLocaleDateString()} — the student chose to continue.
+          </p>
+        </div>
+      )}
+
       {p.status === 'cancelled' && (
         <div className="flex items-start gap-2 border-b border-red-100 bg-red-50/60 px-4 sm:px-5 py-3">
           <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
@@ -245,7 +285,50 @@ export const PipelineTracker: React.FC<{
                     )}
                   </div>
 
-                  {active && (canComplete || canPermit) && (
+                  {/* A payment step: say what the money buys, and let the CEO
+                      record that it arrived. Nobody else can move it, so no
+                      button is offered to anyone else. */}
+                  {active && s.awaitsStudent && (
+                    <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                      {s.unlocks && (
+                        <>
+                          <p className="text-[10px] font-black uppercase tracking-wide text-amber-700">This payment covers</p>
+                          <ul className="mt-1 space-y-0.5">
+                            {s.unlocks.map(u => (
+                              <li key={u} className="flex items-start gap-1.5 text-[11px] text-gray-600">
+                                <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" /> {u}
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                      {isCeo ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            value={payNote}
+                            onChange={(e) => setPayNote(e.target.value)}
+                            placeholder="Reference or note (optional)"
+                            className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-amber-400"
+                          />
+                          <button
+                            onClick={() => doAction(
+                              () => { confirmStagePayment(application.id, s.id, payNote.trim() || undefined); setPayNote(''); },
+                              `${s.label} confirmed — the case has moved on`,
+                            )}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A1628] px-3 py-1.5 text-xs font-bold text-amber-400 transition-colors hover:bg-[#132c50]"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Confirm payment received
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[11px] font-semibold text-amber-700">
+                          Waiting on the student. The CEO confirms the payment to release the case.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {active && !s.awaitsStudent && (canComplete || canPermit) && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {needsPermission && canPermit && !recognitionBlocked && (
                         <button
