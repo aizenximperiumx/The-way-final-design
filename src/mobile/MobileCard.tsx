@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { useAppStore } from '../store/appStore';
 import { getTier, upgradesFrom, type CardTier } from '../lib/tiers';
+import { API_HOST } from '../lib/apiHost';
 import { tap } from '../lib/native';
 import { useI18n } from '../lib/i18n';
 import { BENEFIT_CATEGORIES } from './benefits';
@@ -33,7 +34,10 @@ const MobileCard: React.FC = () => {
   const myApp = applications.find(a => a.studentId === user?.id) ?? null;
   const unlocked = Boolean(myApp?.arrived) || myApp?.pipeline?.status === 'closed';
   const memberSince = user?.createdAt ? new Date(user.createdAt).getFullYear() : new Date().getFullYear();
-  const verifyUrl = `${window.location.origin}/api/verify-member?sid=${encodeURIComponent(user?.id ?? '')}`;
+  // Absolute, and never the page's own origin. Inside the packaged app that
+  // origin is https://localhost, so every card printed a QR pointing at the
+  // student's own phone: a partner scanning it would have reached nothing.
+  const verifyUrl = `${API_HOST}/api/verify-member?sid=${encodeURIComponent(user?.id ?? '')}`;
 
   // From the shared map, not the user record: a profile refresh rebuilds users
   // from a fixed set of columns and would drop it.

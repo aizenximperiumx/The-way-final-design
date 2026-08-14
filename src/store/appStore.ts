@@ -594,7 +594,12 @@ const flushBackendSave = async (getState: () => AppStoreState) => {
   await getState().saveBackendState().catch(() => {});
 };
 
-const SITE_URL = 'https://theway.ge';
+/**
+ * The address we put in emails. www for the same reason API_HOST uses it: the
+ * apex is one origin address that some networks cannot reach, and a link a
+ * student cannot open is worse than no link.
+ */
+const SITE_URL = 'https://www.theway.ge';
 
 const chatPathForRole = (role: string): string =>
   role === 'student' ? '/messages'

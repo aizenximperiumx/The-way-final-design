@@ -13,7 +13,20 @@
  * first request. With no imports it is safe to load first, and it always is.
  */
 
-export const API_HOST = 'https://theway.ge';
+/**
+ * The host the app talks to, and the host printed into member-card QR codes.
+ *
+ * www rather than the bare domain, deliberately. The apex resolves straight to
+ * a single origin address; www is a CNAME onto Hostinger's CDN with several
+ * edges in front of it. Networks that could not route to that one origin - a
+ * whole office, and some mobile carriers - reached the CDN without trouble, and
+ * the same API answers about three times faster through it.
+ *
+ * Verified before switching: the CDN does not cache API responses (they come
+ * back marked dynamic), and CORS headers are still decided per request, so an
+ * allowed origin cannot be served to a different one from a cache.
+ */
+export const API_HOST = 'https://www.theway.ge';
 
 /** True when the page is the packaged app rather than the website or dev server. */
 export const isBundledApp = (): boolean => {
