@@ -645,6 +645,37 @@ const emailNotifyUser = (
 };
 
 // Document types (as used by the staff upload UI) that complete pipeline stages.
+/** Readable names for the document types a stage needs, for error messages. */
+const DOC_TYPE_LABELS: Record<string, string> = {
+  'translation': 'translated documents',
+  'university-approval': 'university approval letter',
+  'recognition-letter': 'recognition letter',
+  'ministry-order': 'ministry order',
+  'visa-documents': 'visa documents',
+  'visa': 'visa',
+  'residency': 'residency permit',
+};
+
+export const docTypeLabel = (type: string): string => DOC_TYPE_LABELS[type] ?? type;
+
+/**
+ * Which of a stage's required documents are not on file yet.
+ *
+ * One definition, used by the guard in the store and by both interfaces to
+ * decide whether the button is even offered, so what the UI shows and what the
+ * store permits can never disagree.
+ */
+export const missingStageDocs = (
+  documents: { studentId?: string; type?: string }[],
+  app: { studentId?: string },
+  stage: PipelineStageId,
+): string[] => {
+  const required = STAGE_TO_DOC_TYPES[stage] ?? [];
+  if (required.length === 0) return [];
+  if (!app.studentId) return required;
+  return required.filter(t => !documents.some(d => d.studentId === app.studentId && d.type === t));
+};
+
 export const STAGE_TO_DOC_TYPES: Record<PipelineStageId, string[]> = {
   // Payments complete when someone confirms the money arrived, not when a
   // document lands, so no upload advances them. Staff who take a receipt can
@@ -797,6 +828,12 @@ const useAppStore = create<AppStoreState>()(
         if (meta.permissionGated && !track.permissionAt) return false;
         // PRD Â§2: Recognition is blocked until the high-school certificate exists.
         if (stage === 'recognition_letter' && !app.intakeHighSchoolCertificate) return false;
+        // A document stage is not finished until its document exists. Enforced
+        // here, at the one point every path goes through, because only
+        // visa_residency used to be checked: every other stage could be marked
+        // done with nothing attached, and on the phone it could be pressed over
+        // and over. The record has to match what the student was told happened.
+        if (missingStageDocs(get().documents, app, stage).length > 0) return false;
 
         const now = new Date().toISOString();
         const isFinal = stage === 'visa_residency';
@@ -3181,10 +3218,12 @@ const useAppStore = create<AppStoreState>()(
         if (stage === 'recognition_letter' && !app.intakeHighSchoolCertificate) {
           throw new Error('Recognition is blocked: the high school certificate has not been uploaded yet');
         }
-        if (stage === 'visa_residency') {
-          const docs = get().documents;
-          const hasBoth = STAGE_TO_DOC_TYPES.visa_residency.every(t => docs.some(d => d.studentId === app.studentId && d.type === t));
-          if (!hasBoth) throw new Error('Upload both the visa and the residency documents first');
+        // Names what is actually missing rather than refusing without saying
+        // why, since this is the message the person pressing the button reads.
+        const missing = missingStageDocs(get().documents, app, stage);
+        if (missing.length > 0) {
+          const list = missing.map(docTypeLabel).join(' and ');
+          throw new Error(`Upload the ${list} first — a stage cannot be completed without its document`);
         }
         if (!completeStageCore(applicationId, stage, actor.id, actor.name)) {
           throw new Error('Could not complete this stage');

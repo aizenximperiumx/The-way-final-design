@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import { useAppStore } from '../../store/appStore';
+import { useAppStore, missingStageDocs, docTypeLabel } from '../../store/appStore';
 import { getUniversityName } from '../../lib/universities';
 import { getStageMeta } from '../../lib/pipeline';
 import { GOLD, NAVY, dim, goldA, card, goldCard } from '../ui';
@@ -154,6 +154,9 @@ const CaseDetail: React.FC = () => {
 
   const isAdvisor = desk.kind === 'advisor' || desk.kind === 'ceo';
   const isCeo = desk.kind === 'ceo';
+  // Asked of the same helper the store guards with, so the button cannot offer
+  // something the store will then refuse.
+  const missingDocs = row ? missingStageDocs(documents, app, row.stage) : [];
   const isSales = desk.kind === 'sales' || desk.kind === 'ceo';
   const isAgencySourced = app.source === 'agency';
 
@@ -273,14 +276,33 @@ const CaseDetail: React.FC = () => {
                 <KeyRound className="w-4 h-4" /> Record permission
               </button>
             ) : (
-              <button
-                onClick={completeStage}
-                className="w-full mt-4 py-3 rounded-2xl flex items-center justify-center gap-2 text-[11.5px] font-black uppercase tracking-wider relative"
-                style={{ background: GOLD, color: NAVY }}
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                {row.stageNo === TOTAL_STAGES ? 'Complete — finish admission' : 'Complete this stage'}
-              </button>
+              // Closed until the document exists. It used to be pressable with
+              // nothing attached, and pressable again and again, which let a
+              // stage be marked done for a student whose document was never
+              // taken. Add the photo and the button opens by itself.
+              missingDocs.length > 0 ? (
+                <div className="mt-4">
+                  <button
+                    onClick={() => setUploading(true)}
+                    className="w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-[11.5px] font-black uppercase tracking-wider"
+                    style={{ background: goldA(0.14), color: GOLD, border: `1px solid ${goldA(0.22)}` }}
+                  >
+                    <Camera className="w-4 h-4" /> Add the {missingDocs.map(docTypeLabel).join(' and ')}
+                  </button>
+                  <p className="mt-2 text-[11px] text-center" style={{ color: dim(0.5) }}>
+                    This stage completes once the document is on file.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={completeStage}
+                  className="w-full mt-4 py-3 rounded-2xl flex items-center justify-center gap-2 text-[11.5px] font-black uppercase tracking-wider relative"
+                  style={{ background: GOLD, color: NAVY }}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {row.stageNo === TOTAL_STAGES ? 'Complete — finish admission' : 'Complete this stage'}
+                </button>
+              )
             )
           )}
         </div>

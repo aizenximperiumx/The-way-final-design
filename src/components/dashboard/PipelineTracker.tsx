@@ -4,7 +4,7 @@ import {
   ChevronRight, AlertTriangle, KeyRound, Ban, Award,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAppStore, STAGE_TO_DOC_TYPES, type Application } from '../../store/appStore';
+import { useAppStore, missingStageDocs, docTypeLabel, type Application } from '../../store/appStore';
 import {
   PIPELINE_STAGES, getSlaWindow, slaDeadline, hoursBetween,
   type PipelineStageId,
@@ -12,9 +12,15 @@ import {
 import { DEFAULT_SLA_GROUPS, type UniversitySlaGroup } from '../../lib/universities';
 
 /**
- * Case pipeline visual — the heart of every application view. Shows the six
- * document stages with live SLA timers, permission gates and (role-dependent)
- * action buttons. Used by Staff, Sales, Agency, CEO and (read-only) Student.
+ * Case pipeline visual — the heart of every application view. Shows all eight
+ * stages with live SLA timers and role-dependent actions: six of document work,
+ * plus the two payments, which wait on the student, carry no timer, and are
+ * released by the CEO. Used by Staff, Sales, Agency, CEO and (read-only)
+ * Student.
+ *
+ * A stage of document work cannot be completed until its document is on file.
+ * The check is the store's own, so this cannot offer a button that would then
+ * be refused.
  */
 
 const fmtRemaining = (hours: number): string => {
@@ -69,6 +75,11 @@ const SlaChip: React.FC<{ startedAt: string; stage: PipelineStageId; slaGroup: U
 export const CaseStatusBadge: React.FC<{ application: Application }> = ({ application }) => {
   const p = application.pipeline;
   if (!p) return null;
+  // A partial close is not the same as a finished admission, and calling both
+  // "Closed" would hide a student who is one payment away from continuing.
+  if (p.status === 'closed' && p.partial) {
+    return <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1 text-[11px] font-bold text-amber-700"><CheckCircle2 className="h-3.5 w-3.5" /> First payment complete</span>;
+  }
   if (p.status === 'closed') {
     return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-bold text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" /> Closed</span>;
   }
@@ -103,8 +114,6 @@ export const PipelineTracker: React.FC<{
     try { fn(); toast.success(ok); } catch (e) { toast.error(e instanceof Error ? e.message : 'Action failed'); }
   };
 
-  const stageDocsPresent = (stage: PipelineStageId) =>
-    STAGE_TO_DOC_TYPES[stage].every(t => documents.some(d => d.studentId === application.studentId && d.type === t));
 
   if (compact) {
     return (
@@ -338,16 +347,25 @@ export const PipelineTracker: React.FC<{
                           <KeyRound className="h-3.5 w-3.5" /> Grant permission
                         </button>
                       )}
-                      {canComplete && !needsPermission && !(s.id === 'recognition_letter' && recognitionBlocked) && (
-                        <button
-                          onClick={() => doAction(() => completePipelineStage(application.id, s.id), `${s.label} completed`)}
-                          disabled={s.id === 'visa_residency' && !stageDocsPresent('visa_residency')}
-                          title={s.id === 'visa_residency' && !stageDocsPresent('visa_residency') ? 'Upload both the visa and residency documents first' : undefined}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Mark completed
-                        </button>
-                      )}
+                      {canComplete && !needsPermission && !(s.id === 'recognition_letter' && recognitionBlocked) && (() => {
+                        // Every document stage, not just the last one. Only
+                        // visa_residency was checked before, so any other stage
+                        // could be marked done with nothing on file.
+                        const missing = missingStageDocs(documents, application, s.id);
+                        const why = missing.length
+                          ? `Upload the ${missing.map(docTypeLabel).join(' and ')} first`
+                          : undefined;
+                        return (
+                          <button
+                            onClick={() => doAction(() => completePipelineStage(application.id, s.id), `${s.label} completed`)}
+                            disabled={missing.length > 0}
+                            title={why}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" /> {why ?? 'Mark completed'}
+                          </button>
+                        );
+                      })()}
                       {canComplete && upcomingHint(s.id) && (
                         <span className="inline-flex items-center gap-1 self-center text-[10px] text-gray-400">
                           <ChevronRight className="h-3 w-3" /> {upcomingHint(s.id)}
