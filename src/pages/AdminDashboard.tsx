@@ -32,6 +32,7 @@ import toast from 'react-hot-toast';
 import { tryGetSupabase } from '../lib/supabase';
 import { PageHeader, StatGrid, StatCard, DashboardSection, EmptyState, type StatTone } from '../components/dashboard/ui';
 import { UniversityAssignmentSettings, PointsAdjustTool, SlaRulesCard } from '../components/dashboard/CeoControls';
+import CardTiers from '../components/dashboard/CardTiers';
 import { Star, Trophy, Timer, Mail, Loader2, Megaphone, EyeOff } from 'lucide-react';
 
 const toneFromColor = (color: string): StatTone =>
@@ -1286,6 +1287,9 @@ const AdminDashboard: React.FC = () => {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-6"
           >
+            {/* Card upgrades sit with the other things waiting on a decision. */}
+            <CardTiers />
+
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-amber-500" />

@@ -1,7 +1,10 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, TrendingUp, Building2, Users } from 'lucide-react';
+import { ShieldAlert, TrendingUp, Building2, Users, Wallet, Sparkles } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAppStore } from '../../store/appStore';
+import { getTier } from '../../lib/tiers';
+import { getUniversityName } from '../../lib/universities';
 import { GOLD, dim, goldA, card } from '../ui';
 import { DeskHeader, Stats, SectionLabel, Row, Square, Tag, Actions, Empty } from './parts';
 import { useCases } from './useCases';
@@ -24,6 +27,8 @@ const CeoDesk: React.FC = () => {
   const navigate = useNavigate();
   const applications = useAppStore(s => s.applications);
   const users = useAppStore(s => s.users);
+  const tierRequests = useAppStore(s => s.tierRequests);
+  const decideTierRequest = useAppStore(s => s.decideTierRequest);
 
   // Every processing case in the company, so breaches surface wherever they are.
   const active = useMemo(() => applications.filter(a => a.pipeline?.status === 'processing'), [applications]);
@@ -49,6 +54,19 @@ const CeoDesk: React.FC = () => {
 
   const advisorsAffected = new Set(breaches.map(b => b.app.assignedStaffId).filter(Boolean)).size;
 
+  // The two things only the CEO can clear.
+  const onPayments = rows.filter(r => r.kind === 'payment');
+  const openTierRequests = tierRequests.filter(r => r.status === 'requested');
+
+  const decide = (id: string, approve: boolean) => {
+    try {
+      decideTierRequest(id, approve);
+      toast.success(approve ? 'Card upgraded' : 'Request declined');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update the request');
+    }
+  };
+
   return (
     <>
       <DeskHeader eyebrow="Direction" sub={`${active.length} cases in progress`} />
@@ -58,6 +76,61 @@ const CeoDesk: React.FC = () => {
         { n: active.length, k: 'Processing' },
         { n: breaches.length, k: 'Breaches' },
       ]} />
+
+      {/* Everything waiting on this one person, in one pass.
+          Payments are CEO-only, so a case held on money stops entirely until
+          it is cleared here; leaving them to be found case by case would make
+          the whole pipeline wait on someone opening the right screen. */}
+      {(onPayments.length > 0 || openTierRequests.length > 0) && (
+        <>
+          <SectionLabel right="Only you">Waiting on you</SectionLabel>
+
+          {onPayments.map(r => (
+            <Row key={r.app.id} tone="gold" onClick={() => navigate(`/app/case/${r.app.id}`)}>
+              <div className="flex items-center gap-3">
+                <Square tone="gold"><Wallet className="w-5 h-5" /></Square>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14.5px] font-bold truncate" style={{ color: '#fff' }}>{r.app.name}</p>
+                  <p className="text-[12px] mt-0.5 truncate" style={{ color: dim(0.55) }}>
+                    {r.label} · {getUniversityName(r.app.university) || 'University not set'}
+                  </p>
+                </div>
+                <Tag tone="gold">Confirm</Tag>
+              </div>
+            </Row>
+          ))}
+
+          {openTierRequests.map(req => (
+            <div key={req.id} className="rounded-[18px] p-3.5 mb-2" style={card}>
+              <div className="flex items-center gap-3">
+                <Square tone="gold"><Sparkles className="w-5 h-5" /></Square>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-black truncate" style={{ color: '#fff' }}>{req.studentName}</p>
+                  <p className="text-[11.5px]" style={{ color: dim(0.55) }}>
+                    Wants {getTier(req.toTier).label} · {getTier(req.toTier).discountPct}% off
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => decide(req.id, true)}
+                  className="flex-1 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider"
+                  style={{ background: GOLD, color: '#0A1628' }}
+                >
+                  Paid — activate
+                </button>
+                <button
+                  onClick={() => decide(req.id, false)}
+                  className="px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: dim(0.6), border: `1px solid ${goldA(0.18)}` }}
+                >
+                  Not yet
+                </button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
 
       {breaches.length > 0 ? (
         <>

@@ -20,6 +20,10 @@ import {
   type PointsEntry,
   type UniversityConfig,
 } from '../lib/pipeline';
+import {
+  DEFAULT_TIER, discountFor, getTier, upgradesFrom,
+  type CardTier, type TierRequest,
+} from '../lib/tiers';
 import { getSupabase, tryGetSupabase } from '../lib/supabase';
 import { API_HOST, apiUrl } from '../lib/apiHost';
 import { appFetch } from '../lib/net';
@@ -27,6 +31,9 @@ import { appFetch } from '../lib/net';
 export type { ApplicationPipeline, PipelineStageId, PointsEntry, UniversityConfig } from '../lib/pipeline';
 
 export const sourceChannel = (raw?: string): 'public' | 'agency' => raw === 'agency' ? 'agency' : 'public';
+
+/** A student's tier as held in shared state - see withCardTiers. */
+export interface CardTierRecord { tier: CardTier; since: string }
 
 export type UserRole = 'ceo' | 'sales' | 'ops' | 'staff' | 'agency_staff' | 'student' | 'agency' | 'customer_support';
 
@@ -68,6 +75,12 @@ export interface User {
   passportExpiry?: string;
   visaExpiry?: string;
   residenceExpiry?: string;
+  /**
+   * Membership card tier. Absent means basic, so every existing student keeps
+   * the card they already have without needing to be migrated.
+   */
+  cardTier?: CardTier;
+  cardTierSince?: string;
 }
 
 export type ApplicationStatus = 'submitted' | 'approved' | 'rejected';
@@ -307,6 +320,10 @@ export interface AppStoreState {
   chatThreadReadAt: Record<string, string>;
   chatEmailNotify: Record<string, { firstAt: string; reminded: boolean }>;
   documentRequests: DocumentRequest[];
+  /** Students asking to move up a card tier, awaiting the CEO. */
+  tierRequests: TierRequest[];
+  /** Card tier per student id. The truth; User.cardTier is reapplied from it. */
+  cardTiers: Record<string, CardTierRecord>;
   leads: Lead[];
   futureLeads: Application[];
   trashedApplications: Application[];
@@ -429,6 +446,12 @@ export interface AppStoreState {
   grantStagePermission: (applicationId: string, stage: PipelineStageId) => void;
   /** Confirm an instalment arrived, releasing the case. CEO only. */
   confirmStagePayment: (applicationId: string, stage: PipelineStageId, note?: string) => void;
+  /** A student asks to move up a card tier. The app takes no money. */
+  requestTierUpgrade: (toTier: CardTier) => void;
+  /** CEO decides an upgrade request; approving sets the tier. */
+  decideTierRequest: (requestId: string, approve: boolean, note?: string) => void;
+  /** CEO sets a student's tier outright, with no request involved. */
+  setStudentTier: (studentId: string, tier: CardTier, note?: string) => void;
   /** Reopen a case that closed at Ministry Order on one instalment. CEO only. */
   ceoResumePartialCase: (applicationId: string) => void;
   completePipelineStage: (applicationId: string, stage: PipelineStageId) => void;
@@ -484,6 +507,21 @@ const withLedgerPoints = (users: User[], ledger: PointsEntry[]): User[] => {
   const totals = ledgerTotals(ledger);
   return users.map(u => ({ ...u, points: totals.get(u.id) ?? 0 }));
 };
+
+/**
+ * Put each student's card tier back onto the user list.
+ *
+ * Tiers are held in shared state rather than on the profile, for the same
+ * reason points are: refreshUsersFromBackend rebuilds every user from a fixed
+ * set of profile columns, so anything written onto a user is lost the next time
+ * that runs. Keeping the tier in state also means no database column is needed
+ * for it to work and sync between the app and the portal.
+ */
+const withCardTiers = (users: User[], tiers: Record<string, CardTierRecord>): User[] =>
+  users.map(u => {
+    const t = tiers[u.id];
+    return t ? { ...u, cardTier: t.tier, cardTierSince: t.since } : u;
+  });
 
 /**
  * State patch that applies ledger totals to BOTH the users list and the
@@ -974,6 +1012,8 @@ const useAppStore = create<AppStoreState>()(
         chatEmailNotify: {},
         appointments: [],
         documentRequests: [],
+        tierRequests: [],
+        cardTiers: {},
         leads: [],
         futureLeads: [],
         trashedApplications: [],
@@ -1101,7 +1141,7 @@ const useAppStore = create<AppStoreState>()(
         } catch { /* storage unavailable - signOut below still clears the server side */ }
         if (supabase) void supabase.auth.signOut().catch(() => {});
         localStorage.removeItem('the-way-storage');
-        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [], pointsLedger: [], universityConfig: null, purgedApplicationIds: [], unTrashedUserIds: [], announcements: [] });
+        set({ currentUser: null, authStatus: 'signed_out', backendHydrated: false, users: [], applications: [], documents: [], notifications: [], appointments: [], chatMessages: [], chatThreadReadAt: {}, chatEmailNotify: {}, documentRequests: [], tierRequests: [], cardTiers: {}, leads: [], futureLeads: [], trashedApplications: [], trashedUsers: [], credentialRequests: [], pointsLedger: [], universityConfig: null, purgedApplicationIds: [], unTrashedUserIds: [], announcements: [] });
       },
 
       changePassword: async (newPassword: string) => {
@@ -1290,7 +1330,7 @@ const useAppStore = create<AppStoreState>()(
         });
         // Points live in the persistent ledger, not in profiles - reapply totals.
         set((state) => ({
-          users: withLedgerPoints(users, state.pointsLedger),
+          users: withCardTiers(withLedgerPoints(users, state.pointsLedger), state.cardTiers),
           currentUser: state.currentUser
             ? { ...state.currentUser, points: ledgerTotals(state.pointsLedger).get(state.currentUser.id) ?? 0 }
             : state.currentUser,
@@ -1322,6 +1362,8 @@ const useAppStore = create<AppStoreState>()(
           chatThreadReadAt: (s.chatThreadReadAt && typeof s.chatThreadReadAt === 'object') ? (s.chatThreadReadAt as Record<string, string>) : {},
           chatEmailNotify: (s.chatEmailNotify && typeof s.chatEmailNotify === 'object') ? (s.chatEmailNotify as Record<string, { firstAt: string; reminded: boolean }>) : {},
           documentRequests: Array.isArray(s.documentRequests) ? (s.documentRequests as DocumentRequest[]) : [],
+          tierRequests: Array.isArray(s.tierRequests) ? (s.tierRequests as TierRequest[]) : [],
+          cardTiers: (s.cardTiers && typeof s.cardTiers === 'object') ? (s.cardTiers as Record<string, CardTierRecord>) : {},
           leads: Array.isArray(s.leads) ? (s.leads as Lead[]) : [],
           futureLeads: Array.isArray(s.futureLeads) ? (s.futureLeads as Application[]) : [],
           trashedApplications: Array.isArray(s.trashedApplications) ? (s.trashedApplications as Application[]) : [],
@@ -1382,6 +1424,8 @@ const useAppStore = create<AppStoreState>()(
           chatThreadReadAt: get().chatThreadReadAt,
           chatEmailNotify: get().chatEmailNotify,
           documentRequests: get().documentRequests,
+          tierRequests: get().tierRequests,
+          cardTiers: get().cardTiers,
           leads: get().leads,
           futureLeads: get().futureLeads,
           trashedApplications: get().trashedApplications,
@@ -3285,6 +3329,132 @@ const useAppStore = create<AppStoreState>()(
       },
 
       /**
+       * A student asks to move up a tier.
+       *
+       * Records the ask and nothing else: no amount, no card, no payment. The
+       * CEO confirms it once money has been arranged by whatever means they
+       * use. One open request at a time, so pressing the button twice does not
+       * produce two things to decide.
+       */
+      requestTierUpgrade: (toTier: CardTier) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['student']);
+        const current = get().cardTiers[actor.id]?.tier ?? actor.cardTier ?? DEFAULT_TIER;
+        if (toTier === current) throw new Error(`You already have the ${getTier(toTier).label} card`);
+        if (!upgradesFrom(current).some(t => t.id === toTier)) {
+          throw new Error(`${getTier(toTier).label} is not an upgrade from ${getTier(current).label}`);
+        }
+        const open = get().tierRequests.find(r => r.studentId === actor.id && r.status === 'requested');
+        if (open) throw new Error(`Your request for the ${getTier(open.toTier).label} card is already with us`);
+
+        const now = new Date().toISOString();
+        const request: TierRequest = {
+          id: `tier-${actor.id}-${Date.now()}`,
+          studentId: actor.id,
+          studentName: actor.name,
+          fromTier: current,
+          toTier,
+          status: 'requested',
+          requestedAt: now,
+        };
+        set((state) => ({
+          tierRequests: [request, ...state.tierRequests],
+          notifications: [
+            ...state.users.filter(u => u.role === 'ceo').map(ceo => ({
+              id: `${request.id}-notify-${ceo.id}`,
+              userId: ceo.id,
+              title: `${getTier(toTier).label} card requested`,
+              message: `${actor.name} would like to upgrade from ${getTier(current).label}.`,
+              type: 'info' as const, time: now, read: false,
+            })),
+            ...state.notifications,
+          ],
+        }));
+        queueBackendSave(get);
+      },
+
+      decideTierRequest: (requestId: string, approve: boolean, note?: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const req = get().tierRequests.find(r => r.id === requestId);
+        if (!req) throw new Error('Request not found');
+        if (req.status !== 'requested') throw new Error('This request has already been decided');
+
+        const now = new Date().toISOString();
+        set((state) => ({
+          tierRequests: state.tierRequests.map(r => r.id === requestId ? {
+            ...r,
+            status: approve ? 'approved' as const : 'declined' as const,
+            decidedAt: now, decidedById: actor.id, decidedByName: actor.name, note,
+          } : r),
+          // The tier only moves on approval; a decline leaves the card alone.
+          // The map is what persists and syncs; the copy on the user is for the
+          // interface and is put back by withCardTiers after any refresh.
+          cardTiers: approve
+            ? { ...state.cardTiers, [req.studentId]: { tier: req.toTier, since: now } }
+            : state.cardTiers,
+          users: approve
+            ? state.users.map(u => u.id === req.studentId ? { ...u, cardTier: req.toTier, cardTierSince: now } : u)
+            : state.users,
+          currentUser: approve && state.currentUser?.id === req.studentId
+            ? { ...state.currentUser, cardTier: req.toTier, cardTierSince: now }
+            : state.currentUser,
+          notifications: [
+            {
+              id: `${requestId}-decided`,
+              userId: req.studentId,
+              title: approve ? `Your ${getTier(req.toTier).label} card is active` : 'About your card upgrade',
+              message: approve
+                ? `You now get ${discountFor(req.toTier)}% off at every partner.`
+                : (note || 'Your advisor will be in touch about this.'),
+              type: 'info' as const, time: now, read: false,
+            },
+            ...state.notifications,
+          ],
+        }));
+        queueBackendSave(get);
+      },
+
+      /**
+       * Set a tier directly, with no request behind it - for an upgrade agreed
+       * in person or over the phone, which is how most of them will happen.
+       */
+      setStudentTier: (studentId: string, tier: CardTier, note?: string) => {
+        const actor = ensureSignedIn(get().currentUser, get().authStatus);
+        requireRole(actor, ['ceo']);
+        const student = get().users.find(u => u.id === studentId);
+        if (!student) throw new Error('Student not found');
+        if (student.role !== 'student') throw new Error('Only students carry a card');
+
+        const now = new Date().toISOString();
+        set((state) => ({
+          cardTiers: { ...state.cardTiers, [studentId]: { tier, since: now } },
+          users: state.users.map(u => u.id === studentId ? { ...u, cardTier: tier, cardTierSince: now } : u),
+          currentUser: state.currentUser?.id === studentId
+            ? { ...state.currentUser, cardTier: tier, cardTierSince: now }
+            : state.currentUser,
+          // Any request they had open is answered by this.
+          tierRequests: state.tierRequests.map(r => (r.studentId === studentId && r.status === 'requested') ? {
+            ...r,
+            status: 'approved' as const,
+            decidedAt: now, decidedById: actor.id, decidedByName: actor.name,
+            note: note ?? 'Set directly by the CEO',
+          } : r),
+          notifications: [
+            {
+              id: `tier-set-${studentId}-${Date.now()}`,
+              userId: studentId,
+              title: `Your ${getTier(tier).label} card is active`,
+              message: `You now get ${discountFor(tier)}% off at every partner.`,
+              type: 'info' as const, time: now, read: false,
+            },
+            ...state.notifications,
+          ],
+        }));
+        queueBackendSave(get);
+      },
+
+      /**
        * Reopen a case that closed after Ministry Order because only the first
        * instalment was paid. It comes back at the second payment, which is
        * where it stopped, so the student pays and continues from there rather
@@ -3597,6 +3767,8 @@ const useAppStore = create<AppStoreState>()(
         chatThreadReadAt: state.chatThreadReadAt,
         chatEmailNotify: state.chatEmailNotify,
         documentRequests: state.documentRequests,
+        tierRequests: state.tierRequests,
+        cardTiers: state.cardTiers,
         leads: state.leads,
         futureLeads: state.futureLeads,
         trashedApplications: state.trashedApplications,
