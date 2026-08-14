@@ -224,8 +224,25 @@ const MobileCard: React.FC = () => {
         ))}
       </div>
 
-      {/* ── Partner catalog ── */}
-      <p className="mt-6 mb-3" style={sectionLabel}>Partner benefits</p>
+      {/* ── Partner catalog ──
+          The tier decides the number, so the number is stated once at the top
+          rather than repeated against every partner. Each partner then only has
+          to say what it is. */}
+      <p className="mt-6 mb-3" style={sectionLabel}>Where your card works</p>
+      <div className="rounded-2xl p-4 mb-3 flex items-center gap-3.5"
+        style={{ background: `linear-gradient(100deg, ${tier.face.from}, ${tier.face.to})` }}>
+        <p className="v3-serif text-[30px] font-black leading-none" style={{ color: tier.face.ink }}>
+          {tier.discountPct}%
+        </p>
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-black" style={{ color: tier.face.ink }}>
+            off at every partner below
+          </p>
+          <p className="text-[11px] font-semibold" style={{ color: tier.face.ink, opacity: 0.75 }}>
+            Your {tier.label} card{unlocked ? '' : ' — active once you arrive'}
+          </p>
+        </div>
+      </div>
       <div className="space-y-2.5 mb-2">
         {BENEFIT_CATEGORIES.map(cat => {
           const open = openCat === cat.id;
@@ -249,9 +266,15 @@ const MobileCard: React.FC = () => {
                         <p className="text-[13px] font-bold" style={{ color: p.comingSoon ? dim(0.55) : '#fff' }}>{p.name}</p>
                         <p className="text-[11px]" style={{ color: dim(0.5) }}>{p.deal}</p>
                       </div>
-                      {p.comingSoon && (
+                      {p.comingSoon ? (
                         <span className="text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full shrink-0" style={{ background: goldA(0.12), color: GOLD }}>
                           Soon
+                        </span>
+                      ) : (
+                        // What this student gets here, in their own tier.
+                        <span className="text-[11px] font-black px-2 py-1 rounded-full shrink-0"
+                          style={{ background: goldA(0.14), color: GOLD }}>
+                          {tier.discountPct}%
                         </span>
                       )}
                     </div>

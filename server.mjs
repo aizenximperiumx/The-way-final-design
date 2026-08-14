@@ -1005,6 +1005,20 @@ const inlineAdminUpdateProfile = async (apiReq, apiRes) => {
 // Opened when a partner (supermarket, café, gym…) scans a student's member QR.
 // Renders a small branded page: valid/active member or not. Shows only the
 // student's first name + last initial — no contact details or documents.
+/**
+ * Card tier discounts, mirroring src/lib/tiers.ts.
+ *
+ * The verify page is plain server-side HTML and cannot import the app's
+ * TypeScript, so these two lists have to agree by hand. A test asserts they do
+ * rather than trusting it: the SLA rules are mirrored the same way and drifted
+ * silently once already, and a partner being told the wrong discount is money.
+ */
+const CARD_TIER_DISCOUNTS = {
+  basic: { label: 'Basic', pct: 10 },
+  gold: { label: 'Gold', pct: 15 },
+  platinum: { label: 'Platinum', pct: 25 },
+};
+
 const inlineVerifyMember = async (apiReq, apiRes, res) => {
   const serveHtml = (statusCode, title, body) => {
     res.statusCode = statusCode;
@@ -1023,6 +1037,9 @@ const inlineVerifyMember = async (apiReq, apiRes, res) => {
   .status{display:inline-block;margin-top:10px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px}
   .status.ok{color:#7BE08A;background:rgba(76,175,80,0.14);border:1px solid rgba(76,175,80,0.35)}
   .status.bad{color:#FF9B9B;background:rgba(255,99,99,0.12);border:1px solid rgba(255,99,99,0.3)}
+  .discount{margin:18px 0 4px;display:flex;align-items:baseline;justify-content:center;gap:8px}
+  .discount .pct{font-size:52px;font-weight:900;letter-spacing:-2px;color:#F5A800;line-height:1}
+  .discount .off{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:#8A9BB4}
 </style></head><body><div class="card">${body}<div class="brand">The Way &middot; Georgia</div></div></body></html>`);
   };
 
@@ -1060,7 +1077,19 @@ const inlineVerifyMember = async (apiReq, apiRes, res) => {
     serveHtml(200, 'Member — not yet active', `<div class="badge bad">…</div><h1>${displayName}</h1><p>The Way student — membership benefits not active yet.</p><span class="status bad">Not active</span>`);
     return;
   }
-  serveHtml(200, 'Verified member', `<div class="badge ok">✓</div><h1>${displayName}</h1><p>Verified The Way student &middot; member since ${sinceYear}</p><span class="status ok">Active member</span>`);
+  // The discount is the only thing the partner actually needs, so it is the
+  // largest thing on the page. Read from the shared state the app writes, and
+  // defaulting to Basic when a student has never been upgraded.
+  const tiers = (rawState && typeof rawState === 'object' && rawState.cardTiers && typeof rawState.cardTiers === 'object')
+    ? rawState.cardTiers
+    : {};
+  const heldTier = String(tiers[sid]?.tier ?? 'basic');
+  const tierInfo = CARD_TIER_DISCOUNTS[heldTier] ?? CARD_TIER_DISCOUNTS.basic;
+
+  serveHtml(200, 'Verified member', `<div class="badge ok">✓</div><h1>${displayName}</h1>`
+    + `<p>Verified The Way student &middot; member since ${sinceYear}</p>`
+    + `<div class="discount"><span class="pct">${tierInfo.pct}%</span><span class="off">discount</span></div>`
+    + `<span class="status ok">${tierInfo.label} member</span>`);
 };
 
 const allowRate = (key, limit, windowMs) => {

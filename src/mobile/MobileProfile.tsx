@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   LogOut, BadgeCheck, GraduationCap, CalendarClock, ShieldAlert,
   QrCode, MessageSquare, KeyRound, ChevronRight, Loader2,
-  Lock, Languages, Compass, Fingerprint,
+  Lock, Languages, Compass, Fingerprint, Sparkles,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,7 @@ import { useI18n } from '../lib/i18n';
 import { tap, thud, biometricAvailable } from '../lib/native';
 import { PinPad, isAppLockEnabled, setAppLockPin, clearAppLock, verifyAppLockPin, isBioUnlockEnabled, setBioUnlockEnabled } from './AppLock';
 import { GOLD, NAVY, card, dim, goldA, sectionLabel, daysUntil } from './ui';
+import MobileIntro from './MobileIntro';
 import MobileLayout from './MobileLayout';
 
 /** Profile — who you are with The Way, your key dates, your account. */
@@ -24,6 +25,9 @@ const MobileProfile: React.FC = () => {
   const navigate = useNavigate();
   const { lang, toggle, t } = useI18n();
   const [pwOpen, setPwOpen] = useState(false);
+  // The welcome is the clearest explanation of the card and the tiers we
+  // have, so it stays reachable rather than being seen once and lost.
+  const [replayIntro, setReplayIntro] = useState(false);
   const [newPw, setNewPw] = useState('');
   const [saving, setSaving] = useState(false);
   // App Lock setup flow
@@ -112,6 +116,10 @@ const MobileProfile: React.FC = () => {
   };
 
   const doLogout = () => { void logout(); navigate('/app'); };
+
+  if (replayIntro) {
+    return <MobileIntro userId={user?.id} name={user?.name} onDone={() => setReplayIntro(false)} />;
+  }
 
   return (
     <MobileLayout title="Profile">
@@ -247,6 +255,19 @@ const MobileProfile: React.FC = () => {
             </button>
           )}
         </div>
+
+        {/* Replay the welcome */}
+        <button
+          onClick={() => { tap(); setReplayIntro(true); }}
+          className="w-full rounded-2xl p-4 flex items-center gap-3 text-left"
+          style={card}
+        >
+          <Sparkles className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
+          <span className="text-[14px] font-semibold flex-1" style={{ color: '#fff' }}>
+            About your card and Georgia
+          </span>
+          <ChevronRight className="w-4 h-4" style={{ color: dim(0.4) }} />
+        </button>
 
         {/* Change password */}
         <div className="rounded-2xl overflow-hidden" style={card}>

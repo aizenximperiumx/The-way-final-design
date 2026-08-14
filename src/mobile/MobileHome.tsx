@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2, ArrowRight, Upload, GraduationCap, Sparkles, QrCode,
@@ -13,6 +13,7 @@ import { PIPELINE_STAGES } from '../lib/pipeline';
 import { BENEFIT_CATEGORIES } from './benefits';
 import { GOLD, NAVY, card, goldCard, dim, goldA, sectionLabel, daysUntil } from './ui';
 import MobileLayout from './MobileLayout';
+import MobileIntro, { hasSeenIntro } from './MobileIntro';
 import ArrivalCard from './ArrivalCard';
 import HoloCard from './HoloCard';
 
@@ -23,6 +24,9 @@ import HoloCard from './HoloCard';
  */
 const MobileHome: React.FC = () => {
   const { user } = useAuth();
+  // The welcome, once per account per device. Home is the first screen a
+  // student lands on after signing in, so it is where it belongs.
+  const [intro, setIntro] = useState(() => !hasSeenIntro(user?.id));
   const { applications } = useApp();
   const { documentRequests, announcements } = useAppStore();
   const navigate = useNavigate();
@@ -59,6 +63,10 @@ const MobileHome: React.FC = () => {
     { label: 'Residence permit', days: residencyDays },
     { label: 'Passport', days: passportDays },
   ].filter(e => e.days !== null) as { label: string; days: number }[];
+
+  if (intro) {
+    return <MobileIntro userId={user?.id} name={user?.name} onDone={() => setIntro(false)} />;
+  }
 
   return (
     <MobileLayout>
